@@ -9,13 +9,6 @@ const BINANCE_WS_BASE = 'wss://stream.binance.com:9443/stream?streams=';
 // FALLBACK: CoinCap (Very reliable for frontend)
 const COINCAP_API_BASE = 'https://api.coincap.io/v2';
 
-// List of known major memes to filter for the "Meme" view
-const MEME_SYMBOLS = [
-    'DOGE', 'SHIB', 'PEPE', 'WIF', 'FLOKI', 'BONK', 'BOME', 'MEME', 'PEOPLE', 
-    'DOGS', 'TURBO', 'MYRO', 'NEIRO', '1000SATS', 'ORDI', 'BABYDOGE', 'MOODENG',
-    'PNUT', 'ACT', 'POPCAT', 'SLERF', 'BRETT', 'GOAT'
-];
-
 // UTILITY: Fetch with Timeout to prevent blocking UI
 const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 4000) => {
     const controller = new AbortController();
@@ -30,19 +23,19 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout 
     }
 };
 
-export const fetchCryptoData = async (mode: 'volume' | 'memes' = 'volume'): Promise<MarketData[]> => {
+export const fetchCryptoData = async (): Promise<MarketData[]> => {
   try {
-    const data = await fetchBinanceMarkets(mode);
+    const data = await fetchBinanceMarkets();
     if (data.length === 0) throw new Error("Empty Binance Data");
     return data;
   } catch (error) {
     console.warn("Binance API failed/blocked, switching to CoinCap fallback...", error);
-    return await fetchCoinCapMarkets(mode);
+    return await fetchCoinCapMarkets();
   }
 };
 
 // --- BINANCE FETCH STRATEGY ---
-const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData[]> => {
+const fetchBinanceMarkets = async (): Promise<MarketData[]> => {
     try {
         const response = await fetchWithTimeout(`${BINANCE_API_BASE}/ticker/24hr`);
         if (!response.ok) throw new Error(`Binance returned ${response.status}`);
@@ -59,13 +52,6 @@ const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
                 !symbol.includes('DOWN') && 
                 !symbol.includes('UP');
         });
-
-        if (mode === 'memes') {
-            filteredData = filteredData.filter((ticker: any) => {
-                const baseSymbol = ticker.symbol.replace('USDT', '');
-                return MEME_SYMBOLS.some(meme => baseSymbol === meme || baseSymbol === `1000${meme}`);
-            });
-        }
 
         filteredData = filteredData
             .sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
@@ -89,22 +75,13 @@ const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
 };
 
 // --- COINCAP FETCH STRATEGY (FALLBACK) ---
-const fetchCoinCapMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData[]> => {
+const fetchCoinCapMarkets = async (): Promise<MarketData[]> => {
     try {
-        const response = await fetchWithTimeout(`${COINCAP_API_BASE}/assets?limit=100`);
+        const response = await fetchWithTimeout(`${COINCAP_API_BASE}/assets?limit=50`);
         if (!response.ok) return [];
         
         const json = await response.json();
         let assets = json.data;
-
-        if (mode === 'memes') {
-            assets = assets.filter((asset: any) => 
-                MEME_SYMBOLS.includes(asset.symbol.toUpperCase())
-            );
-        } else {
-            // CoinCap is already sorted by rank (roughly volume/mcap)
-            assets = assets.slice(0, 50);
-        }
 
         return assets.map((asset: any) => ({
             id: asset.id, // CoinCap ID (e.g. 'bitcoin') - Important for candles
@@ -318,8 +295,8 @@ ${extraInfo}
 // --- AUTONOMOUS QUANT ENGINE v4.0 (API INDEPENDENT) ---
 
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {
-    // 1. Get market data
-    const market = await fetchCryptoData('volume');
+    // 1. Get market data - Always VOLUME based (Top 50)
+    const market = await fetchCryptoData();
     if (!market || market.length === 0) throw new Error("No market data available");
     
     // Scan top 30 assets

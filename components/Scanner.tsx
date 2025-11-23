@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState, useRef, memo } from 'react';
-import { Activity, RefreshCw, WifiOff, Radio, Clock, Zap, BarChart3, HelpCircle } from 'lucide-react';
+import { Activity, RefreshCw, WifiOff, BarChart3 } from 'lucide-react';
 import { MarketData } from '../types';
 import { fetchCryptoData, subscribeToLivePrices } from '../services/cryptoService';
 
@@ -38,20 +39,13 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
-  const [lastTickTime, setLastTickTime] = useState<Date | null>(null);
   
-  // New State: Scanner Mode
-  const [mode, setMode] = useState<'volume' | 'memes'>('volume');
-
   const loadInitialData = async () => {
     setLoading(true);
-    // Pass mode to service
-    const data = await fetchCryptoData(mode);
+    const data = await fetchCryptoData();
     if (data.length > 0) {
       setMarketData(data);
       setError(false);
-      // Optional: Auto-select first only if nothing is selected or if switching modes drastically
-      // But preserving user selection is usually better UX unless invalid
     } else {
       setError(true);
     }
@@ -60,16 +54,14 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
 
   useEffect(() => {
     loadInitialData();
-  }, [mode]); // Reload when mode changes
+  }, []); 
 
   // WebSocket Logic
   useEffect(() => {
     if (marketData.length === 0 || error) return;
 
-    // Fixed: subscribeToLivePrices expects MarketData[], not string[]
     const unsubscribe = subscribeToLivePrices(marketData, (liveData) => {
       setWsConnected(true);
-      setLastTickTime(new Date());
       
       setMarketData(currentData => {
         let hasChanges = false;
@@ -95,13 +87,13 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
 
   return (
     <div className="h-full overflow-hidden bg-surface border border-border rounded-xl shadow-sm flex flex-col">
-      {/* Enhanced Header with Toggles */}
+      {/* Header */}
       <div className="p-3 border-b border-border flex flex-col gap-3 bg-background/50 backdrop-blur-sm">
         <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
-                <Activity size={16} className={mode === 'memes' ? 'text-pink-500' : 'text-accent'} />
+                <Activity size={16} className="text-accent" />
                 <h2 className="text-xs font-mono font-bold uppercase tracking-wide">
-                    {mode === 'memes' ? 'Meme Hunter' : 'Volumen Pro'}
+                    Scanner Institucional
                 </h2>
             </div>
             
@@ -120,31 +112,11 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
             </div>
         </div>
 
-        {/* Toggle Buttons */}
-        <div className="flex p-1 bg-background border border-border rounded-lg">
-            <button 
-                onClick={() => setMode('volume')}
-                title="Top 50 monedas por volumen 24h"
-                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-[10px] font-mono uppercase rounded transition-all ${
-                    mode === 'volume' 
-                    ? 'bg-accent/10 text-accent font-bold shadow-sm' 
-                    : 'text-secondary hover:text-primary'
-                }`}
-            >
-                <BarChart3 size={12} /> Top Vol
-            </button>
-            <div className="w-px bg-border mx-1 my-1"></div>
-            <button 
-                onClick={() => setMode('memes')}
-                title="Top Memes seleccionados ordenados por volumen"
-                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-[10px] font-mono uppercase rounded transition-all ${
-                    mode === 'memes' 
-                    ? 'bg-pink-500/10 text-pink-500 font-bold shadow-sm' 
-                    : 'text-secondary hover:text-primary'
-                }`}
-            >
-                <Zap size={12} /> Memes
-            </button>
+        {/* Info Label */}
+        <div className="flex p-1 bg-background border border-border rounded-lg justify-center">
+             <span className="flex items-center gap-2 py-1.5 text-[10px] font-mono uppercase text-secondary">
+                <BarChart3 size={12} /> Top 50 Volumen
+            </span>
         </div>
       </div>
 
@@ -152,7 +124,7 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
         {loading && marketData.length === 0 ? (
            <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
               <RefreshCw className="animate-spin" />
-              <span className="text-xs font-mono">Cargando {mode}...</span>
+              <span className="text-xs font-mono">Conectando feeds...</span>
            </div>
         ) : error && marketData.length === 0 ? (
            <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-4 p-4 text-center">
@@ -180,7 +152,7 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
                     onClick={() => onSelectSymbol(rawSymbol)}
                     className={`border-b border-border/40 transition-colors cursor-pointer group ${
                         isSelected 
-                            ? mode === 'memes' ? 'bg-pink-500/10' : 'bg-accent/10' 
+                            ? 'bg-accent/10' 
                             : 'hover:bg-white/5'
                     }`}
                   >
@@ -188,7 +160,7 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
                       <div className="flex flex-col">
                           <span className={`font-mono font-bold text-xs ${
                               isSelected 
-                                ? mode === 'memes' ? 'text-pink-500' : 'text-accent' 
+                                ? 'text-accent' 
                                 : 'text-primary'
                           }`}>
                               {rawSymbol}

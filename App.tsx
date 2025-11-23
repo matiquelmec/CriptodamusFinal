@@ -131,10 +131,10 @@ const App: React.FC = () => {
       {/* Main Content Area */}
       {/* 
          On Mobile: overflow-y-auto allows the whole page content (Scanner + Chart + Chat) to scroll properly.
-         pb-24 ensures the content isn't hidden behind the fixed bottom nav.
+         pb-32 ensures the content isn't hidden behind the fixed bottom nav.
          On Desktop (lg): overflow-hidden keeps the layout rigid/dashboard-like.
       */}
-      <main className="flex-1 overflow-y-auto lg:overflow-hidden p-4 container mx-auto pb-24 lg:pb-4">
+      <main className="flex-1 overflow-y-auto lg:overflow-hidden p-4 container mx-auto pb-32 lg:pb-4">
          {renderContent()}
       </main>
       

@@ -214,21 +214,21 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
       </div>
 
       <form onSubmit={handleSubmit} className="p-3 border-t border-border bg-background">
-        <div className="relative">
+        <div className="flex items-center gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={`Consulta sobre ${selectedSymbol}...`}
-            className="w-full bg-surface border border-border rounded pl-3 pr-10 py-2 text-xs text-primary placeholder-secondary/50 focus:border-accent focus:outline-none font-mono transition-all disabled:opacity-50"
+            className="flex-1 bg-surface border border-border rounded pl-3 pr-2 py-2 text-xs text-primary placeholder-secondary/50 focus:border-accent focus:outline-none font-mono transition-all disabled:opacity-50"
             disabled={isLoading}
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-accent hover:text-white hover:bg-accent rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-accent hover:bg-accentHover text-white rounded font-mono text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-accent/20 shrink-0"
           >
-            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <> <Send size={14} /> <span className="hidden sm:inline">Enviar</span> </>}
           </button>
         </div>
       </form>
