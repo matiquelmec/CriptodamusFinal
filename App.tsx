@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { LayoutDashboard, Settings, BarChart, CalendarDays, Zap } from 'lucide-react';
 import Scanner from './components/Scanner';

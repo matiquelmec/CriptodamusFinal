@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, Loader2, Key, BookOpen, ChevronDown, Check, Info } from 'lucide-react';
-import { streamMarketAnalysis, initializeGemini, resetSession } from '../services/geminiService';
+import { Send, Bot, User, Sparkles, Loader2, BookOpen, ChevronDown, Check, Info, RefreshCw, Radio } from 'lucide-react';
+import { streamMarketAnalysis, resetSession } from '../services/geminiService';
 import { ChatMessage, Strategy } from '../types';
 import { getMarketContextForAI, getTechnicalAnalysis, getFearAndGreedIndex } from '../services/cryptoService';
 import { STRATEGIES } from '../services/strategyContext';
@@ -11,43 +11,12 @@ interface AIChatProps {
 
 const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
   const [currentStrategy, setCurrentStrategy] = useState<Strategy>(STRATEGIES[0]);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'model',
-      content: `Sistema conectado. Estrategia activa: **${STRATEGIES[0].name}**. Selecciona un activo para comenzar.`,
-      timestamp: Date.now()
-    }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  const [hasKey, setHasKey] = useState(false);
   const [showStrategySelector, setShowStrategySelector] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const envKey = process.env.API_KEY;
-    if (envKey) {
-        initializeGemini(envKey);
-        setHasKey(true);
-    }
-  }, []);
-
-  useEffect(() => {
-      if (selectedSymbol) {
-          setInput(`Analiza ${selectedSymbol} usando la estrategia actual.`);
-      }
-  }, [selectedSymbol]);
-
-  const handleKeySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (apiKey.trim().length > 0) {
-        initializeGemini(apiKey);
-        setHasKey(true);
-    }
-  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -57,20 +26,92 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
     scrollToBottom();
   }, [messages]);
 
+  // AUTO-ANALYSIS TRIGGER: Runs when symbol changes
+  useEffect(() => {
+      const runAutoAnalysis = async () => {
+          setIsLoading(true);
+          // Clear previous messages or keep a history? Let's clear for focus.
+          setMessages([{
+              id: 'init',
+              role: 'model',
+              content: `Conectando con motor autónomo para analizar **${selectedSymbol}**...`,
+              timestamp: Date.now(),
+              isThinking: true
+          }]);
+
+          try {
+              // Prepare Context
+              const contextPromise = Promise.all([
+                  getMarketContextForAI(),
+                  getTechnicalAnalysis(selectedSymbol),
+                  getFearAndGreedIndex()
+              ]);
+
+              const [marketContext, techAnalysis, sentimentData] = await Promise.race([
+                  contextPromise,
+                  new Promise<any[]>((resolve) => setTimeout(() => resolve(["Contexto timeout", "Análisis técnico parcial", null]), 4000))
+              ]);
+
+              const sentimentString = sentimentData 
+                ? `SENTIMIENTO MACRO (Fear & Greed Index): Valor ${sentimentData.value} (${sentimentData.value_classification}).` 
+                : "SENTIMIENTO MACRO: No disponible.";
+
+              const combinedContext = `
+${marketContext}
+${sentimentString}
+${techAnalysis}
+              `.trim();
+
+              // Trigger "ANALISIS_INTEGRAL" command automatically
+              const stream = streamMarketAnalysis("ANALISIS_INTEGRAL", combinedContext, currentStrategy.systemInstruction);
+              
+              let fullResponse = "";
+              const msgId = Date.now().toString();
+
+              // Replace the "Thinking" message with the real one
+              setMessages(prev => prev.filter(m => m.id !== 'init').concat({
+                  id: msgId,
+                  role: 'model',
+                  content: '',
+                  timestamp: Date.now(),
+                  isThinking: false
+              }));
+
+              for await (const chunk of stream) {
+                  fullResponse += chunk;
+                  setMessages(prev => prev.map(msg => 
+                      msg.id === msgId ? { ...msg, content: fullResponse } : msg
+                  ));
+              }
+
+          } catch (e) {
+              setMessages(prev => [...prev, {
+                  id: Date.now().toString(),
+                  role: 'model',
+                  content: "⚠️ Error al generar el reporte autónomo. Reintentando...",
+                  timestamp: Date.now()
+              }]);
+          } finally {
+              setIsLoading(false);
+          }
+      };
+
+      runAutoAnalysis();
+  }, [selectedSymbol, currentStrategy]);
+
   const handleStrategyChange = (strategy: Strategy) => {
       if (strategy.id === currentStrategy.id) return;
-      
       setCurrentStrategy(strategy);
-      resetSession(); // Reset AI memory context
-      setMessages([
-          {
-              id: Date.now().toString(),
-              role: 'model',
-              content: `Estrategia cambiada a: **${strategy.name}**.\n\n${strategy.description}`,
-              timestamp: Date.now()
-          }
-      ]);
       setShowStrategySelector(false);
+      // The useEffect [selectedSymbol, currentStrategy] will trigger re-analysis automatically
+  };
+
+  const handleReset = () => {
+    setIsLoading(false);
+    // Force re-trigger by essentially doing nothing visible, or we could just clear messages
+    setMessages([]);
+    // Reloading logic is handled by useEffect on dependency change mostly, 
+    // but for manual reset we might want to clear state
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -98,29 +139,19 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
     }]);
 
     try {
-      // Parallel data fetching for speed
-      const [marketContext, techAnalysis, sentimentData] = await Promise.all([
+      const contextPromise = Promise.all([
           getMarketContextForAI(),
           getTechnicalAnalysis(selectedSymbol),
           getFearAndGreedIndex()
       ]);
 
-      const sentimentString = sentimentData 
-        ? `SENTIMIENTO MACRO (Fear & Greed Index): Valor ${sentimentData.value} (${sentimentData.value_classification}).` 
-        : "SENTIMIENTO MACRO: No disponible.";
+      const [marketContext, techAnalysis, sentimentData] = await Promise.race([
+          contextPromise,
+          new Promise<any[]>((resolve) => setTimeout(() => resolve(["Contexto timeout", "Análisis técnico parcial", null]), 4000))
+      ]);
 
-      const combinedContext = `
-${marketContext}
-
-${sentimentString}
-
-${techAnalysis}
-
-INSTRUCCIÓN CRÍTICA: El usuario está viendo el gráfico de ${selectedSymbol}.
-1. CONSULTA EL CALENDARIO ECONÓMICO DE HOY (Google Search) para verificar eventos de alto impacto.
-2. Usa los "DATOS TÉCNICOS CALCULADOS" (Especialmente RVOL y Soportes) como TU VERDAD ABSOLUTA.
-No alucines patrones que no estén respaldados por los números provistos.
-      `.trim();
+      const sentimentString = sentimentData ? `Valor ${sentimentData.value}` : "N/A";
+      const combinedContext = `${marketContext}\n${sentimentString}\n${techAnalysis}`;
       
       const stream = streamMarketAnalysis(userMsg.content, combinedContext, currentStrategy.systemInstruction);
       
@@ -134,63 +165,52 @@ No alucines patrones que no estén respaldados por los números provistos.
       }
 
     } catch (error) {
-      console.error(error);
       setMessages(prev => prev.map(msg => 
-          msg.id === botMsgId ? { ...msg, content: 'Error: No pude obtener los datos de análisis técnico o realizar la búsqueda. Verifica tu conexión.', isThinking: false } : msg
+          msg.id === botMsgId ? { ...msg, content: 'Error en motor matemático.', isThinking: false } : msg
       ));
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (!hasKey) {
-      return (
-          <div className="h-full flex flex-col items-center justify-center p-8 bg-surface border border-border rounded-xl">
-              <div className="bg-background p-4 rounded-full mb-4 border border-border">
-                  <Key className="text-accent" size={32} />
-              </div>
-              <h2 className="text-xl font-mono font-bold text-primary mb-2">Autenticación</h2>
-              <p className="text-secondary text-center mb-6 max-w-md text-sm">
-                  Ingresa tu API Key de Google Gemini para activar el Asesor.
-              </p>
-              <form onSubmit={handleKeySubmit} className="w-full max-w-sm flex gap-2">
-                  <input 
-                    type="password" 
-                    placeholder="API Key"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="flex-1 bg-background border border-border rounded px-3 py-2 text-primary focus:border-accent outline-none font-mono text-xs"
-                  />
-                  <button type="submit" className="bg-accent text-white px-4 py-2 rounded font-mono text-xs">
-                      Entrar
-                  </button>
-              </form>
-          </div>
-      )
-  }
-
   return (
     <div className="h-full flex flex-col bg-surface border border-border rounded-xl shadow-sm overflow-hidden relative">
-      {/* Header with Strategy Selector */}
-      <div className="p-3 border-b border-border bg-background/50 backdrop-blur-sm z-20">
-        <div className="flex justify-between items-center mb-2">
+      {/* Header with Strategy Selector & Status */}
+      <div className="p-3 border-b border-border bg-background/50 backdrop-blur-sm z-20 flex justify-between items-center">
+        <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2">
                 <Bot size={16} className="text-accent" />
-                <h2 className="text-xs font-mono font-bold uppercase tracking-wide">Asesor IA</h2>
+                <h2 className="text-xs font-mono font-bold uppercase tracking-wide">Asesor Autónomo</h2>
+                {/* Status Indicator */}
+                <div className="flex items-center gap-1 bg-success/10 px-1.5 rounded-full border border-success/20 ml-2">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
+                    </span>
+                    <span className="text-[9px] font-mono text-success font-bold uppercase">Online</span>
+                </div>
             </div>
              <button 
                 onClick={() => setShowStrategySelector(!showStrategySelector)}
-                className="flex items-center gap-1.5 px-2 py-1 bg-surface border border-border rounded hover:bg-white/5 transition-colors"
+                className="flex items-center gap-1.5 px-2 py-0.5 bg-surface border border-border rounded hover:bg-white/5 transition-colors w-fit"
             >
                 <BookOpen size={10} className="text-secondary" />
                 <span className="text-[10px] font-mono font-medium truncate max-w-[100px] md:max-w-none">{currentStrategy.name}</span>
                 <ChevronDown size={10} className={`text-secondary transition-transform ${showStrategySelector ? 'rotate-180' : ''}`} />
             </button>
         </div>
+
+        <button 
+            onClick={handleReset} 
+            title="Limpiar Chat"
+            className="p-1.5 text-secondary hover:text-primary hover:bg-white/5 rounded transition-colors"
+        >
+            <RefreshCw size={14} />
+        </button>
         
         {/* Dropdown for Strategy Selection */}
         {showStrategySelector && (
-            <div className="absolute top-12 left-0 right-0 mx-2 p-3 bg-surface border border-border rounded-lg shadow-xl z-30 animate-in fade-in slide-in-from-top-2">
+            <div className="absolute top-14 left-2 right-2 p-3 bg-surface border border-border rounded-lg shadow-xl z-30 animate-in fade-in slide-in-from-top-2">
                 <h3 className="text-xs font-mono font-bold text-secondary mb-3 uppercase">Seleccionar Estrategia</h3>
                 <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
                     {STRATEGIES.map(strategy => (
@@ -212,41 +232,6 @@ No alucines patrones que no estén respaldados por los números provistos.
                             <p className="text-[10px] text-secondary mb-2 leading-relaxed">
                                 {strategy.description}
                             </p>
-                            
-                            {/* Strategy Details Badge Grid */}
-                            <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-dashed border-border/50">
-                                <div>
-                                    <span className="text-[9px] text-secondary uppercase block mb-0.5">Riesgo</span>
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                        strategy.riskProfile === 'Conservador' ? 'bg-success/10 text-success' : 
-                                        strategy.riskProfile === 'Agresivo' ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-warning'
-                                    }`}>
-                                        {strategy.riskProfile}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-[9px] text-secondary uppercase block mb-0.5">Timeframe</span>
-                                    <span className="text-[10px] font-mono text-primary bg-background px-1.5 py-0.5 rounded border border-border">
-                                        {strategy.timeframe}
-                                    </span>
-                                </div>
-                            </div>
-
-                             {/* Expanded Details */}
-                             <div className="mt-2 space-y-1">
-                                <div className="flex gap-1 items-start">
-                                    <Info size={8} className="text-secondary mt-0.5" />
-                                    <p className="text-[9px] text-secondary/80">
-                                        <span className="font-bold text-secondary">Entrada:</span> {strategy.details.entryCriteria}
-                                    </p>
-                                </div>
-                                <div className="flex gap-1 items-start">
-                                    <Info size={8} className="text-secondary mt-0.5" />
-                                    <p className="text-[9px] text-secondary/80">
-                                        <span className="font-bold text-secondary">Gestión:</span> {strategy.details.riskManagement}
-                                    </p>
-                                </div>
-                             </div>
                         </div>
                     ))}
                 </div>
@@ -267,15 +252,15 @@ No alucines patrones que no estén respaldados por los números provistos.
               {msg.role === 'user' ? <User size={12} /> : <Sparkles size={12} />}
             </div>
             
-            <div className={`max-w-[90%] rounded p-2 text-xs leading-relaxed ${
+            <div className={`max-w-[95%] rounded p-3 text-xs leading-relaxed shadow-sm ${
               msg.role === 'user' 
                 ? 'bg-primary text-background' 
-                : 'bg-background border border-border text-primary'
+                : 'bg-surface border border-border text-primary'
             }`}>
               {msg.isThinking ? (
-                  <div className="flex items-center gap-2 text-secondary">
+                  <div className="flex items-center gap-2 text-secondary py-1">
                       <Loader2 size={12} className="animate-spin" />
-                      <span className="font-mono text-[10px]">Analizando estructura, noticias y volumen...</span>
+                      <span className="font-mono text-[10px]">Analizando estructura y confluencia...</span>
                   </div>
               ) : (
                 <div className="markdown-body font-mono whitespace-pre-wrap">
@@ -294,8 +279,8 @@ No alucines patrones que no estén respaldados por los números provistos.
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={`Consultar al Agente...`}
-            className="w-full bg-surface border border-border rounded pl-3 pr-10 py-2 text-xs text-primary placeholder-secondary/50 focus:border-accent focus:outline-none font-mono transition-all"
+            placeholder={`Consulta adicional sobre ${selectedSymbol}...`}
+            className="w-full bg-surface border border-border rounded pl-3 pr-10 py-2 text-xs text-primary placeholder-secondary/50 focus:border-accent focus:outline-none font-mono transition-all disabled:opacity-50"
             disabled={isLoading}
           />
           <button
@@ -303,7 +288,7 @@ No alucines patrones que no estén respaldados por los números provistos.
             disabled={isLoading || !input.trim()}
             className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-accent hover:text-white hover:bg-accent rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Send size={14} />
+            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
           </button>
         </div>
       </form>

@@ -1,7 +1,8 @@
+
 import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle } from '../types';
 import { scanMarketOpportunities } from '../services/cryptoService';
-import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Clock } from 'lucide-react';
+import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Clock, Cpu } from 'lucide-react';
 
 interface OpportunityFinderProps {
     onSelectOpportunity: (symbol: string) => void;
@@ -26,35 +27,15 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
             setOpportunities(opps);
         } catch (e: any) {
             console.error(e);
-            if (e.message && (e.message.includes('429') || e.message.includes('Quota'))) {
-                setError("Límite de API alcanzado. El sistema está enfriándose.");
-                startCooldown(60); // 60s cooldown for quota reset
-            } else {
-                setError("Error de conexión al escanear el mercado.");
-            }
+            setError("Error de conexión al obtener datos de mercado.");
         } finally {
             setLoading(false);
         }
     };
 
-    const startCooldown = (seconds: number) => {
-        setCooldown(seconds);
-        const interval = setInterval(() => {
-            setCooldown((prev) => {
-                if (prev <= 1) {
-                    clearInterval(interval);
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-    };
-
-    // Auto-scan on style change only if not in cooldown
+    // Auto-scan on style change
     useEffect(() => {
-        if (cooldown === 0) {
-            scan();
-        }
+        scan();
     }, [style]);
 
     return (
@@ -62,40 +43,36 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
             {/* Header / Controls */}
             <div className="p-4 border-b border-border bg-background/50 backdrop-blur-sm flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-accent to-blue-700 rounded-lg text-white shadow-lg shadow-accent/20">
-                        <Crosshair size={20} />
+                    <div className="p-2 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-lg text-white shadow-lg shadow-blue-500/20">
+                        <Cpu size={20} />
                     </div>
                     <div>
-                        <h2 className="text-sm font-mono font-bold text-primary uppercase tracking-wider">Quant AI Scanner</h2>
-                        <p className="text-[10px] text-secondary">Generador de Señales Gemini 2.5</p>
+                        <h2 className="text-sm font-mono font-bold text-primary uppercase tracking-wider">Criptodamus Auto-Pilot</h2>
+                        <p className="text-[10px] text-secondary">Motor Matemático Autónomo v4.0</p>
                     </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 bg-background p-1 rounded-lg border border-border">
                     <button 
                         onClick={() => setStyle('SCALP_AGRESSIVE')}
-                        disabled={cooldown > 0}
                         className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold transition-all uppercase flex items-center gap-2 ${style === 'SCALP_AGRESSIVE' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'text-secondary hover:text-primary'}`}
                     >
                         <Zap size={12} /> Scalp
                     </button>
                     <button 
                         onClick={() => setStyle('SWING_INSTITUTIONAL')}
-                        disabled={cooldown > 0}
                         className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold transition-all uppercase flex items-center gap-2 ${style === 'SWING_INSTITUTIONAL' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-secondary hover:text-primary'}`}
                     >
                         <Layers size={12} /> Swing
                     </button>
                     <button 
                         onClick={() => setStyle('BREAKOUT_MOMENTUM')}
-                        disabled={cooldown > 0}
                         className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold transition-all uppercase flex items-center gap-2 ${style === 'BREAKOUT_MOMENTUM' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'text-secondary hover:text-primary'}`}
                     >
                         <TrendingUp size={12} /> Breakout
                     </button>
                      <button 
                         onClick={() => setStyle('ICHIMOKU_CLOUD')}
-                        disabled={cooldown > 0}
                         className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold transition-all uppercase flex items-center gap-2 ${style === 'ICHIMOKU_CLOUD' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-secondary hover:text-primary'}`}
                     >
                         <Cloud size={12} /> Ichimoku
@@ -104,17 +81,11 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
 
                 <button 
                     onClick={scan} 
-                    disabled={loading || cooldown > 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/90 text-white rounded font-mono text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-accent/10 min-w-[120px] justify-center"
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-white text-background rounded font-mono text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md min-w-[120px] justify-center"
                 >
-                    {loading ? (
-                        <RefreshCw size={14} className="animate-spin" />
-                    ) : cooldown > 0 ? (
-                        <Clock size={14} className="animate-pulse" />
-                    ) : (
-                        <RefreshCw size={14} />
-                    )}
-                    {loading ? 'Analizando...' : cooldown > 0 ? `Espera ${cooldown}s` : 'Actualizar'}
+                    <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                    {loading ? 'Calculando...' : 'Escanear'}
                 </button>
             </div>
 
@@ -125,18 +96,17 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         <div className="relative">
                             <div className="w-16 h-16 border-4 border-border rounded-full border-t-accent animate-spin"></div>
                             <div className="absolute inset-0 flex items-center justify-center">
-                                <Zap size={24} className="text-accent animate-pulse" />
+                                <Cpu size={24} className="text-accent animate-pulse" />
                             </div>
                         </div>
                         <div className="text-center">
-                            <h3 className="text-sm font-mono font-bold text-primary mb-1">IA Analizando Estructura...</h3>
+                            <h3 className="text-sm font-mono font-bold text-primary mb-1">Ejecutando Algoritmos...</h3>
                             <p className="text-xs font-mono opacity-70">
-                                {style === 'SCALP_AGRESSIVE' && "Buscando divergencias y sobrecompra/venta..."}
-                                {style === 'SWING_INSTITUTIONAL' && "Calculando niveles Fibonacci y Order Blocks..."}
-                                {style === 'BREAKOUT_MOMENTUM' && "Midiendo volumen relativo y roturas..."}
-                                {style === 'ICHIMOKU_CLOUD' && "Evaluando Kumo Cloud y Tenkan/Kijun Cross..."}
+                                {style === 'SCALP_AGRESSIVE' && "Calculando RSI Vectorial y Bandas de Bollinger..."}
+                                {style === 'SWING_INSTITUTIONAL' && "Detectando Barridos de Liquidez y Estructura..."}
+                                {style === 'BREAKOUT_MOMENTUM' && "Analizando Volumetría y Flujo de Órdenes..."}
+                                {style === 'ICHIMOKU_CLOUD' && "Proyectando Nube Kumo y Equilibrios TK..."}
                             </p>
-                            <p className="text-[10px] mt-4 text-secondary/50 animate-pulse">Optimizando peticiones para evitar congestión...</p>
                         </div>
                     </div>
                 ) : error ? (
@@ -144,23 +114,21 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                          <div className="p-3 bg-danger/10 rounded-full text-danger mb-2">
                              <AlertTriangle size={32} />
                          </div>
-                        <span className="font-mono text-sm text-danger font-bold">Sistema en Pausa</span>
+                        <span className="font-mono text-sm text-danger font-bold">Error de Datos</span>
                         <span className="text-xs max-w-xs text-center">{error}</span>
-                        {cooldown === 0 && (
-                            <button onClick={scan} className="mt-2 px-4 py-2 bg-surface border border-border hover:bg-background rounded text-xs">
-                                Reintentar Ahora
-                            </button>
-                        )}
+                        <button onClick={scan} className="mt-2 px-4 py-2 bg-surface border border-border hover:bg-background rounded text-xs">
+                            Reintentar
+                        </button>
                     </div>
                 ) : opportunities.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-secondary gap-3 opacity-60">
                         <BarChart2 size={48} strokeWidth={1} />
-                        <h3 className="font-mono text-sm font-bold">Escaneo Completado: 0 Resultados</h3>
+                        <h3 className="font-mono text-sm font-bold">Sin Señales Claras</h3>
                         <p className="text-xs text-center max-w-sm">
-                            El sistema analizó las 30 monedas principales, pero ninguna superó el umbral de confianza (>65%) para la estrategia <span className="text-primary font-bold">{style.split('_')[0]}</span>.
+                            El algoritmo matemático ha filtrado las 30 principales criptomonedas y ninguna cumple los criterios estrictos de la estrategia <span className="text-primary font-bold">{style.split('_')[0]}</span>.
                         </p>
-                        <p className="text-[10px] mt-2 bg-surface p-2 rounded border border-border">
-                            El sistema funciona correctamente. Simplemente no hay operaciones de alta probabilidad ahora mismo.
+                        <p className="text-[10px] mt-2 bg-surface p-2 rounded border border-border font-mono text-accent">
+                            Paciencia = Rentabilidad.
                         </p>
                     </div>
                 ) : (
@@ -176,7 +144,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
 };
 
 // Sub-component for the "Signal Ticket" look
-const SignalCard = ({ data, onSelect }: { data: AIOpportunity, onSelect: () => void }) => {
+const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void }> = ({ data, onSelect }) => {
     const isLong = data.side === 'LONG';
     const mainColor = isLong ? 'text-success' : 'text-danger';
     const bgColor = isLong ? 'bg-success/5' : 'bg-danger/5';
@@ -246,7 +214,6 @@ const SignalCard = ({ data, onSelect }: { data: AIOpportunity, onSelect: () => v
                             <span className="block text-xs font-mono text-success font-bold">${data.takeProfits.tp2}</span>
                         </div>
                         <div className="text-center p-2 rounded bg-success/20 border border-success/30 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-2 h-2 bg-accent rounded-full animate-ping"></div>
                             <span className="block text-[9px] text-success/70 font-bold">TP 3</span>
                             <span className="block text-xs font-mono text-success font-bold">${data.takeProfits.tp3}</span>
                         </div>
@@ -265,9 +232,10 @@ const SignalCard = ({ data, onSelect }: { data: AIOpportunity, onSelect: () => v
                      </div>
                 </div>
                 
-                <div className="p-3 bg-accent/5 border border-accent/10 rounded-lg">
+                <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg">
                     <p className="text-[10px] text-secondary italic leading-relaxed">
-                        "<span className="text-accent not-italic font-medium">{data.technicalReasoning}</span>"
+                        <span className="text-blue-400 not-italic font-bold mr-1">[ALGORITMO]:</span> 
+                        {data.technicalReasoning}
                     </p>
                 </div>
             </div>

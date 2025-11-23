@@ -1,6 +1,6 @@
 
 import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle } from '../types';
-import { generateBatchTradeSignals } from './geminiService';
+import { hasActiveSession } from './geminiService';
 
 // PRIMARY: Binance Vision (CORS friendly for public data)
 const BINANCE_API_BASE = 'https://data-api.binance.vision/api/v3';
@@ -16,6 +16,20 @@ const MEME_SYMBOLS = [
     'PNUT', 'ACT', 'POPCAT', 'SLERF', 'BRETT', 'GOAT'
 ];
 
+// UTILITY: Fetch with Timeout to prevent blocking UI
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 4000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        throw error;
+    }
+};
+
 export const fetchCryptoData = async (mode: 'volume' | 'memes' = 'volume'): Promise<MarketData[]> => {
   try {
     const data = await fetchBinanceMarkets(mode);
@@ -29,74 +43,81 @@ export const fetchCryptoData = async (mode: 'volume' | 'memes' = 'volume'): Prom
 
 // --- BINANCE FETCH STRATEGY ---
 const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData[]> => {
-    // 24hr ticker is heavy, but data-api.binance.vision usually handles it well
-    const response = await fetch(`${BINANCE_API_BASE}/ticker/24hr`);
-    if (!response.ok) throw new Error(`Binance returned ${response.status}`);
-    
-    const data = await response.json();
-    
-    // Ignored symbols
-    const ignoredPatterns = ['USDCUSDT', 'FDUSDUSDT', 'TUSDUSDT', 'USDPUSDT', 'EURUSDT', 'DAIUSDT', 'BUSDUSDT', 'UPUSDT', 'DOWNUSDT', 'BULLUSDT', 'BEARUSDT', 'USDT', 'PAXGUSDT'];
+    try {
+        const response = await fetchWithTimeout(`${BINANCE_API_BASE}/ticker/24hr`);
+        if (!response.ok) throw new Error(`Binance returned ${response.status}`);
+        
+        const data = await response.json();
+        
+        // Ignored symbols
+        const ignoredPatterns = ['USDCUSDT', 'FDUSDUSDT', 'TUSDUSDT', 'USDPUSDT', 'EURUSDT', 'DAIUSDT', 'BUSDUSDT', 'UPUSDT', 'DOWNUSDT', 'BULLUSDT', 'BEARUSDT', 'USDT', 'PAXGUSDT'];
 
-    let filteredData = data.filter((ticker: any) => {
-        const symbol = ticker.symbol;
-        return symbol.endsWith('USDT') && 
-               !ignoredPatterns.includes(symbol) &&
-               !symbol.includes('DOWN') && 
-               !symbol.includes('UP');
-    });
-
-    if (mode === 'memes') {
-        filteredData = filteredData.filter((ticker: any) => {
-            const baseSymbol = ticker.symbol.replace('USDT', '');
-            return MEME_SYMBOLS.some(meme => baseSymbol === meme || baseSymbol === `1000${meme}`);
+        let filteredData = data.filter((ticker: any) => {
+            const symbol = ticker.symbol;
+            return symbol.endsWith('USDT') && 
+                !ignoredPatterns.includes(symbol) &&
+                !symbol.includes('DOWN') && 
+                !symbol.includes('UP');
         });
+
+        if (mode === 'memes') {
+            filteredData = filteredData.filter((ticker: any) => {
+                const baseSymbol = ticker.symbol.replace('USDT', '');
+                return MEME_SYMBOLS.some(meme => baseSymbol === meme || baseSymbol === `1000${meme}`);
+            });
+        }
+
+        filteredData = filteredData
+            .sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
+            .slice(0, 50);
+
+        return filteredData.map((ticker: any) => {
+            const rawSymbol = ticker.symbol.replace('USDT', '');
+            return {
+                id: ticker.symbol, // Binance Symbol ID
+                symbol: `${rawSymbol}/USDT`,
+                price: parseFloat(ticker.lastPrice),
+                change24h: parseFloat(ticker.priceChangePercent),
+                rsi: 50, // Placeholder, calculated properly in detailed analysis
+                volume: formatVolume(parseFloat(ticker.quoteVolume)),
+                trend: parseFloat(ticker.priceChangePercent) > 0.5 ? 'bullish' : 'bearish'
+            };
+        });
+    } catch (e) {
+        throw e;
     }
-
-    filteredData = filteredData
-        .sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
-        .slice(0, 50);
-
-    return filteredData.map((ticker: any) => {
-        const rawSymbol = ticker.symbol.replace('USDT', '');
-        return {
-            id: ticker.symbol, // Binance Symbol ID
-            symbol: `${rawSymbol}/USDT`,
-            price: parseFloat(ticker.lastPrice),
-            change24h: parseFloat(ticker.priceChangePercent),
-            rsi: 50, // Placeholder, calculated properly in detailed analysis
-            volume: formatVolume(parseFloat(ticker.quoteVolume)),
-            trend: parseFloat(ticker.priceChangePercent) > 0.5 ? 'bullish' : 'bearish'
-        };
-    });
 };
 
 // --- COINCAP FETCH STRATEGY (FALLBACK) ---
 const fetchCoinCapMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData[]> => {
-    const response = await fetch(`${COINCAP_API_BASE}/assets?limit=100`);
-    if (!response.ok) return [];
-    
-    const json = await response.json();
-    let assets = json.data;
+    try {
+        const response = await fetchWithTimeout(`${COINCAP_API_BASE}/assets?limit=100`);
+        if (!response.ok) return [];
+        
+        const json = await response.json();
+        let assets = json.data;
 
-    if (mode === 'memes') {
-         assets = assets.filter((asset: any) => 
-            MEME_SYMBOLS.includes(asset.symbol.toUpperCase())
-         );
-    } else {
-        // CoinCap is already sorted by rank (roughly volume/mcap)
-        assets = assets.slice(0, 50);
+        if (mode === 'memes') {
+            assets = assets.filter((asset: any) => 
+                MEME_SYMBOLS.includes(asset.symbol.toUpperCase())
+            );
+        } else {
+            // CoinCap is already sorted by rank (roughly volume/mcap)
+            assets = assets.slice(0, 50);
+        }
+
+        return assets.map((asset: any) => ({
+            id: asset.id, // CoinCap ID (e.g. 'bitcoin') - Important for candles
+            symbol: `${asset.symbol}/USDT`,
+            price: parseFloat(asset.priceUsd),
+            change24h: parseFloat(asset.changePercent24Hr),
+            rsi: 50,
+            volume: formatVolume(parseFloat(asset.volumeUsd24Hr)),
+            trend: parseFloat(asset.changePercent24Hr) > 0.5 ? 'bullish' : 'bearish'
+        }));
+    } catch (e) {
+        return [];
     }
-
-    return assets.map((asset: any) => ({
-        id: asset.id, // CoinCap ID (e.g. 'bitcoin') - Important for candles
-        symbol: `${asset.symbol}/USDT`,
-        price: parseFloat(asset.priceUsd),
-        change24h: parseFloat(asset.changePercent24Hr),
-        rsi: 50,
-        volume: formatVolume(parseFloat(asset.volumeUsd24Hr)),
-        trend: parseFloat(asset.changePercent24Hr) > 0.5 ? 'bullish' : 'bearish'
-    }));
 };
 
 // General subscription for the main scanner
@@ -141,7 +162,7 @@ export const subscribeToLivePrices = (marketData: MarketData[], callback: (data:
 
 export const getFearAndGreedIndex = async (): Promise<FearAndGreedData | null> => {
   try {
-    const response = await fetch('https://api.alternative.me/fng/');
+    const response = await fetchWithTimeout('https://api.alternative.me/fng/', {}, 3000);
     if (!response.ok) return null;
     const json = await response.json();
     return json.data[0];
@@ -152,7 +173,7 @@ export const getFearAndGreedIndex = async (): Promise<FearAndGreedData | null> =
 
 export const getMacroData = async (): Promise<string> => {
     try {
-        const globalRes = await fetch('https://api.coincap.io/v2/global');
+        const globalRes = await fetchWithTimeout('https://api.coincap.io/v2/global', {}, 3000);
         let btcDominance = "Unknown";
         if (globalRes.ok) {
             const data = await globalRes.json();
@@ -173,10 +194,10 @@ export const getMarketContextForAI = async (): Promise<string> => {
 const fetchCandles = async (symbolId: string, interval: string): Promise<{close: number, volume: number, high: number, low: number, open: number}[]> => {
     const isBinance = symbolId === symbolId.toUpperCase() && symbolId.endsWith('USDT');
 
-    if (isBinance) {
-        try {
-            // Fetching 120 candles to ensure deep data for EMA200 and historical volatility checks
-            const res = await fetch(`${BINANCE_API_BASE}/klines?symbol=${symbolId}&interval=${interval}&limit=120`);
+    try {
+        if (isBinance) {
+            // Fetching 205 candles to ensure deep data for EMA200 calculation
+            const res = await fetchWithTimeout(`${BINANCE_API_BASE}/klines?symbol=${symbolId}&interval=${interval}&limit=205`, {}, 4000);
             if (!res.ok) throw new Error("Binance Candle Error");
             const data = await res.json();
             return data.map((d: any[]) => ({ 
@@ -186,28 +207,41 @@ const fetchCandles = async (symbolId: string, interval: string): Promise<{close:
                 close: parseFloat(d[4]), 
                 volume: parseFloat(d[5]) 
             }));
-        } catch (e) {
-            const fallbackId = mapBinanceToCoinCap(symbolId);
-            if (fallbackId) return fetchCoinCapCandles(fallbackId, interval);
-            return [];
+        } else {
+            const ccInterval = interval === '15m' ? 'm15' : 'h1'; 
+            const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${symbolId}&quoteId=tether`, {}, 4000);
+            if (!res.ok) return [];
+            const json = await res.json();
+            return json.data.map((d: any) => ({ 
+                open: parseFloat(d.open),
+                high: parseFloat(d.high),
+                low: parseFloat(d.low),
+                close: parseFloat(d.close), 
+                volume: parseFloat(d.volume) 
+            }));
         }
-    } else {
-        return fetchCoinCapCandles(symbolId, interval);
+    } catch (e) {
+        // Retry with CoinCap logic if Binance fails (or vice versa handled by mapBinanceToCoinCap caller)
+        if (isBinance) {
+            const fallbackId = mapBinanceToCoinCap(symbolId);
+            if (fallbackId) {
+                 try {
+                    const ccInterval = interval === '15m' ? 'm15' : 'h1'; 
+                    const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${fallbackId}&quoteId=tether`, {}, 4000);
+                    if (!res.ok) return [];
+                    const json = await res.json();
+                    return json.data.map((d: any) => ({ 
+                        open: parseFloat(d.open),
+                        high: parseFloat(d.high),
+                        low: parseFloat(d.low),
+                        close: parseFloat(d.close), 
+                        volume: parseFloat(d.volume) 
+                    }));
+                 } catch(err) { return []; }
+            }
+        }
+        return [];
     }
-};
-
-const fetchCoinCapCandles = async (id: string, interval: string) => {
-    const ccInterval = interval === '15m' ? 'm15' : 'h1'; 
-    const res = await fetch(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${id}&quoteId=tether`);
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.data.map((d: any) => ({ 
-        open: parseFloat(d.open),
-        high: parseFloat(d.high),
-        low: parseFloat(d.low),
-        close: parseFloat(d.close), 
-        volume: parseFloat(d.volume) 
-    }));
 };
 
 const mapBinanceToCoinCap = (symbol: string) => {
@@ -221,7 +255,7 @@ export const getTechnicalAnalysis = async (symbolDisplay: string): Promise<strin
 
     try {
         const candles = await fetchCandles(binanceSymbol, '15m');
-        if (candles.length < 50) return "Datos insuficientes.";
+        if (candles.length < 50) return `Datos insuficientes para análisis técnico de ${symbolDisplay}.`;
 
         const prices = candles.map(c => c.close);
         const volumes = candles.map(c => c.volume);
@@ -230,7 +264,7 @@ export const getTechnicalAnalysis = async (symbolDisplay: string): Promise<strin
         
         return calculateTechnicalString(rawSymbol, prices, volumes, highs, lows);
     } catch (e) {
-        return "Error calculando técnicos.";
+        return `No se pudo conectar al mercado para ${symbolDisplay}.`;
     }
 };
 
@@ -240,6 +274,7 @@ const calculateTechnicalString = (symbol: string, prices: number[], volumes: num
         const rsi = calculateRSI(prices, 14);
         const ema20 = calculateEMA(prices, 20);
         const ema50 = calculateEMA(prices, 50);
+        const ema100 = calculateEMA(prices, 100);
         const ema200 = calculateEMA(prices, 200);
 
         const sma20 = calculateSMA(prices, 20);
@@ -250,15 +285,24 @@ const calculateTechnicalString = (symbol: string, prices: number[], volumes: num
         const avgVol = calculateSMA(volumes, 20);
         const rvol = avgVol > 0 ? (volumes[volumes.length - 1] / avgVol) : 0;
 
+        // Check Golden Cross / Death Cross status
+        const isGoldenCross = ema50 > ema200;
+        const crossStatus = isGoldenCross ? "GOLDEN CROSS (Alcista Macro)" : "DEATH CROSS (Bajista Macro)";
+        
         // --- NEW ADVANCED METRICS FOR AI ---
         const atr = calculateATR(highs, lows, prices, 14);
         const adx = calculateADX(highs, lows, prices, 14);
         const pivots = calculatePivotPoints(highs, lows, prices);
+        
+        // Calculate Distance to EMA 20 (Mean Reversion)
+        const distEma20 = ((currentPrice - ema20) / ema20) * 100;
 
         return `
 DATOS TÉCNICOS AVANZADOS PARA ${symbol}:
 - Precio Actual: $${currentPrice}
-- Estructura EMA (20/50/200): $${ema20.toFixed(4)} / $${ema50.toFixed(4)} / $${ema200.toFixed(4)}
+- Estructura EMA (20/50/100/200): $${ema20.toFixed(4)} / $${ema50.toFixed(4)} / $${ema100.toFixed(4)} / $${ema200.toFixed(4)}
+- Distancia EMA20: ${distEma20.toFixed(2)}%
+- Estado Cruce Macro: ${crossStatus}
 - RSI (14, Wilder): ${rsi.toFixed(2)} ${rsi > 70 ? '(SOBRECOMPRA)' : rsi < 30 ? '(SOBREVENTA)' : '(NEUTRO)'}
 - RVOL (Fuerza Relativa): ${rvol.toFixed(2)} ${rvol > 1.5 ? 'VOLUMEN ALTO' : 'VOLUMEN BAJO'}
 - Bollinger: Sup $${upperBand.toFixed(4)} / Inf $${lowerBand.toFixed(4)}
@@ -271,162 +315,197 @@ ${extraInfo}
         `.trim();
 }
 
-// --- NEW ROBUST AI SCANNER ENGINE v2.0 ---
+// --- AUTONOMOUS QUANT ENGINE v4.0 (API INDEPENDENT) ---
 
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {
     // 1. Get market data
     const market = await fetchCryptoData('volume');
     if (!market || market.length === 0) throw new Error("No market data available");
     
-    // 2. Mathematical Pre-Filtering (Robust Candidate Selection)
-    // We filter heavily here to only send "Math Approved" setups to the AI
-    
-    // Scan top 30 assets to increase finding valid signals
+    // Scan top 30 assets
     const topCandidates = market.slice(0, 30);
     
-    const analyzedCandidates = await Promise.all(topCandidates.map(async (coin) => {
+    const validMathCandidates: AIOpportunity[] = [];
+
+    await Promise.all(topCandidates.map(async (coin) => {
         try {
             // Determine interval based on strategy
             const interval = style === 'SWING_INSTITUTIONAL' || style === 'ICHIMOKU_CLOUD' ? '4h' : '15m';
             
             const candles = await fetchCandles(coin.id, interval);
-            // Need min 80 candles for historical checks
-            if (candles.length < 80) return null; 
+            if (candles.length < 200) return; // Need deeper history for EMA 200
 
             const prices = candles.map(c => c.close);
             const volumes = candles.map(c => c.volume);
             const highs = candles.map(c => c.high);
             const lows = candles.map(c => c.low);
-            const opens = candles.map(c => c.open);
             
             let score = 0;
             let detectionNote = "";
+            let signalSide: 'LONG' | 'SHORT' = 'LONG'; // Default
 
-            // --- STRATEGY SPECIFIC DETECTORS ---
+            // Use Closed Candle for Confirmation (No Repainting)
+            const checkIndex = prices.length - 2; 
+
+            // --- DETERMINISTIC MATH DETECTORS ---
 
             if (style === 'ICHIMOKU_CLOUD') {
-                // MATH DETECTOR: ZEN DRAGON (CORRECTED DISPLACEMENT LOGIC)
-                const currentPrice = prices[prices.length - 1];
-                
-                // 1. Current TK Cross (Happening Now)
-                const { tenkan, kijun } = calculateIchimokuLines(highs, lows, 0); // 0 offset = current
-                
-                // 2. Cloud Check (Happening Past)
-                // The cloud that is plotted "today" was actually generated by data 26 periods ago.
+                const currentPrice = prices[checkIndex];
+                const { tenkan, kijun } = calculateIchimokuLines(highs, lows, 1); // offset 1 for closed candle
                 const offset = 26;
-                const pastHighs = highs.slice(0, highs.length - offset);
-                const pastLows = lows.slice(0, lows.length - offset);
+                const pastHighs = highs.slice(0, highs.length - offset - 1);
+                const pastLows = lows.slice(0, lows.length - offset - 1);
                 
                 if (pastHighs.length > 52) {
                      const { senkouA, senkouB } = calculateIchimokuCloud(pastHighs, pastLows);
-                     
-                     // Cloud Status
                      const aboveCloud = currentPrice > senkouA && currentPrice > senkouB;
                      const belowCloud = currentPrice < senkouA && currentPrice < senkouB;
-                     
                      const tkCrossBullish = tenkan > kijun;
                      const tkCrossBearish = tenkan < kijun;
 
                      if (aboveCloud && tkCrossBullish) {
-                         score += 10;
-                         detectionNote = "DETECCIÓN MATEMÁTICA: Kumo Breakout + TK Cross Alcista Validado.";
+                         score = 85;
+                         signalSide = 'LONG';
+                         detectionNote = "Tendencia Zen Dragon: Precio sobre Nube + Cruce TK Alcista.";
                      } else if (belowCloud && tkCrossBearish) {
-                          score += 10;
-                          detectionNote = "DETECCIÓN MATEMÁTICA: Kumo Breakout + TK Cross Bajista Validado.";
+                          score = 85;
+                          signalSide = 'SHORT';
+                          detectionNote = "Tendencia Zen Dragon: Precio bajo Nube + Cruce TK Bajista.";
                      }
                 }
 
             } else if (style === 'SWING_INSTITUTIONAL') {
-                // MATH DETECTOR: SMC LIQUIDITY & ORDER BLOCKS (V2)
-                const lastLow = lows[lows.length - 1];
-                const lastClose = prices[prices.length - 1];
-                const prev10Lows = Math.min(...lows.slice(lows.length - 12, lows.length - 2)); 
-                
-                // 1. SFP Logic (Liquidity Sweep)
-                if (lastLow < prev10Lows && lastClose > prev10Lows) {
-                    score += 8;
-                    detectionNote += "Swing Failure Pattern (Toma de Liquidez). ";
+                const lastLow = lows[checkIndex];
+                const lastHigh = highs[checkIndex];
+                const lastClose = prices[checkIndex];
+                const prev10Lows = Math.min(...lows.slice(checkIndex - 10, checkIndex)); 
+                const prev10Highs = Math.max(...highs.slice(checkIndex - 10, checkIndex));
+
+                // 1. Check for GOLDEN CROSS (EMA 50 > EMA 200) for Swing Bias
+                const ema50 = calculateEMA(prices.slice(0, checkIndex + 1), 50);
+                const ema200 = calculateEMA(prices.slice(0, checkIndex + 1), 200);
+                const isBullishTrend = ema50 > ema200;
+
+                // SFP Logic
+                if (isBullishTrend && lastLow < prev10Lows && lastClose > prev10Lows) {
+                    score = 80;
+                    signalSide = 'LONG';
+                    detectionNote = "SMC Setup (Trend Follow): Golden Cross + Barrido de Liquidez.";
+                } else if (!isBullishTrend && lastHigh > prev10Highs && lastClose < prev10Highs) {
+                    score = 80;
+                    signalSide = 'SHORT';
+                    detectionNote = "SMC Setup (Trend Follow): Death Cross + Barrido de Liquidez.";
                 }
 
-                // 2. RSI Divergence Logic (REAL IMPLEMENTATION)
+                // RSI Divergence Logic
                 const rsiSeries = calculateRSIArray(prices, 14);
-                const divergence = detectBullishDivergence(prices, rsiSeries, lows);
-                if (divergence) {
-                    score += 5;
-                    detectionNote += "Divergencia RSI Alcista detectada (Reversión). ";
+                const div = detectBullishDivergence(prices, rsiSeries, lows);
+                if (div) {
+                    score = Math.max(score, 75);
+                    signalSide = 'LONG'; 
+                    detectionNote = score >= 80 ? detectionNote + " + Divergencia RSI." : "Divergencia RSI Confirmada en Zona Baja.";
                 }
-
-                // 3. Order Block Proximity (Volume Spike previously)
-                // Checks if we are retesting a zone where a large move started (RVOL > 2)
-                const rvol = (volumes[volumes.length-1] / calculateSMA(volumes, 20));
-                if (rvol > 1.2 && score > 0) score += 2; // Volume confirming the reversal
 
             } else if (style === 'BREAKOUT_MOMENTUM') {
-                // MATH DETECTOR: VOLATILITY EXPANSION
                 const avgVol = calculateSMA(volumes, 20);
-                const rvol = avgVol > 0 ? (volumes[volumes.length-1] / avgVol) : 0;
+                const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
+                const change = (prices[checkIndex] - prices[checkIndex-1]) / prices[checkIndex-1];
                 
-                if (rvol > 2.0) {
-                     score += 8;
-                     detectionNote = `DETECCIÓN MATEMÁTICA: Expansión de Volumen Masiva (x${rvol.toFixed(1)}).`;
+                // EMA 20 Trend Check
+                const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
+                const priceAboveEma20 = prices[checkIndex] > ema20;
+
+                if (rvol > 2.0 && priceAboveEma20) {
+                     score = 70 + Math.min((rvol * 5), 25); 
+                     if (change > 0) {
+                        signalSide = 'LONG';
+                        detectionNote = `Breakout: Inyección de Volumen Masiva (x${rvol.toFixed(1)}) sobre EMA 20.`;
+                     } else {
+                        signalSide = 'SHORT';
+                        detectionNote = `Breakdown: Venta Institucional Masiva (x${rvol.toFixed(1)}).`;
+                     }
                 }
             } else {
-                // SCALP: DYNAMIC BOLLINGER SQUEEZE (V2)
-                const { bandwidth } = calculateBollingerStats(prices);
-                
-                // Calculate historical bandwidth to see if current is low RELATIVE to history
+                // SCALP: BOLLINGER SQUEEZE + EMA 100 Support
+                const { bandwidth, lower, upper } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
+                const ema100 = calculateEMA(prices.slice(0, checkIndex + 1), 100);
+                const close = prices[checkIndex];
+
                 const historicalBandwidths = [];
                 for(let i = 20; i < 50; i++) {
-                    const slice = prices.slice(0, prices.length - i);
+                    const slice = prices.slice(0, checkIndex + 1 - i);
                     historicalBandwidths.push(calculateBollingerStats(slice).bandwidth);
                 }
                 const minHistBandwidth = Math.min(...historicalBandwidths);
 
-                if (bandwidth <= minHistBandwidth * 1.1) { // Current bandwidth is within 10% of historical lows
-                    score += 7;
-                    detectionNote = "DETECCIÓN MATEMÁTICA: Compresión Extrema de Bollinger (Squeeze).";
+                if (bandwidth <= minHistBandwidth * 1.1) {
+                    score = 80;
+                    detectionNote = "Patrón Quant: Compresión Extrema (Squeeze). Explosión inminente.";
+                    const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
+                    const ema50 = calculateEMA(prices.slice(0, checkIndex + 1), 50);
+                    signalSide = ema20 > ema50 ? 'LONG' : 'SHORT';
                 }
                 
-                const rsi = calculateRSI(prices, 14);
-                if (rsi < 30 || rsi > 70) score += 3;
+                // Walking the Bands Strategy
+                else if (close > upper && close > ema100) {
+                     score = 75;
+                     signalSide = 'LONG';
+                     detectionNote = "Bollinger Walk: Precio rompiendo banda superior sobre EMA 100.";
+                }
             }
 
-            // Stricter Threshold: Only pass highly qualified candidates
-            if (score >= 7) {
-                return {
+            // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
+            if (score >= 70) {
+                const currentPrice = prices[prices.length - 1]; // Use live price for entry
+                const atr = calculateATR(highs, lows, prices, 14);
+                
+                // Algorithmic SL/TP Calculation (Exact Maths)
+                let sl = 0;
+                let tp1 = 0, tp2 = 0, tp3 = 0;
+
+                // Adjust multiplier based on timeframe/volatility
+                const slMult = interval === '15m' ? 1.5 : 2.0;
+
+                if (signalSide === 'LONG') {
+                    sl = currentPrice - (atr * slMult);
+                    const risk = currentPrice - sl;
+                    tp1 = currentPrice + risk;      // 1:1
+                    tp2 = currentPrice + (risk * 2); // 1:2
+                    tp3 = currentPrice + (risk * 3); // 1:3
+                } else {
+                    sl = currentPrice + (atr * slMult);
+                    const risk = sl - currentPrice;
+                    tp1 = currentPrice - risk;
+                    tp2 = currentPrice - (risk * 2);
+                    tp3 = currentPrice - (risk * 3);
+                }
+
+                const decimals = currentPrice > 1000 ? 2 : currentPrice > 1 ? 4 : 6;
+                const format = (n: number) => parseFloat(n.toFixed(decimals));
+
+                const mathOpp: AIOpportunity = {
+                    id: Date.now().toString() + Math.random(),
                     symbol: coin.symbol,
-                    techData: calculateTechnicalString(coin.symbol.split('/')[0], prices, volumes, highs, lows, detectionNote)
+                    timestamp: Date.now(),
+                    strategy: style,
+                    side: signalSide,
+                    confidenceScore: Math.floor(score), 
+                    entryZone: { min: format(currentPrice * 0.999), max: format(currentPrice * 1.001) },
+                    dcaLevel: signalSide === 'LONG' ? format(currentPrice - (atr * 0.5)) : format(currentPrice + (atr * 0.5)),
+                    stopLoss: format(sl),
+                    takeProfits: { tp1: format(tp1), tp2: format(tp2), tp3: format(tp3) },
+                    technicalReasoning: detectionNote,
+                    invalidated: false
                 };
+
+                validMathCandidates.push(mathOpp);
             }
-            return null;
 
         } catch(e) { return null; }
     }));
 
-    const validCandidates = analyzedCandidates.filter(c => c !== null);
-    
-    // 3. BATCH AI ANALYSIS
-    // Instead of calling the API 3 times, we batch the top 3 (or more) into ONE single request.
-    // This fixes the "429 Resource Exhausted" error.
-    
-    const topBatch = validCandidates.slice(0, 3); // Pick top 3 best mathematical candidates
-    
-    if (topBatch.length > 0) {
-        try {
-            const signals = await generateBatchTradeSignals(
-                topBatch.map(c => ({ symbol: c!.symbol, technicalData: c!.techData })), 
-                style
-            );
-            
-            // Filter by confidence
-            return signals.filter(s => s.confidenceScore > 65);
-        } catch (e) {
-            console.error("Error in AI batch:", e);
-            return [];
-        }
-    }
-
-    return [];
+    // Return pure math results instantly
+    return validMathCandidates.sort((a, b) => b.confidenceScore - a.confidenceScore);
 };
 
 // --- MATH HELPERS (ROBUST) ---
@@ -441,7 +520,7 @@ const detectBullishDivergence = (prices: number[], rsiSeries: number[], lows: nu
     let recentLowPrice = Infinity;
     
     // Check last 3 closed candles
-    const startCheck = prices.length - 1;
+    const startCheck = prices.length - 2; // Avoid live candle
     for (let i = startCheck; i > startCheck - 3; i--) {
         if (lows[i] < recentLowPrice) {
             recentLowPrice = lows[i];
@@ -459,10 +538,8 @@ const detectBullishDivergence = (prices: number[], rsiSeries: number[], lows: nu
     for (let i = lookbackStart; i > lookbackEnd; i--) {
         // Is this a pivot low? (Lower than neighbors)
         if (lows[i] < lows[i-1] && lows[i] < lows[i+1]) {
-            // Is it strictly valid for divergence? (Past Low > Current Low for Hidden Div? No, Regular Bullish: Price Lower Low)
             // Regular Bullish Divergence: Price Lower Low, RSI Higher Low
             if (lows[i] > recentLowPrice) { 
-                // Found a candidate low (Price was higher in the past, so current is Lower Low)
                 pastLowPrice = lows[i];
                 pastLowIndex = i;
                 break; // Found the most recent structural low
@@ -552,7 +629,7 @@ const calculateRSIArray = (data: number[], period: number): number[] => {
     const rsiArray = new Array(data.length).fill(0);
 
     // First average (SMA)
-    for (let i = 1; i <= period; i++) {
+    for (let i = 1; i < period + 1; i++) {
         const change = data[i] - data[i - 1];
         if (change >= 0) gains += change;
         else losses += Math.abs(change);
@@ -609,17 +686,18 @@ const calculateATR = (highs: number[], lows: number[], closes: number[], period:
 
 // Simplified ADX (Trend Strength)
 const calculateADX = (highs: number[], lows: number[], closes: number[], period: number) => {
-    // Requires full implementation of +DM, -DM, TR, Smoothed versions.
-    // For this context, we will use a simpler Trend Strength proxy:
-    // ABS(EMA20 - EMA50) normalized by price. 
-    // This gives the AI a relative idea if the MAs are fanning out (Strong Trend) or flat (Range).
+    
+    // Heuristic: Use EMA spread to approximate Trend Strength and avoid 0.0 values
     const ema20 = calculateEMA(closes, 20);
     const ema50 = calculateEMA(closes, 50);
     const spread = Math.abs(ema20 - ema50);
-    // Normalize: Spread as percentage of price * 100
-    const strength = (spread / closes[closes.length-1]) * 1000; 
-    // Heuristic: > 5 is strong, < 2 is weak
-    return strength * 5; // Scaling to look like ADX 0-100 roughly
+    
+    // Normalize based on volatility (ATR proxy) or price to get a 0-100 score
+    // Factor boosted to provide actionable signals
+    const score = (spread / closes[closes.length-1]) * 1000 * 5; 
+    
+    // Clamp to ensure visual stability
+    return Math.max(5.5, Math.min(score, 99.9));
 }
 
 const calculatePivotPoints = (highs: number[], lows: number[], closes: number[]) => {
