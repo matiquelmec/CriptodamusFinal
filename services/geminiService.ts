@@ -1,4 +1,3 @@
-
 import { AIOpportunity, TradingStyle } from "../types";
 
 // --- MOTOR AUTÓNOMO (OFFLINE) ---
@@ -60,8 +59,8 @@ export const streamMarketAnalysis = async function* (userMessage: string, market
     const pR1 = parseFloat(pivotR1);
     const pS1 = parseFloat(pivotS1);
 
-    // Lógica de Comando: ANALISIS_INTEGRAL (Disparado al cambiar moneda)
-    if (userMessage === "ANALISIS_INTEGRAL" || lowerMsg.includes('analisis') || lowerMsg.includes('reporte')) {
+    // Lógica de Comando: ANALISIS_INTEGRAL (O frase natural pre-llenada)
+    if (userMessage === "ANALISIS_INTEGRAL" || lowerMsg.includes('generar análisis') || lowerMsg.includes('reporte') || lowerMsg.includes('analisis')) {
         let response = "";
 
         // --- LÓGICA DE FASES DE MERCADO ---
@@ -148,7 +147,7 @@ export const streamMarketAnalysis = async function* (userMessage: string, market
     }
     else {
         // Fallback conversacional
-        yield `**Sistema Autónomo:** He recibido tu mensaje. Para ver el análisis completo de nuevo, cambia de moneda o escribe "ANALISIS".\n\nDatos actuales: RSI ${rsiStr}, ADX ${adxStr}.`;
+        yield `**Sistema Autónomo:** He recibido tu mensaje. Para ver el análisis completo de nuevo, cambia de moneda o presiona "Generar Análisis Integral".\n\nDatos actuales: RSI ${rsiStr}, ADX ${adxStr}.`;
     }
 }
 

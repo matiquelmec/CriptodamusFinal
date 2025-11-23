@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, Loader2, BookOpen, ChevronDown, Check, Info, RefreshCw, Radio } from 'lucide-react';
-import { streamMarketAnalysis, resetSession } from '../services/geminiService';
+import { Send, Bot, User, Sparkles, Loader2, BookOpen, ChevronDown, Check, RefreshCw } from 'lucide-react';
+import { streamMarketAnalysis } from '../services/geminiService';
 import { ChatMessage, Strategy } from '../types';
 import { getMarketContextForAI, getTechnicalAnalysis, getFearAndGreedIndex } from '../services/cryptoService';
 import { STRATEGIES } from '../services/strategyContext';
@@ -26,92 +26,32 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
     scrollToBottom();
   }, [messages]);
 
-  // AUTO-ANALYSIS TRIGGER: Runs when symbol changes
+  // PREPARE INPUT ON SYMBOL CHANGE (NO AUTO-FIRE)
   useEffect(() => {
-      const runAutoAnalysis = async () => {
-          setIsLoading(true);
-          // Clear previous messages or keep a history? Let's clear for focus.
-          setMessages([{
-              id: 'init',
-              role: 'model',
-              content: `Conectando con motor autónomo para analizar **${selectedSymbol}**...`,
-              timestamp: Date.now(),
-              isThinking: true
-          }]);
+      // 1. Reset Chat with a System Ready Message
+      setMessages([{
+          id: Date.now().toString(),
+          role: 'model',
+          content: `Activo seleccionado: **${selectedSymbol}**.\n\nEl motor autónomo ha cargado los datos de mercado. Presiona enviar para ejecutar la estrategia **${currentStrategy.name}**.`,
+          timestamp: Date.now(),
+          isThinking: false
+      }]);
 
-          try {
-              // Prepare Context
-              const contextPromise = Promise.all([
-                  getMarketContextForAI(),
-                  getTechnicalAnalysis(selectedSymbol),
-                  getFearAndGreedIndex()
-              ]);
-
-              const [marketContext, techAnalysis, sentimentData] = await Promise.race([
-                  contextPromise,
-                  new Promise<any[]>((resolve) => setTimeout(() => resolve(["Contexto timeout", "Análisis técnico parcial", null]), 4000))
-              ]);
-
-              const sentimentString = sentimentData 
-                ? `SENTIMIENTO MACRO (Fear & Greed Index): Valor ${sentimentData.value} (${sentimentData.value_classification}).` 
-                : "SENTIMIENTO MACRO: No disponible.";
-
-              const combinedContext = `
-${marketContext}
-${sentimentString}
-${techAnalysis}
-              `.trim();
-
-              // Trigger "ANALISIS_INTEGRAL" command automatically
-              const stream = streamMarketAnalysis("ANALISIS_INTEGRAL", combinedContext, currentStrategy.systemInstruction);
-              
-              let fullResponse = "";
-              const msgId = Date.now().toString();
-
-              // Replace the "Thinking" message with the real one
-              setMessages(prev => prev.filter(m => m.id !== 'init').concat({
-                  id: msgId,
-                  role: 'model',
-                  content: '',
-                  timestamp: Date.now(),
-                  isThinking: false
-              }));
-
-              for await (const chunk of stream) {
-                  fullResponse += chunk;
-                  setMessages(prev => prev.map(msg => 
-                      msg.id === msgId ? { ...msg, content: fullResponse } : msg
-                  ));
-              }
-
-          } catch (e) {
-              setMessages(prev => [...prev, {
-                  id: Date.now().toString(),
-                  role: 'model',
-                  content: "⚠️ Error al generar el reporte autónomo. Reintentando...",
-                  timestamp: Date.now()
-              }]);
-          } finally {
-              setIsLoading(false);
-          }
-      };
-
-      runAutoAnalysis();
+      // 2. Pre-fill the input so the user just has to hit Enter
+      setInput("Generar Análisis Integral");
+      
   }, [selectedSymbol, currentStrategy]);
 
   const handleStrategyChange = (strategy: Strategy) => {
       if (strategy.id === currentStrategy.id) return;
       setCurrentStrategy(strategy);
       setShowStrategySelector(false);
-      // The useEffect [selectedSymbol, currentStrategy] will trigger re-analysis automatically
   };
 
   const handleReset = () => {
     setIsLoading(false);
-    // Force re-trigger by essentially doing nothing visible, or we could just clear messages
     setMessages([]);
-    // Reloading logic is handled by useEffect on dependency change mostly, 
-    // but for manual reset we might want to clear state
+    setInput("Generar Análisis Integral");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -126,7 +66,7 @@ ${techAnalysis}
     };
 
     setMessages(prev => [...prev, userMsg]);
-    setInput('');
+    setInput(''); // Clear input after sending
     setIsLoading(true);
 
     let botMsgId = (Date.now() + 1).toString();
@@ -166,7 +106,7 @@ ${techAnalysis}
 
     } catch (error) {
       setMessages(prev => prev.map(msg => 
-          msg.id === botMsgId ? { ...msg, content: 'Error en motor matemático.', isThinking: false } : msg
+          msg.id === botMsgId ? { ...msg, content: 'Error en motor matemático. Intente nuevamente.', isThinking: false } : msg
       ));
     } finally {
       setIsLoading(false);
@@ -187,7 +127,7 @@ ${techAnalysis}
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
                     </span>
-                    <span className="text-[9px] font-mono text-success font-bold uppercase">Online</span>
+                    <span className="text-[9px] font-mono text-success font-bold uppercase">Ready</span>
                 </div>
             </div>
              <button 
@@ -260,7 +200,7 @@ ${techAnalysis}
               {msg.isThinking ? (
                   <div className="flex items-center gap-2 text-secondary py-1">
                       <Loader2 size={12} className="animate-spin" />
-                      <span className="font-mono text-[10px]">Analizando estructura y confluencia...</span>
+                      <span className="font-mono text-[10px]">Procesando datos macro y técnicos...</span>
                   </div>
               ) : (
                 <div className="markdown-body font-mono whitespace-pre-wrap">
@@ -279,7 +219,7 @@ ${techAnalysis}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={`Consulta adicional sobre ${selectedSymbol}...`}
+            placeholder={`Consulta sobre ${selectedSymbol}...`}
             className="w-full bg-surface border border-border rounded pl-3 pr-10 py-2 text-xs text-primary placeholder-secondary/50 focus:border-accent focus:outline-none font-mono transition-all disabled:opacity-50"
             disabled={isLoading}
           />
