@@ -1,4 +1,5 @@
 
+
 import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle } from '../types';
 import { hasActiveSession } from './geminiService';
 
@@ -8,6 +9,14 @@ const BINANCE_WS_BASE = 'wss://stream.binance.com:9443/stream?streams=';
 
 // FALLBACK: CoinCap (Very reliable for frontend)
 const COINCAP_API_BASE = 'https://api.coincap.io/v2';
+
+// List of known major memes to filter for the "Meme" view
+const MEME_SYMBOLS = [
+    'DOGE', 'SHIB', 'PEPE', 'WIF', 'FLOKI', 'BONK', 'BOME', 'MEME', 'PEOPLE', 
+    'DOGS', 'TURBO', 'MYRO', 'NEIRO', '1000SATS', 'ORDI', 'BABYDOGE', 'MOODENG',
+    'PNUT', 'ACT', 'POPCAT', 'SLERF', 'BRETT', 'GOAT', 'MOG', 'SPX', 'HIPPO', 'LADYS',
+    'CHILLGUY', 'LUCE', 'PENGU'
+];
 
 // UTILITY: Fetch with Timeout to prevent blocking UI
 const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 4000) => {
@@ -23,19 +32,19 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout 
     }
 };
 
-export const fetchCryptoData = async (): Promise<MarketData[]> => {
+export const fetchCryptoData = async (mode: 'volume' | 'memes' = 'volume'): Promise<MarketData[]> => {
   try {
-    const data = await fetchBinanceMarkets();
+    const data = await fetchBinanceMarkets(mode);
     if (data.length === 0) throw new Error("Empty Binance Data");
     return data;
   } catch (error) {
     console.warn("Binance API failed/blocked, switching to CoinCap fallback...", error);
-    return await fetchCoinCapMarkets();
+    return await fetchCoinCapMarkets(mode);
   }
 };
 
 // --- BINANCE FETCH STRATEGY ---
-const fetchBinanceMarkets = async (): Promise<MarketData[]> => {
+const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData[]> => {
     try {
         const response = await fetchWithTimeout(`${BINANCE_API_BASE}/ticker/24hr`);
         if (!response.ok) throw new Error(`Binance returned ${response.status}`);
@@ -53,9 +62,20 @@ const fetchBinanceMarkets = async (): Promise<MarketData[]> => {
                 !symbol.includes('UP');
         });
 
-        filteredData = filteredData
-            .sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
-            .slice(0, 50);
+        if (mode === 'memes') {
+            filteredData = filteredData.filter((ticker: any) => {
+                const baseSymbol = ticker.symbol.replace('USDT', '');
+                // Check specific list or 1000-prefix (e.g. 1000SATS, 1000PEPE sometimes used)
+                return MEME_SYMBOLS.includes(baseSymbol) || MEME_SYMBOLS.includes(baseSymbol.replace('1000', ''));
+            });
+             // Sort memes by Volume too
+            filteredData = filteredData.sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
+        } else {
+            // Default: Top 50 by Volume
+            filteredData = filteredData
+                .sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
+                .slice(0, 50);
+        }
 
         return filteredData.map((ticker: any) => {
             const rawSymbol = ticker.symbol.replace('USDT', '');
@@ -75,13 +95,21 @@ const fetchBinanceMarkets = async (): Promise<MarketData[]> => {
 };
 
 // --- COINCAP FETCH STRATEGY (FALLBACK) ---
-const fetchCoinCapMarkets = async (): Promise<MarketData[]> => {
+const fetchCoinCapMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData[]> => {
     try {
-        const response = await fetchWithTimeout(`${COINCAP_API_BASE}/assets?limit=50`);
+        const response = await fetchWithTimeout(`${COINCAP_API_BASE}/assets?limit=100`);
         if (!response.ok) return [];
         
         const json = await response.json();
         let assets = json.data;
+
+        if (mode === 'memes') {
+             assets = assets.filter((asset: any) => 
+                MEME_SYMBOLS.includes(asset.symbol.toUpperCase())
+            );
+        } else {
+            assets = assets.slice(0, 50);
+        }
 
         return assets.map((asset: any) => ({
             id: asset.id, // CoinCap ID (e.g. 'bitcoin') - Important for candles
@@ -295,12 +323,15 @@ ${extraInfo}
 // --- AUTONOMOUS QUANT ENGINE v4.0 (API INDEPENDENT) ---
 
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {
-    // 1. Get market data - Always VOLUME based (Top 50)
-    const market = await fetchCryptoData();
+    // 1. Get market data based on selected style
+    // MEME_SCALP uses specific meme list, others use top volume
+    const mode = style === 'MEME_SCALP' ? 'memes' : 'volume';
+    const market = await fetchCryptoData(mode);
+    
     if (!market || market.length === 0) throw new Error("No market data available");
     
-    // Scan top 30 assets
-    const topCandidates = market.slice(0, 30);
+    // Scan all candidates if Memes (usually < 40), or top 40 for general
+    const topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 40);
     
     const validMathCandidates: AIOpportunity[] = [];
 
@@ -326,7 +357,33 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             // --- DETERMINISTIC MATH DETECTORS ---
 
-            if (style === 'ICHIMOKU_CLOUD') {
+            if (style === 'MEME_SCALP') {
+                 // MEME HUNTER LOGIC
+                 const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
+                 const currentPrice = prices[checkIndex];
+                 const avgVol = calculateSMA(volumes, 20);
+                 const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
+                 const rsi = calculateRSI(prices.slice(0, checkIndex + 1), 14);
+
+                 // ESTRATEGIA 1: EL PUMP (MOMENTUM)
+                 // Precio sobre EMA 20, Volumen alto, RSI fuerte pero con espacio
+                 if (currentPrice > ema20 && rvol > 1.8 && rsi > 55) {
+                     score = 80 + Math.min(rvol * 3, 15); // Higher volume = Higher score
+                     signalSide = 'LONG';
+                     detectionNote = `Meme Pump: Volumen Explosivo (x${rvol.toFixed(1)}) + Momentum (RSI ${rsi.toFixed(0)}).`;
+                 }
+                 // ESTRATEGIA 2: EL DIP (REBOTE)
+                 // Precio cae agresivamente fuera de bandas y RSI sobrevendido
+                 else {
+                     const { lower } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
+                     if (currentPrice < lower && rsi < 35) {
+                         score = 80;
+                         signalSide = 'LONG'; // Catch the knife safely
+                         detectionNote = `Meme Oversold: Precio fuera de Bandas + RSI Sobrevendido (${rsi.toFixed(0)}). Rebote inminente.`;
+                     }
+                 }
+
+            } else if (style === 'ICHIMOKU_CLOUD') {
                 const currentPrice = prices[checkIndex];
                 const { tenkan, kijun } = calculateIchimokuLines(highs, lows, 1); // offset 1 for closed candle
                 const offset = 26;
@@ -441,7 +498,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 let tp1 = 0, tp2 = 0, tp3 = 0;
 
                 // Adjust multiplier based on timeframe/volatility
-                const slMult = interval === '15m' ? 1.5 : 2.0;
+                // Memes need wider SL due to noise
+                const slMult = style === 'MEME_SCALP' ? 2.5 : (interval === '15m' ? 1.5 : 2.0);
 
                 if (signalSide === 'LONG') {
                     sl = currentPrice - (atr * slMult);

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useRef, memo } from 'react';
-import { Activity, RefreshCw, WifiOff, BarChart3 } from 'lucide-react';
+import { Activity, RefreshCw, WifiOff, BarChart3, Rocket } from 'lucide-react';
 import { MarketData } from '../types';
 import { fetchCryptoData, subscribeToLivePrices } from '../services/cryptoService';
 
@@ -39,22 +39,29 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
+  const [scanMode, setScanMode] = useState<'volume' | 'memes'>('volume');
   
   const loadInitialData = async () => {
     setLoading(true);
-    const data = await fetchCryptoData();
-    if (data.length > 0) {
-      setMarketData(data);
-      setError(false);
-    } else {
-      setError(true);
+    setWsConnected(false); // Reset WS status while loading new data
+    try {
+        const data = await fetchCryptoData(scanMode);
+        if (data.length > 0) {
+            setMarketData(data);
+            setError(false);
+        } else {
+            setError(true);
+        }
+    } catch(e) {
+        setError(true);
     }
     setLoading(false);
   };
 
+  // Reload when mode changes
   useEffect(() => {
     loadInitialData();
-  }, []); 
+  }, [scanMode]); 
 
   // WebSocket Logic
   useEffect(() => {
@@ -83,7 +90,7 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
       unsubscribe();
       setWsConnected(false);
     };
-  }, [marketData.length, error]); 
+  }, [marketData.length, error]); // Re-connect when data (mode) changes
 
   return (
     <div className="h-full overflow-hidden bg-surface border border-border rounded-xl shadow-sm flex flex-col">
@@ -93,7 +100,7 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
             <div className="flex items-center gap-2">
                 <Activity size={16} className="text-accent" />
                 <h2 className="text-xs font-mono font-bold uppercase tracking-wide">
-                    Scanner Institucional
+                    Scanner
                 </h2>
             </div>
             
@@ -112,19 +119,32 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
             </div>
         </div>
 
-        {/* Info Label */}
-        <div className="flex p-1 bg-background border border-border rounded-lg justify-center">
-             <span className="flex items-center gap-2 py-1.5 text-[10px] font-mono uppercase text-secondary">
-                <BarChart3 size={12} /> Top 50 Volumen
-            </span>
+        {/* Mode Toggle */}
+        <div className="flex bg-background border border-border rounded-lg p-0.5">
+             <button 
+                onClick={() => setScanMode('volume')}
+                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-[10px] font-mono uppercase rounded-md transition-all ${
+                    scanMode === 'volume' ? 'bg-surface text-primary shadow-sm' : 'text-secondary hover:text-primary'
+                }`}
+             >
+                <BarChart3 size={12} /> Top Vol
+            </button>
+            <button 
+                onClick={() => setScanMode('memes')}
+                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-[10px] font-mono uppercase rounded-md transition-all ${
+                    scanMode === 'memes' ? 'bg-surface text-pink-400 shadow-sm' : 'text-secondary hover:text-pink-400'
+                }`}
+             >
+                <Rocket size={12} /> Memes
+            </button>
         </div>
       </div>
 
       <div className="overflow-y-auto flex-1 relative custom-scrollbar">
-        {loading && marketData.length === 0 ? (
-           <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
+        {loading ? (
+           <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2 bg-surface/50 backdrop-blur-sm z-10">
               <RefreshCw className="animate-spin" />
-              <span className="text-xs font-mono">Conectando feeds...</span>
+              <span className="text-xs font-mono">Cargando {scanMode}...</span>
            </div>
         ) : error && marketData.length === 0 ? (
            <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-4 p-4 text-center">
@@ -161,7 +181,7 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
                           <span className={`font-mono font-bold text-xs ${
                               isSelected 
                                 ? 'text-accent' 
-                                : 'text-primary'
+                                : scanMode === 'memes' ? 'text-pink-400' : 'text-primary'
                           }`}>
                               {rawSymbol}
                           </span>

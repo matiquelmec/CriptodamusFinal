@@ -1,8 +1,9 @@
 
+
 import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle } from '../types';
 import { scanMarketOpportunities } from '../services/cryptoService';
-import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Clock, Cpu } from 'lucide-react';
+import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Clock, Cpu, Rocket } from 'lucide-react';
 
 interface OpportunityFinderProps {
     onSelectOpportunity: (symbol: string) => void;
@@ -77,6 +78,12 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                     >
                         <Cloud size={12} /> Ichimoku
                     </button>
+                    <button 
+                        onClick={() => setStyle('MEME_SCALP')}
+                        className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold transition-all uppercase flex items-center gap-2 ${style === 'MEME_SCALP' ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30' : 'text-secondary hover:text-primary'}`}
+                    >
+                        <Rocket size={12} /> Meme Hunter
+                    </button>
                 </div>
 
                 <button 
@@ -106,6 +113,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                 {style === 'SWING_INSTITUTIONAL' && "Detectando Barridos de Liquidez y Estructura..."}
                                 {style === 'BREAKOUT_MOMENTUM' && "Analizando Volumetría y Flujo de Órdenes..."}
                                 {style === 'ICHIMOKU_CLOUD' && "Proyectando Nube Kumo y Equilibrios TK..."}
+                                {style === 'MEME_SCALP' && "Rastreando Pumps y Rebotes en Memecoins..."}
                             </p>
                         </div>
                     </div>

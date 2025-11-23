@@ -1,4 +1,5 @@
 
+
 export interface MarketData {
   id: string; // ID for WebSocket subscription (e.g., 'bitcoin')
   symbol: string;
@@ -88,4 +89,4 @@ export enum TabView {
   SETTINGS = 'SETTINGS'
 }
 
-export type TradingStyle = 'SCALP_AGRESSIVE' | 'SWING_INSTITUTIONAL' | 'BREAKOUT_MOMENTUM' | 'ICHIMOKU_CLOUD';
+export type TradingStyle = 'SCALP_AGRESSIVE' | 'SWING_INSTITUTIONAL' | 'BREAKOUT_MOMENTUM' | 'ICHIMOKU_CLOUD' | 'MEME_SCALP';

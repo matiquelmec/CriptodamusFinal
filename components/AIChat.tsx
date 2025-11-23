@@ -228,7 +228,7 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
             disabled={isLoading || !input.trim()}
             className="flex items-center justify-center gap-2 px-3 py-2 bg-accent hover:bg-accentHover text-white rounded font-mono text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-accent/20 shrink-0"
           >
-            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <> <Send size={14} /> <span className="hidden sm:inline">Enviar</span> </>}
+            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <> <Send size={14} /> <span>Enviar</span> </>}
           </button>
         </div>
       </form>
