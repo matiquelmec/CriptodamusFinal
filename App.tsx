@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { LayoutDashboard, Settings, BarChart, CalendarDays, Zap } from 'lucide-react';
 import Scanner from './components/Scanner';
@@ -45,18 +46,19 @@ const App: React.FC = () => {
                   <TradingViewWidget symbol={selectedSymbol} />
                </div>
                {/* Bottom: AI */}
-               <div className="h-[500px] lg:flex-[2] w-full lg:min-h-0 pb-4 lg:pb-0">
+               {/* FIX: Added mb-24 on mobile to force scroll space above the fixed bottom nav */}
+               <div className="h-[500px] lg:flex-[2] w-full lg:min-h-0 mb-24 lg:mb-0">
                   <AIChat selectedSymbol={selectedSymbol} />
                </div>
             </div>
           </div>
         );
       case TabView.OPPORTUNITIES:
-          return <div className="h-full min-h-[600px]"><OpportunityFinder onSelectOpportunity={handleSelectOpportunity} /></div>;
+          return <div className="h-full min-h-[600px] mb-24 lg:mb-0"><OpportunityFinder onSelectOpportunity={handleSelectOpportunity} /></div>;
       case TabView.CALENDAR:
-        return <div className="h-full min-h-[600px]"><EconomicCalendar /></div>;
+        return <div className="h-full min-h-[600px] mb-24 lg:mb-0"><EconomicCalendar /></div>;
       case TabView.SETTINGS:
-        return <div className="h-full min-h-[600px]"><SettingsPanel onClose={() => setActiveTab(TabView.DASHBOARD)} /></div>;
+        return <div className="h-full min-h-[600px] mb-24 lg:mb-0"><SettingsPanel onClose={() => setActiveTab(TabView.DASHBOARD)} /></div>;
       default:
         return <div className="flex items-center justify-center h-full text-secondary font-mono">Vista en desarrollo</div>;
     }
@@ -131,10 +133,10 @@ const App: React.FC = () => {
       {/* Main Content Area */}
       {/* 
          On Mobile: overflow-y-auto allows the whole page content (Scanner + Chart + Chat) to scroll properly.
-         pb-40 (160px) ensures extra space at the bottom so the last element (Chat) isn't hidden behind the fixed bottom nav.
+         pb-48 (192px) ensures extra space at the bottom so the last element (Chat) isn't hidden behind the fixed bottom nav.
          On Desktop (lg): overflow-hidden keeps the layout rigid/dashboard-like.
       */}
-      <main className="flex-1 overflow-y-auto lg:overflow-hidden p-4 container mx-auto pb-40 lg:pb-4">
+      <main className="flex-1 overflow-y-auto lg:overflow-hidden p-4 container mx-auto pb-48 lg:pb-4">
          {renderContent()}
       </main>
       
