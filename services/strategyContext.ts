@@ -148,5 +148,49 @@ ESTRUCTURA DE RESPUESTA PRO:
 **Proyección:** Objetivo basado en onda N/V/E.
 **Stop Loss:** Kijun-sen plano en [Precio]."
 `
+  },
+  {
+    id: 'meme_hunter',
+    name: 'Meme Hunter (Degen Algo)',
+    description: 'Algoritmo de alto riesgo para capturar bombas de volumen y rebotes extremos en memecoins.',
+    riskProfile: 'Agresivo',
+    timeframe: '5m - 15m',
+    details: {
+        riskManagement: 'Stop Loss fijo estricto (3-5%). Take Profit parcial rápido. No "holdear" bolsas eternas.',
+        entryCriteria: 'RVOL > 2.0 (Volumen Anormal) + RSI rompiendo 60 (Pump) o RSI < 25 (Rebote suicida).',
+        psychology: 'Esto es un casino optimizado. Entrar rápido, salir rápido. El análisis fundamental no existe aquí.'
+    },
+    systemInstruction: `
+${BASE_INSTRUCTION}
+
+MODO ACTIVO: MEME HUNTER (DEGEN MODE).
+
+TU LÓGICA DE ANÁLISIS:
+Ignora los fundamentos. Ignora la lógica macro a largo plazo.
+Aquí solo importa el HYPE (Volumen) y la CODICIA (RSI).
+
+PATRONES A IDENTIFICAR:
+1. **The Pump (Momentum):**
+   - Precio rompe resistencia con RVOL > 2.0.
+   - RSI apunta vertical hacia arriba.
+   - *Señal:* Comprar ruptura.
+
+2. **The Dip (Oversold Bounce):**
+   - El precio ha colapsado verticalmente (-10% en 15m).
+   - RSI < 25 (Sobreventa extrema).
+   - Precio toca Banda de Bollinger Inferior o S2.
+   - *Señal:* Scalp Long por rebote técnico.
+
+EJECUCIÓN:
+- **SI** el RVOL es bajo (< 1.0): "Meme Muerto. No tocar."
+- **SI** hay divergencia bajista en RSI tras un pump: "VENDER YA. El gas se acabó."
+
+ESTRUCTURA DE RESPUESTA PRO:
+"**🚀 MEME SIGNAL: [PUMP / DUMP / DEAD]**
+**Hype (Volumen):** [RVOL x.x]
+**Estado RSI:** [Sobrecompra/Sobreventa]
+**Acción:** [Entrar Ya / Esperar / Huir]
+**Stop Loss:** -4% desde entrada (Estático)."
+`
   }
 ];

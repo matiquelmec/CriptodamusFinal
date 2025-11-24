@@ -1,5 +1,3 @@
-
-
 import { AIOpportunity, TradingStyle, TechnicalIndicators } from "../types";
 
 // --- MOTOR AUTÓNOMO (OFFLINE) ---
@@ -28,7 +26,8 @@ export const streamMarketAnalysis = async function* (
     // Simular "pensamiento" para UX
     await new Promise(resolve => setTimeout(resolve, 800));
     
-    const lowerMsg = userMessage.toLowerCase();
+    // Normalización ROBUSTA: Simplemente a minúsculas, sin trucos de unicode complejos.
+    const msg = userMessage.toLowerCase().trim();
 
     // 1. FAILSAFE: Si no hay datos técnicos (API Error)
     if (!techData) {
@@ -39,8 +38,30 @@ export const streamMarketAnalysis = async function* (
     // 2. EXTRAER DATOS (YA NO SE PARSEA TEXTO, SE USAN OBJETOS)
     const { price, rsi, adx, atr, rvol, ema20, ema50, ema100, ema200, macd, bollinger, pivots, trendStatus } = techData;
 
-    // --- LÓGICA DE COMANDO: ANALISIS_INTEGRAL ---
-    if (userMessage.includes("Analisis") || lowerMsg.includes('estrategia') || lowerMsg.includes('opinion')) {
+    // Extraer Dominancia de Bitcoin del contexto de texto si es posible
+    let btcDominance = 0;
+    try {
+        const domMatch = marketContext.match(/Dominancia Bitcoin: (\d+\.?\d*)/);
+        if (domMatch) btcDominance = parseFloat(domMatch[1]);
+    } catch(e) {}
+
+    // --- LÓGICA DE COMANDO: DETECCIÓN AMPLIA ---
+    // Buscamos coincidencia directa con las palabras clave del botón o variaciones comunes
+    const isAnalysisRequest = 
+        msg.includes("analisis") || 
+        msg.includes("análisis") || // Chequeo explícito de tilde
+        msg.includes("generar") ||  // Palabra clave del botón por defecto
+        msg.includes("integral") ||
+        msg.includes("estrategia") || 
+        msg.includes("opinion") ||
+        msg.includes("reporte") ||
+        msg.includes("prediccion") ||
+        msg.includes("ver") ||
+        msg.includes("long") ||
+        msg.includes("short") ||
+        msg.includes("entrar");
+
+    if (isAnalysisRequest) {
         let response = "";
 
         // --- PHASE 1: SCORING SYSTEM (MATRIX) ---
@@ -93,8 +114,8 @@ export const streamMarketAnalysis = async function* (
         if (trendStatus.deathCross) response += `- **⚠️ Death Cross Detectado:** Señal bajista de largo plazo.\n`;
         
         // Macro Context Check
-        if (marketContext.includes("Dominancia Bitcoin") && parseFloat(marketContext.split(':')[1]) > 58) {
-            response += `- **⚠️ Macro Warn:** Dominancia BTC alta. Altcoins pueden sufrir volatilidad extra.\n`;
+        if (btcDominance > 58) {
+            response += `- **⚠️ Macro Warn:** Dominancia BTC Alta (${btcDominance}%). Altcoins y Memes pueden perder liquidez rápidamente.\n`;
         }
         response += `\n`;
 
@@ -130,17 +151,22 @@ export const streamMarketAnalysis = async function* (
         response += `#### 🛡️ Setup Sugerido (Gestión de Riesgo)\n`;
         
         // Generate strategy based on logic + selected strategy context
-        response += generateStrategicAdvice(techData, sentiment, strategyId);
+        response += generateStrategicAdvice(techData, sentiment, strategyId, btcDominance);
 
         yield response;
     }
     // Lógica para preguntas puntuales
-    else if (lowerMsg.includes('riesgo') || lowerMsg.includes('stop')) {
+    else if (msg.includes('riesgo') || msg.includes('stop') || msg.includes('sl')) {
         yield `### 🛡️ Gestión de Riesgo (ATR)\nEl ATR actual es **$${atr.toFixed(4)}**.\n\n- **Scalping SL (Tight):** $${(price - (atr * 1.5)).toFixed(4)} (1.5x ATR)\n- **Swing SL (Wide):** $${(price - (atr * 2.5)).toFixed(4)} (2.5x ATR)\n\nRecuerda: Nunca arriesgues más del 2% de tu cuenta por operación.`;
     }
     else {
-        // Fallback conversacional
-        yield `**Sistema Autónomo:** Datos recibidos correctamente.\nPrecio: $${price} | RSI: ${rsi.toFixed(1)} | Estructura: ${price > ema200 ? 'Alcista' : 'Bajista'}.\n\nEscribe "Generar Análisis" para obtener la estrategia completa.`;
+        // Fallback conversacional (DEBUG: Indica qué entendió)
+        yield `**Sistema Autónomo:** Datos capturados para **${techData.symbol}**.\n\n`;
+        yield `📊 **Resumen Rápido:**\n`;
+        yield `• Precio: $${price}\n`;
+        yield `• Tendencia: ${price > ema200 ? '✅ Alcista' : '🔻 Bajista'}\n`;
+        yield `• RSI: ${rsi.toFixed(1)}\n`;
+        yield `\nℹ️ _Mensaje recibido: "${msg}". Intenta escribiendo simplemente "Analisis" para forzar el reporte completo._`;
     }
 }
 
@@ -150,6 +176,7 @@ const formatStrategyName = (id: string) => {
         case 'smc_liquidity': return "SMC (Smart Money Concepts)";
         case 'quant_volatility': return "Quant & Momentum";
         case 'ichimoku_dragon': return "Ichimoku Cloud";
+        case 'meme_hunter': return "Meme Hunter (Degen)";
         default: return "Estandard (Price Action)";
     }
 }
@@ -162,116 +189,80 @@ const generateLevelsTable = (price: number, pivots: any, ema200: number) => {
     const levels = [
         { name: "R2 (Resistencia)", price: r2 },
         { name: "R1 (Objetivo Corto)", price: pivots.r1 },
-        { name: "P (Pivote Central)", price: pivots.p },
+        { name: "Pivote (Equilibrio)", price: pivots.p },
+        { name: "EMA 200 (Tendencia)", price: ema200 },
         { name: "S1 (Soporte)", price: pivots.s1 },
-        { name: "S2 (Fondo)", price: s2 },
-        { name: "EMA 200 (Dinámico)", price: ema200 },
-    ].sort((a,b) => b.price - a.price); // Sort descending
+        { name: "S2 (Fondo)", price: s2 }
+    ];
 
-    let table = `| Nivel | Precio | Distancia |\n|---|---|---|\n`;
-    
+    levels.sort((a, b) => b.price - a.price);
+
+    let table = "| Nivel | Precio | Distancia |\n|---|---|---|\n";
     levels.forEach(l => {
         const dist = ((l.price - price) / price) * 100;
-        const icon = l.price > price ? "🔴" : "🟢";
+        const icon = l.price > price ? '🔴' : '🟢';
         const distStr = dist > 0 ? `+${dist.toFixed(2)}%` : `${dist.toFixed(2)}%`;
-        const style = Math.abs(dist) < 0.5 ? "**" : ""; // Highlight close levels
-        
-        table += `| ${icon} ${l.name} | ${style}$${l.price.toFixed(4)}${style} | ${distStr} |\n`;
+        const style = Math.abs(dist) < 0.5 ? "**" : ""; // Highlight nearby levels
+        table += `| ${icon} ${l.name} | $${l.price.toFixed(l.price > 100 ? 2 : 4)} | ${style}${distStr}${style} |\n`;
     });
-
     return table;
 }
 
-// --- CORE BRAIN: Generates the actual advice based on numbers ---
-const generateStrategicAdvice = (data: TechnicalIndicators, sentiment: string, strategyId: string): string => {
-    const { price, rsi, ema20, ema50, ema100, ema200, pivots, bollinger, atr } = data;
+const generateStrategicAdvice = (
+    data: TechnicalIndicators, 
+    sentiment: string, 
+    strategyId: string, 
+    btcDom: number
+): string => {
+    const { price, atr, bollinger, rsi, trendStatus, ema20, ema50, ema100, ema200 } = data; // ema100 added
     const isBullish = sentiment.includes("ALCISTA");
+    const isBearish = sentiment.includes("BAJISTA");
+
     let advice = "";
 
-    // Helper for decimals
-    const dec = price > 1000 ? 2 : 4;
-
-    // LOGIC BRANCH: SMC (Liquidity Hunter)
+    // ESTRATEGIA: SMC LIQUIDITY
     if (strategyId === 'smc_liquidity') {
         if (isBullish) {
-            advice += `**🟢 OPORTUNIDAD SMC LONG:**\n`;
-            advice += `El precio muestra estructura alcista. Buscamos entrar en la corrección.\n\n`;
-            advice += `> **Zona de Entrada (POI):** $${ema50.toFixed(dec)} - $${pivots.p.toFixed(dec)}\n`;
-            advice += `> **Confirmación:** Esperar mecha de rechazo en esta zona en 15m.\n`;
-            advice += `> **Invalidación (SL):** Cierre debajo de EMA 100 ($${data.ema100.toFixed(dec)}).\n`;
-            advice += `> **Target (TP):** R1 ($${pivots.r1.toFixed(dec)}) o máximo anterior.`;
+            advice = `**Setup Long (SMC):** Buscar entrada en Retroceso al Order Block (EMA 50 en $${ema50.toFixed(4)}). \n`;
+            advice += `- **Stop Loss:** $${(ema50 - atr).toFixed(4)} (Bajo el mínimo anterior).\n`;
+            advice += `- **Take Profit:** Liquidez en Máximos ($${(price + atr*3).toFixed(4)}).`;
         } else {
-            advice += `**🔴 OPORTUNIDAD SMC SHORT:**\n`;
-            advice += `Ruptura de estructura confirmada (ChoCH).\n\n`;
-            advice += `> **Zona de Entrada (Breaker):** $${pivots.p.toFixed(dec)} - $${pivots.r1.toFixed(dec)}\n`;
-            advice += `> **Invalidación (SL):** Por encima del último alto ($${(price + atr*2).toFixed(dec)}).\n`;
-            advice += `> **Target (TP):** Liquidez en S1 ($${pivots.s1.toFixed(dec)}).`;
-        }
-    } 
-    // LOGIC BRANCH: SCALP / QUANT (Volatility)
-    else if (strategyId === 'quant_volatility') {
-        if (data.bollinger.bandwidth < 5) {
-            advice += `**⚠️ ALERTA DE SQUEEZE (COMPRESIÓN):**\n`;
-            advice += `La volatilidad ha muerto. **NO OPERAR RANGO.**\n`;
-            advice += `Coloca órdenes de ruptura (Stop Orders):\n`;
-            advice += `1. **Buy Stop:** $${bollinger.upper.toFixed(dec)} (Ruptura Alcista)\n`;
-            advice += `2. **Sell Stop:** $${bollinger.lower.toFixed(dec)} (Ruptura Bajista)\n`;
-        } else if (isBullish) {
-            advice += `**🚀 MOMENTUM SCALP LONG:**\n`;
-            advice += `Precio sobre EMA 20. El momentum es tu amigo.\n`;
-            advice += `> **Trailing Stop:** EMA 20 ($${ema20.toFixed(dec)}).\n`;
-            advice += `> **Take Profit:** Banda Superior ($${bollinger.upper.toFixed(dec)}).\n`;
-        } else {
-            advice += `**🐻 MOMENTUM SCALP SHORT:**\n`;
-            advice += `Precio bajo EMA 20. Busca cortos rápidos.\n`;
-            advice += `> **Stop Loss:** EMA 50 ($${ema50.toFixed(dec)}).\n`;
-            advice += `> **Take Profit:** Banda Inferior ($${bollinger.lower.toFixed(dec)}).`;
+            advice = `**Setup Short (SMC):** Buscar entrada tras barrido de liquidez y rechazo en $${(price + atr).toFixed(4)}. \n`;
+            advice += `- **Stop Loss:** $${(price + atr*1.5).toFixed(4)}. \n`;
+            advice += `- **Target:** EMA 200 ($${ema200.toFixed(4)}).`;
         }
     }
-    // LOGIC BRANCH: ICHIMOKU (Trend)
+    // ESTRATEGIA: MEME HUNTER
+    else if (strategyId === 'meme_hunter') {
+        if (data.rvol > 2.0 && isBullish) {
+            advice = `**🚀 DEGEN LONG:** Volumen masivo detectado. Entrar en ruptura de mercado.\n`;
+            advice += `- **SL Estricto:** -4% ($${(price * 0.96).toFixed(4)}).\n`;
+            advice += `- **Salida:** En cuanto el RSI toque 80 o el volumen baje. ¡No te cases con la bolsa!`;
+        } else if (rsi < 30) {
+            advice = `**🧲 OVERSOLD BOUNCE:** RSI en suelo (${rsi.toFixed(0)}). Scalp rápido por rebote.\n`;
+            advice += `- **Entrada:** Zona actual.\n`;
+            advice += `- **TP:** Banda Media ($${bollinger.middle.toFixed(4)}).`;
+        } else {
+            advice = `⚠️ **NO TRADE ZONE:** Volumen bajo para una Meme Coin. El riesgo de "Bleed" (Sangrado lento) es alto. Esperar RVOL > 2.0.`;
+        }
+    }
+    // ESTRATEGIA: ICHIMOKU
     else if (strategyId === 'ichimoku_dragon') {
-        // Simple proxy for Kumo if precise cloud data isn't fully calculated here (using EMA proxies)
-        if (isBullish && price > ema100) {
-            advice += `**🐉 ESTRATEGIA DRAGON (TREND):**\n`;
-            advice += `El activo está en tendencia saludable sobre el equilibrio.\n\n`;
-            advice += `> **Zona de Recompra (Kijun):** $${ema50.toFixed(dec)}\n`;
-            advice += `> **Objetivo:** Expansión de Fibonacci ($${(price + atr*3).toFixed(dec)}).`;
-        } else {
-            advice += `**☁️ BAJO LA NUBE (RESISTENCIA):**\n`;
-            advice += `La tendencia es bajista o neutra. Operar largos es arriesgado.\n`;
-            advice += `> **Resistencia Clave:** EMA 100 ($${ema100.toFixed(dec)}). Solo comprar si rompe y apoya.`;
-        }
+        advice = `**Análisis Zen:** ${isBullish ? 'El precio busca soporte en Tenkan/Kijun.' : 'Resistencia fuerte en Kijun-sen.'}\n`;
+        advice += `Operar a favor de la Nube. Si el precio está dentro de la Nube, esperar ruptura clara.`;
     }
-    // DEFAULT LOGIC
+    // DEFAULT: QUANT/GENERAL
     else {
-        if (isBullish) {
-             if (rsi > 70) {
-                 advice += `**⚠️ ESCENARIO DE FOMO:**\n`;
-                 advice += `Tendencia fuerte pero RSI en sobrecompra. No perseguir el precio.\n`;
-                 advice += `**Acción:** Esperar pullback a $${ema20.toFixed(dec)} para entrar.`;
-             } else {
-                 advice += `**✅ CONTINUACIÓN ALCISTA:**\n`;
-                 advice += `Soportes respetados. Estructura de máximos crecientes.\n`;
-                 advice += `> **Entrada:** Precio de mercado.\n`;
-                 advice += `> **SL:** $${(price - atr*1.5).toFixed(dec)}\n`;
-                 advice += `> **TP:** $${pivots.r1.toFixed(dec)}`;
-             }
+        if (parseFloat(bollinger.bandwidth.toFixed(2)) < 5) {
+             advice = `🔥 **ALERTA DE SQUEEZE:** Las bandas están comprimidas. Esperar ruptura de $${bollinger.upper.toFixed(4)} (Long) o $${bollinger.lower.toFixed(4)} (Short) con volumen.`;
+        } else if (isBullish) {
+            advice = `**Trend Following:** Comprar en retrocesos a la EMA 20 ($${ema20.toFixed(4)}).\n`;
+            advice += `- **SL:** Cierre de vela 1h bajo EMA 50 ($${ema50.toFixed(4)}).`;
         } else {
-             if (rsi < 30) {
-                 advice += `**⚠️ RIESGO DE REBOTE (SUELO):**\n`;
-                 advice += `Sobreventa extrema. Riesgo de "Short Squeeze".\n`;
-                 advice += `**Acción:** No vender en pánico. Esperar rebote a $${ema20.toFixed(dec)} para evaluar cortos.`;
-             } else {
-                 advice += `**🔻 ESTRATEGIA DE VENTA:**\n`;
-                 advice += `Debilidad estructural. Los rebotes son oportunidades de venta.\n`;
-                 advice += `> **Venta Limit:** $${ema20.toFixed(dec)} (Si el precio sube ahí).`;
-             }
+             advice = `**Trend Following:** Vender en rebotes a la EMA 20 ($${ema20.toFixed(4)}).\n`;
+             advice += `- **SL:** Cierre de vela 1h sobre EMA 50 ($${ema50.toFixed(4)}).`;
         }
     }
 
     return advice;
 }
-
-
-// Función dummy para compatibilidad
-export const generateBatchTradeSignals = async () => { return []; }
