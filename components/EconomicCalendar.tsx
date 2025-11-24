@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, memo } from 'react';
-import { AlertTriangle, Info } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 const EconomicCalendar: React.FC = () => {
   const container = useRef<HTMLDivElement>(null);
@@ -40,7 +40,7 @@ const EconomicCalendar: React.FC = () => {
             <div>
                 <h3 className="text-sm font-mono font-bold text-primary mb-1">Monitor de Volatilidad Macro</h3>
                 <p className="text-xs text-secondary leading-relaxed">
-                    Las noticias de <span className="text-warning font-bold">3 Estrellas (Alta Importancia)</span> como el IPC (CPI), Tasas de Interés (FED) o NFP pueden invalidar el análisis técnico momentáneamente.
+                    Las noticias de <span className="text-warning font-bold">Alta Importancia (🔥 Roja / 3 Barras)</span> como el IPC (CPI), Tasas de Interés (FED) o NFP pueden invalidar el análisis técnico momentáneamente.
                     <br />
                     <span className="text-accent mt-1 block font-mono">
                         Regla del Sistema: NO abrir nuevas operaciones 30 minutos antes ni después de noticias de alto impacto.

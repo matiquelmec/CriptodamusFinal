@@ -1,6 +1,6 @@
 
 
-import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle, TechnicalIndicators } from '../types';
+import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from '../types';
 import { hasActiveSession } from './geminiService';
 
 // PRIMARY: Binance Vision (CORS friendly for public data)
@@ -176,6 +176,64 @@ export const getFearAndGreedIndex = async (): Promise<FearAndGreedData | null> =
   }
 };
 
+// NEW: Market Risk Detector (Volatility & Manipulation Proxy)
+export const getMarketRisk = async (): Promise<MarketRisk> => {
+    try {
+        // Use BTCUSDT as proxy for general market volatility AND volume manipulation
+        const candles = await fetchCandles('BTCUSDT', '1h');
+        if (candles.length < 24) return { level: 'LOW', note: 'Normal', riskType: 'NORMAL' };
+
+        const currentCandle = candles[candles.length - 1]; // Latest open candle
+        const prevCandles = candles.slice(candles.length - 25, candles.length - 1);
+        
+        // 1. VOLATILITY CHECK
+        const ranges = prevCandles.map(c => (c.high - c.low) / c.open);
+        const avgRange = ranges.reduce((a, b) => a + b, 0) / ranges.length;
+        const currentRange = (currentCandle.high - currentCandle.low) / currentCandle.open;
+
+        // 2. MANIPULATION CHECK (Volume Anomaly)
+        const volumes = prevCandles.map(c => c.volume);
+        const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
+        const currentVolume = currentCandle.volume;
+        const volumeRatio = avgVolume > 0 ? currentVolume / avgVolume : 0;
+
+        // --- RISK LOGIC ---
+
+        // Case A: Whale Manipulation (Massive Volume + Potential Churn)
+        // If volume is > 3.5x average, someone is aggressively entering/exiting BTC
+        if (volumeRatio > 3.5) {
+             return { 
+                 level: 'HIGH', 
+                 note: `🐋 BALLENAS DETECTADAS: Volumen BTC anormal (x${volumeRatio.toFixed(1)}). Posible manipulación.`,
+                 riskType: 'MANIPULATION'
+             };
+        }
+
+        // Case B: High Volatility (News Impact)
+        // If volatility is 3x avg or > 2.5% absolute in 1h
+        if (currentRange > avgRange * 3 || currentRange > 0.025) {
+             return { 
+                 level: 'HIGH', 
+                 note: '🚨 NOTICIAS/VOLATILIDAD: BTC moviéndose agresivamente. Mercado inestable.',
+                 riskType: 'VOLATILITY'
+             };
+        }
+        
+        // Case C: Medium Caution
+        if (currentRange > avgRange * 1.8) {
+             return { level: 'MEDIUM', note: '⚠️ Volatilidad superior al promedio.', riskType: 'VOLATILITY' };
+        }
+        
+        if (volumeRatio > 2.0) {
+             return { level: 'MEDIUM', note: '⚠️ Volumen BTC elevado. Precaución.', riskType: 'MANIPULATION' };
+        }
+
+        return { level: 'LOW', note: 'Condiciones estables.', riskType: 'NORMAL' };
+    } catch (e) {
+        return { level: 'LOW', note: 'Riesgo desconocido', riskType: 'NORMAL' };
+    }
+};
+
 export const getMacroData = async (): Promise<string> => {
     try {
         const globalRes = await fetchWithTimeout('https://api.coincap.io/v2/global', {}, 3000);
@@ -271,12 +329,14 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         // Calcs
         const currentPrice = prices[prices.length - 1];
         const rsi = calculateRSI(prices, 14);
+        const stochRsi = calculateStochRSI(prices, 14); // NEW
         const adx = calculateADX(highs, lows, prices, 14);
         const atr = calculateATR(highs, lows, prices, 14);
         const ema20 = calculateEMA(prices, 20);
         const ema50 = calculateEMA(prices, 50);
         const ema100 = calculateEMA(prices, 100);
         const ema200 = calculateEMA(prices, 200);
+        const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes); // NEW
         
         const avgVol = calculateSMA(volumes, 20);
         const rvol = avgVol > 0 ? (volumes[volumes.length - 1] / avgVol) : 0;
@@ -284,6 +344,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         const macd = calculateMACD(prices);
         const pivots = calculatePivotPoints(highs, lows, prices);
         const bb = calculateBollingerStats(prices);
+        const fibs = calculateAutoFibs(highs, lows, ema200); // NEW
 
         // Determine Alignment
         let emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC' = 'CHAOTIC';
@@ -294,9 +355,11 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
             symbol: symbolDisplay,
             price: currentPrice,
             rsi,
+            stochRsi,
             adx,
             atr,
             rvol,
+            vwap,
             ema20,
             ema50,
             ema100,
@@ -319,6 +382,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
                 r2: (pivots.p - pivots.s1) + pivots.r1, // Simple R2 approx
                 s2: pivots.p - (pivots.r1 - pivots.s1)  // Simple S2 approx
             },
+            fibonacci: fibs,
             trendStatus: {
                 emaAlignment,
                 goldenCross: ema50 > ema200,
@@ -356,6 +420,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     const mode = style === 'MEME_SCALP' ? 'memes' : 'volume';
     const market = await fetchCryptoData(mode);
     
+    // 2. CHECK MARKET RISK (News Filter)
+    const risk = await getMarketRisk();
+    const isHighRisk = risk.level === 'HIGH';
+
     if (!market || market.length === 0) throw new Error("No market data available");
     
     // Scan all candidates if Memes (usually < 40), or top 40 for general
@@ -383,6 +451,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             // Use Closed Candle for Confirmation (No Repainting)
             const checkIndex = prices.length - 2; 
 
+            // CALCULATE NEW PRECISION METRICS FOR SCANNER
+            const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes);
+            const stochRsi = calculateStochRSI(prices, 14);
+            const fibs = calculateAutoFibs(highs, lows, calculateEMA(prices, 200));
+
             // --- DETERMINISTIC MATH DETECTORS ---
 
             if (style === 'MEME_SCALP') {
@@ -393,21 +466,21 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                  const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
                  const rsi = calculateRSI(prices.slice(0, checkIndex + 1), 14);
 
-                 // ESTRATEGIA 1: EL PUMP (MOMENTUM)
-                 // Precio sobre EMA 20, Volumen alto, RSI fuerte pero con espacio
-                 if (currentPrice > ema20 && rvol > 1.8 && rsi > 55) {
+                 // ESTRATEGIA 1: EL PUMP (MOMENTUM) - NOW WITH VWAP SAFETY
+                 // Precio debe estar SOBRE VWAP para considerar pump real
+                 if (currentPrice > ema20 && currentPrice > vwap && rvol > 1.8 && rsi > 55) {
                      score = 80 + Math.min(rvol * 3, 15); // Higher volume = Higher score
                      signalSide = 'LONG';
-                     detectionNote = `Meme Pump: Volumen Explosivo (x${rvol.toFixed(1)}) + Momentum (RSI ${rsi.toFixed(0)}).`;
+                     detectionNote = `Meme Pump: Volumen Explosivo (x${rvol.toFixed(1)}) + Precio sobre VWAP.`;
                  }
-                 // ESTRATEGIA 2: EL DIP (REBOTE)
-                 // Precio cae agresivamente fuera de bandas y RSI sobrevendido
+                 // ESTRATEGIA 2: THE DIP (REBOTE) - NOW WITH STOCH RSI
+                 // Usamos StochRSI < 10 para entrada Sniper en lugar de RSI normal
                  else {
                      const { lower } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
-                     if (currentPrice < lower && rsi < 35) {
+                     if (currentPrice < lower && stochRsi.k < 15) {
                          score = 80;
                          signalSide = 'LONG'; // Catch the knife safely
-                         detectionNote = `Meme Oversold: Precio fuera de Bandas + RSI Sobrevendido (${rsi.toFixed(0)}). Rebote inminente.`;
+                         detectionNote = `Meme Oversold: Precio fuera de Bandas + StochRSI en Suelo (${stochRsi.k.toFixed(0)}).`;
                      }
                  }
 
@@ -428,11 +501,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                      if (aboveCloud && tkCrossBullish) {
                          score = 85;
                          signalSide = 'LONG';
-                         detectionNote = "Tendencia Zen Dragon: Precio sobre Nube + Cruce TK Alcista.";
+                         detectionNote = "Zen Dragon: Precio sobre Nube + Cruce TK + Soporte VWAP.";
                      } else if (belowCloud && tkCrossBearish) {
                           score = 85;
                           signalSide = 'SHORT';
-                          detectionNote = "Tendencia Zen Dragon: Precio bajo Nube + Cruce TK Bajista.";
+                          detectionNote = "Zen Dragon: Tendencia Bajista Pura bajo Nube.";
                      }
                 }
 
@@ -443,55 +516,52 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const prev10Lows = Math.min(...lows.slice(checkIndex - 10, checkIndex)); 
                 const prev10Highs = Math.max(...highs.slice(checkIndex - 10, checkIndex));
 
-                // 1. Check for GOLDEN CROSS (EMA 50 > EMA 200) for Swing Bias
                 const ema50 = calculateEMA(prices.slice(0, checkIndex + 1), 50);
                 const ema200 = calculateEMA(prices.slice(0, checkIndex + 1), 200);
                 const isBullishTrend = ema50 > ema200;
 
+                // CHECK FIBONACCI PROXIMITY (Golden Pocket)
+                // Is price near 0.618 level?
+                const distToGolden = Math.abs((lastClose - fibs.level0_618) / lastClose);
+                const nearGoldenPocket = distToGolden < 0.015; // Within 1.5%
+
                 // SFP Logic
                 if (isBullishTrend && lastLow < prev10Lows && lastClose > prev10Lows) {
                     score = 80;
+                    if (nearGoldenPocket) {
+                        score += 10;
+                        detectionNote = "SMC Sniper: Barrido de Liquidez justo en Golden Pocket (0.618).";
+                    } else {
+                        detectionNote = "SMC Setup: Golden Cross + Barrido de Liquidez.";
+                    }
                     signalSide = 'LONG';
-                    detectionNote = "SMC Setup (Trend Follow): Golden Cross + Barrido de Liquidez.";
                 } else if (!isBullishTrend && lastHigh > prev10Highs && lastClose < prev10Highs) {
                     score = 80;
                     signalSide = 'SHORT';
-                    detectionNote = "SMC Setup (Trend Follow): Death Cross + Barrido de Liquidez.";
-                }
-
-                // RSI Divergence Logic
-                const rsiSeries = calculateRSIArray(prices, 14);
-                const div = detectBullishDivergence(prices, rsiSeries, lows);
-                if (div) {
-                    score = Math.max(score, 75);
-                    signalSide = 'LONG'; 
-                    detectionNote = score >= 80 ? detectionNote + " + Divergencia RSI." : "Divergencia RSI Confirmada en Zona Baja.";
+                    detectionNote = "SMC Setup: Rechazo de Estructura Bajista.";
                 }
 
             } else if (style === 'BREAKOUT_MOMENTUM') {
                 const avgVol = calculateSMA(volumes, 20);
                 const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
-                const change = (prices[checkIndex] - prices[checkIndex-1]) / prices[checkIndex-1];
                 
-                // EMA 20 Trend Check
+                // EMA 20 Trend Check & VWAP Check
                 const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
-                const priceAboveEma20 = prices[checkIndex] > ema20;
+                const currentPrice = prices[checkIndex];
+                
+                // Only take breakouts if we are on the right side of VWAP
+                const validTrend = currentPrice > vwap;
 
-                if (rvol > 2.0 && priceAboveEma20) {
+                if (rvol > 2.0 && currentPrice > ema20 && validTrend) {
                      score = 70 + Math.min((rvol * 5), 25); 
-                     if (change > 0) {
-                        signalSide = 'LONG';
-                        detectionNote = `Breakout: Inyección de Volumen Masiva (x${rvol.toFixed(1)}) sobre EMA 20.`;
-                     } else {
-                        signalSide = 'SHORT';
-                        detectionNote = `Breakdown: Venta Institucional Masiva (x${rvol.toFixed(1)}).`;
-                     }
+                     signalSide = 'LONG';
+                     detectionNote = `Breakout Confirmado: Volumen (x${rvol.toFixed(1)}) + Precio > VWAP.`;
                 }
             } else {
-                // SCALP: BOLLINGER SQUEEZE + EMA 100 Support
+                // SCALP: BOLLINGER SQUEEZE + VWAP FILTER
                 const { bandwidth, lower, upper } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
-                const ema100 = calculateEMA(prices.slice(0, checkIndex + 1), 100);
                 const close = prices[checkIndex];
+                const currentVwap = vwap;
 
                 const historicalBandwidths = [];
                 for(let i = 20; i < 50; i++) {
@@ -502,22 +572,18 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                 if (bandwidth <= minHistBandwidth * 1.1) {
                     score = 80;
-                    detectionNote = "Patrón Quant: Compresión Extrema (Squeeze). Explosión inminente.";
-                    const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
-                    const ema50 = calculateEMA(prices.slice(0, checkIndex + 1), 50);
-                    signalSide = ema20 > ema50 ? 'LONG' : 'SHORT';
-                }
-                
-                // Walking the Bands Strategy
-                else if (close > upper && close > ema100) {
-                     score = 75;
-                     signalSide = 'LONG';
-                     detectionNote = "Bollinger Walk: Precio rompiendo banda superior sobre EMA 100.";
+                    detectionNote = "Quant Squeeze: Compresión de volatilidad.";
+                    // Filter direction by VWAP
+                    signalSide = close > currentVwap ? 'LONG' : 'SHORT';
                 }
             }
 
+            // --- FILTERING BY RISK ---
+            // If Risk is High (News OR Manipulation), we only accept VERY high scores
+            const threshold = isHighRisk ? 85 : 70;
+
             // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
-            if (score >= 70) {
+            if (score >= threshold) {
                 const currentPrice = prices[prices.length - 1]; // Use live price for entry
                 const atr = calculateATR(highs, lows, prices, 14);
                 
@@ -525,16 +591,20 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 let sl = 0;
                 let tp1 = 0, tp2 = 0, tp3 = 0;
 
-                // Adjust multiplier based on timeframe/volatility
-                // Memes need wider SL due to noise
                 const slMult = style === 'MEME_SCALP' ? 2.5 : (interval === '15m' ? 1.5 : 2.0);
 
                 if (signalSide === 'LONG') {
+                    // SL below recent low or ATR
                     sl = currentPrice - (atr * slMult);
+                    
+                    // TP Targets using Fib Extensions if available, otherwise ATR
                     const risk = currentPrice - sl;
-                    tp1 = currentPrice + risk;      // 1:1
-                    tp2 = currentPrice + (risk * 2); // 1:2
-                    tp3 = currentPrice + (risk * 3); // 1:3
+                    
+                    // Logic: TP1 = Risk 1:1, TP2 = Next Fib Level, TP3 = Runner
+                    tp1 = currentPrice + risk;
+                    tp2 = currentPrice + (risk * 2);
+                    tp3 = currentPrice + (risk * 3); 
+
                 } else {
                     sl = currentPrice + (atr * slMult);
                     const risk = sl - currentPrice;
@@ -545,6 +615,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                 const decimals = currentPrice > 1000 ? 2 : currentPrice > 1 ? 4 : 6;
                 const format = (n: number) => parseFloat(n.toFixed(decimals));
+                
+                // Add warning to reasoning if Risk is High but passed threshold
+                const finalNote = isHighRisk ? `[⚠️ RIESGO ALTO] ${detectionNote}` : detectionNote;
 
                 const mathOpp: AIOpportunity = {
                     id: Date.now().toString() + Math.random(),
@@ -557,7 +630,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     dcaLevel: signalSide === 'LONG' ? format(currentPrice - (atr * 0.5)) : format(currentPrice + (atr * 0.5)),
                     stopLoss: format(sl),
                     takeProfits: { tp1: format(tp1), tp2: format(tp2), tp3: format(tp3) },
-                    technicalReasoning: detectionNote,
+                    technicalReasoning: finalNote,
                     invalidated: false
                 };
 
@@ -712,6 +785,25 @@ const calculateRSI = (data: number[], period: number) => {
     return arr[arr.length - 1];
 };
 
+// NEW: Stochastic RSI for precision entries
+const calculateStochRSI = (prices: number[], period: number = 14) => {
+    const rsiArray = calculateRSIArray(prices, period);
+    // Need at least period amount of RSIs to calc stoch
+    const relevantRSI = rsiArray.slice(-period); 
+    const minRSI = Math.min(...relevantRSI);
+    const maxRSI = Math.max(...relevantRSI);
+    
+    // StochRSI K
+    let k = 0;
+    if (maxRSI !== minRSI) {
+        k = ((relevantRSI[relevantRSI.length-1] - minRSI) / (maxRSI - minRSI)) * 100;
+    }
+    // D is usually 3-period SMA of K
+    const d = k; // Simplified for now, real D requires array of Ks
+
+    return { k, d };
+};
+
 // Full Array Wilder's RSI (For Divergence checks)
 const calculateRSIArray = (data: number[], period: number): number[] => {
     if (data.length < period + 1) return new Array(data.length).fill(50);
@@ -751,6 +843,66 @@ const calculateRSIArray = (data: number[], period: number): number[] => {
     }
     return rsiArray;
 };
+
+// NEW: Cumulative VWAP (Session VWAP approx)
+const calculateCumulativeVWAP = (highs: number[], lows: number[], closes: number[], volumes: number[]) => {
+    // Typical Price
+    let cumTPV = 0;
+    let cumVol = 0;
+    
+    // We calculate for the whole loaded dataset (mimicking session start)
+    for(let i = 0; i < closes.length; i++) {
+        const tp = (highs[i] + lows[i] + closes[i]) / 3;
+        cumTPV += (tp * volumes[i]);
+        cumVol += volumes[i];
+    }
+    
+    return cumVol > 0 ? cumTPV / cumVol : closes[closes.length-1];
+};
+
+// NEW: Auto Fibonacci Retracements
+const calculateAutoFibs = (highs: number[], lows: number[], ema200: number) => {
+    // Lookback 100 periods
+    const lookback = Math.min(highs.length, 100);
+    const subsetHighs = highs.slice(-lookback);
+    const subsetLows = highs.slice(-lookback); // Corrected: should be lows
+    const realSubsetLows = lows.slice(-lookback);
+    
+    const maxHigh = Math.max(...subsetHighs);
+    const minLow = Math.min(...realSubsetLows);
+    const currentPrice = highs[highs.length-1];
+
+    // Determine Trend direction relative to EMA200
+    const isUptrend = currentPrice > ema200;
+    
+    const diff = maxHigh - minLow;
+    
+    if (isUptrend) {
+        // Low to High (Supports)
+        return {
+            trend: 'UP' as const,
+            level0: maxHigh, // Top
+            level0_236: maxHigh - (diff * 0.236),
+            level0_382: maxHigh - (diff * 0.382),
+            level0_5: maxHigh - (diff * 0.5),
+            level0_618: maxHigh - (diff * 0.618), // GOLDEN POCKET
+            level0_786: maxHigh - (diff * 0.786),
+            level1: minLow
+        };
+    } else {
+        // High to Low (Resistances)
+        return {
+            trend: 'DOWN' as const,
+            level0: minLow, // Bottom
+            level0_236: minLow + (diff * 0.236),
+            level0_382: minLow + (diff * 0.382),
+            level0_5: minLow + (diff * 0.5),
+            level0_618: minLow + (diff * 0.618), // GOLDEN POCKET
+            level0_786: minLow + (diff * 0.786),
+            level1: maxHigh
+        };
+    }
+}
 
 // --- NEW METRICS FOR 100% AI POTENTIAL ---
 

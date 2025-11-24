@@ -1,10 +1,8 @@
-
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles, Loader2, BookOpen, ChevronDown, Check, RefreshCw } from 'lucide-react';
 import { streamMarketAnalysis } from '../services/geminiService';
 import { ChatMessage, Strategy } from '../types';
-import { getMarketContextForAI, getRawTechnicalIndicators, getFearAndGreedIndex } from '../services/cryptoService';
+import { getMarketContextForAI, getRawTechnicalIndicators, getFearAndGreedIndex, getMarketRisk } from '../services/cryptoService';
 import { STRATEGIES } from '../services/strategyContext';
 
 interface AIChatProps {
@@ -30,11 +28,11 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
 
   // PREPARE INPUT ON SYMBOL CHANGE (NO AUTO-FIRE)
   useEffect(() => {
-      // 1. Reset Chat with a System Ready Message
+      // 1. Reset Chat with a System Ready Message containing INSTRUCTIONS
       setMessages([{
           id: Date.now().toString(),
           role: 'model',
-          content: `Activo seleccionado: **${selectedSymbol}**.\n\nEl motor autónomo ha cargado los datos de mercado. Presiona enviar para ejecutar la estrategia **${currentStrategy.name}**.`,
+          content: `### 🔮 Panel de Control Autónomo\n\nSigue estos pasos para generar una señal válida:\n\n1. **Activo:** Estás analizando **${selectedSymbol}**.\n2. **Estrategia:** El sistema usará la lógica **"${currentStrategy.name}"**.\n   *(Si deseas otra lógica como Scalp o Swing, cámbiala en el menú superior ↗)*\n3. **Ejecutar:** Haz clic en **Enviar** para procesar el análisis matemático.`,
           timestamp: Date.now(),
           isThinking: false
       }]);
@@ -82,15 +80,17 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
 
     try {
       // UPGRADE: Fetch RAW data objects, not just strings
+      // Also fetch Market Risk for the advisor
       const contextPromise = Promise.all([
           getMarketContextForAI(),
           getRawTechnicalIndicators(selectedSymbol), // New robust function
-          getFearAndGreedIndex()
+          getFearAndGreedIndex(),
+          getMarketRisk() // New Risk Fetch
       ]);
 
-      const [marketContext, techData, sentimentData] = await Promise.race([
+      const [marketContext, techData, sentimentData, riskProfile] = await Promise.race([
           contextPromise,
-          new Promise<any[]>((resolve) => setTimeout(() => resolve(["Contexto timeout", null, null]), 4000))
+          new Promise<any[]>((resolve) => setTimeout(() => resolve(["Contexto timeout", null, null, {level: 'LOW'}]), 4000))
       ]);
 
       const sentimentString = sentimentData ? `Fear & Greed: ${sentimentData.value}` : "Sentiment N/A";
@@ -101,7 +101,8 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
           userMsg.content, 
           combinedContextString, 
           techData, // Passing the object directly
-          currentStrategy.id
+          currentStrategy.id,
+          riskProfile || { level: 'LOW', note: '' }
       );
       
       let botResponse = '';
@@ -142,11 +143,13 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
             </div>
              <button 
                 onClick={() => setShowStrategySelector(!showStrategySelector)}
-                className="flex items-center gap-1.5 px-2 py-0.5 bg-surface border border-border rounded hover:bg-white/5 transition-colors w-fit"
+                className="flex items-center gap-1.5 px-2 py-0.5 bg-surface border border-border rounded hover:bg-white/5 transition-colors w-fit relative"
             >
                 <BookOpen size={10} className="text-secondary" />
                 <span className="text-[10px] font-mono font-medium truncate max-w-[100px] md:max-w-none">{currentStrategy.name}</span>
                 <ChevronDown size={10} className={`text-secondary transition-transform ${showStrategySelector ? 'rotate-180' : ''}`} />
+                {/* Visual Hint for Strategy Selection */}
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-accent rounded-full animate-pulse opacity-50"></span>
             </button>
         </div>
 
@@ -229,7 +232,7 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={`Consulta sobre ${selectedSymbol}...`}
+            placeholder={`Ejecutar ${currentStrategy.name} en ${selectedSymbol}...`}
             className="flex-1 bg-surface border border-border rounded pl-3 pr-2 py-2 text-xs text-primary placeholder-secondary/50 focus:border-accent focus:outline-none font-mono transition-all disabled:opacity-50"
             disabled={isLoading}
           />

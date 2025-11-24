@@ -1,9 +1,9 @@
 
 
 import React, { useEffect, useState } from 'react';
-import { AIOpportunity, TradingStyle } from '../types';
-import { scanMarketOpportunities } from '../services/cryptoService';
-import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Clock, Cpu, Rocket } from 'lucide-react';
+import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
+import { scanMarketOpportunities, getMarketRisk } from '../services/cryptoService';
+import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Clock, Cpu, Rocket, Eye } from 'lucide-react';
 
 interface OpportunityFinderProps {
     onSelectOpportunity: (symbol: string) => void;
@@ -15,6 +15,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     const [error, setError] = useState<string | null>(null);
     const [style, setStyle] = useState<TradingStyle>('SCALP_AGRESSIVE');
     const [cooldown, setCooldown] = useState(0);
+    const [currentRisk, setCurrentRisk] = useState<MarketRisk | null>(null);
 
     const scan = async () => {
         if (cooldown > 0) return;
@@ -24,8 +25,13 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
         setOpportunities([]); // Clear previous
         
         try {
-            const opps = await scanMarketOpportunities(style);
+            // Parallel fetch for speed
+            const [opps, riskData] = await Promise.all([
+                scanMarketOpportunities(style),
+                getMarketRisk()
+            ]);
             setOpportunities(opps);
+            setCurrentRisk(riskData);
         } catch (e: any) {
             console.error(e);
             setError("Error de conexión al obtener datos de mercado.");
@@ -42,16 +48,49 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     return (
         <div className="h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col overflow-hidden">
             {/* Header / Controls */}
-            <div className="p-4 border-b border-border bg-background/50 backdrop-blur-sm flex flex-col md:flex-row justify-between md:items-center gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-lg text-white shadow-lg shadow-blue-500/20">
-                        <Cpu size={20} />
+            <div className="p-4 border-b border-border bg-background/50 backdrop-blur-sm flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-lg text-white shadow-lg shadow-blue-500/20">
+                            <Cpu size={20} />
+                        </div>
+                        <div>
+                            <h2 className="text-sm font-mono font-bold text-primary uppercase tracking-wider">Criptodamus Auto-Pilot</h2>
+                            <p className="text-[10px] text-secondary">Motor Matemático Autónomo v4.0</p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="text-sm font-mono font-bold text-primary uppercase tracking-wider">Criptodamus Auto-Pilot</h2>
-                        <p className="text-[10px] text-secondary">Motor Matemático Autónomo v4.0</p>
-                    </div>
+
+                    <button 
+                        onClick={scan} 
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-white text-background rounded font-mono text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md min-w-[120px] justify-center ml-auto md:ml-0"
+                    >
+                        <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                        {loading ? 'Calculando...' : 'Escanear'}
+                    </button>
                 </div>
+                
+                {/* Risk Shield Banner */}
+                {currentRisk && (
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                        currentRisk.level === 'HIGH' ? 'bg-danger/10 border-danger/20 text-danger' :
+                        currentRisk.level === 'MEDIUM' ? 'bg-warning/10 border-warning/20 text-warning' :
+                        'bg-success/5 border-success/10 text-success'
+                    }`}>
+                        {currentRisk.riskType === 'MANIPULATION' ? (
+                            <Eye size={14} className={currentRisk.level === 'HIGH' ? 'animate-pulse' : ''} />
+                        ) : (
+                            <Shield size={14} className={currentRisk.level === 'HIGH' ? 'animate-pulse' : ''} />
+                        )}
+                        
+                        <span className="text-[10px] font-mono font-bold uppercase">
+                            {currentRisk.riskType === 'MANIPULATION' ? 'Whale Alert' : `Escudo Macro: ${currentRisk.level}`}
+                        </span>
+                        <span className="text-[10px] opacity-80 border-l border-current pl-2 ml-1 truncate">
+                            {currentRisk.note}
+                        </span>
+                    </div>
+                )}
 
                 <div className="flex flex-wrap items-center gap-2 bg-background p-1 rounded-lg border border-border">
                     <button 
@@ -85,15 +124,6 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         <Rocket size={12} /> Meme Hunter
                     </button>
                 </div>
-
-                <button 
-                    onClick={scan} 
-                    disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-white text-background rounded font-mono text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md min-w-[120px] justify-center"
-                >
-                    <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-                    {loading ? 'Calculando...' : 'Escanear'}
-                </button>
             </div>
 
             {/* Content */}
@@ -133,8 +163,13 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         <BarChart2 size={48} strokeWidth={1} />
                         <h3 className="font-mono text-sm font-bold">Sin Señales Claras</h3>
                         <p className="text-xs text-center max-w-sm">
-                            El algoritmo matemático ha filtrado las 30 principales criptomonedas y ninguna cumple los criterios estrictos de la estrategia <span className="text-primary font-bold">{style.split('_')[0]}</span>.
+                            El algoritmo matemático ha filtrado las {style === 'MEME_SCALP' ? 'Memecoins' : 'criptomonedas'} principales y ninguna cumple los criterios estrictos de la estrategia <span className="text-primary font-bold">{style.split('_')[0]}</span>.
                         </p>
+                        {currentRisk && currentRisk.level === 'HIGH' && (
+                             <p className="text-[10px] mt-2 bg-danger/10 p-2 rounded border border-danger/20 font-mono text-danger">
+                                ⚠️ Filtro Activado: Señales débiles descartadas por {currentRisk.riskType === 'MANIPULATION' ? 'Manipulación' : 'Riesgo Macro'}.
+                            </p>
+                        )}
                         <p className="text-[10px] mt-2 bg-surface p-2 rounded border border-border font-mono text-accent">
                             Paciencia = Rentabilidad.
                         </p>

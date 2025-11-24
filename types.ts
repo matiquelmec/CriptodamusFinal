@@ -54,13 +54,24 @@ export interface MacroData {
     goldPrice: number;
 }
 
+export interface MarketRisk {
+    level: 'LOW' | 'MEDIUM' | 'HIGH';
+    note: string;
+    riskType?: 'VOLATILITY' | 'MANIPULATION' | 'NORMAL'; // New logic
+}
+
 export interface TechnicalIndicators {
     symbol: string;
     price: number;
     rsi: number;
+    stochRsi: { // NEW: Faster momentum
+        k: number;
+        d: number;
+    };
     adx: number;
     atr: number;
     rvol: number;
+    vwap: number; // NEW: Volume Weighted Average Price
     ema20: number;
     ema50: number;
     ema100: number;
@@ -82,6 +93,16 @@ export interface TechnicalIndicators {
         s1: number;
         r2: number;
         s2: number;
+    };
+    fibonacci: { // NEW: Auto-Fibs
+        level0: number;
+        level0_236: number;
+        level0_382: number;
+        level0_5: number;
+        level0_618: number; // Golden Pocket
+        level0_786: number;
+        level1: number;
+        trend: 'UP' | 'DOWN';
     };
     trendStatus: {
         emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC';
