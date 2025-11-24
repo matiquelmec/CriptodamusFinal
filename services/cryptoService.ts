@@ -447,6 +447,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             let score = 0;
             let detectionNote = "";
             let signalSide: 'LONG' | 'SHORT' = 'LONG'; // Default
+            
+            // Educational Metrics to pass to UI
+            let specificTrigger = "";
+            let structureNote = "";
 
             // Use Closed Candle for Confirmation (No Repainting)
             const checkIndex = prices.length - 2; 
@@ -454,38 +458,42 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             // CALCULATE NEW PRECISION METRICS FOR SCANNER
             const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes);
             const stochRsi = calculateStochRSI(prices, 14);
+            const rsi = calculateRSI(prices.slice(0, checkIndex + 1), 14);
             const fibs = calculateAutoFibs(highs, lows, calculateEMA(prices, 200));
+            const ema200 = calculateEMA(prices.slice(0, checkIndex + 1), 200);
+            const currentPrice = prices[checkIndex];
+            const avgVol = calculateSMA(volumes, 20);
+            const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
+
+            // Common structure check
+            const trendDist = ((currentPrice - ema200) / ema200) * 100;
+            structureNote = trendDist > 0 ? `Tendencia Alcista (+${trendDist.toFixed(1)}% sobre EMA200)` : `Tendencia Bajista (${trendDist.toFixed(1)}% bajo EMA200)`;
 
             // --- DETERMINISTIC MATH DETECTORS ---
 
             if (style === 'MEME_SCALP') {
                  // MEME HUNTER LOGIC
                  const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
-                 const currentPrice = prices[checkIndex];
-                 const avgVol = calculateSMA(volumes, 20);
-                 const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
-                 const rsi = calculateRSI(prices.slice(0, checkIndex + 1), 14);
 
                  // ESTRATEGIA 1: EL PUMP (MOMENTUM) - NOW WITH VWAP SAFETY
-                 // Precio debe estar SOBRE VWAP para considerar pump real
                  if (currentPrice > ema20 && currentPrice > vwap && rvol > 1.8 && rsi > 55) {
                      score = 80 + Math.min(rvol * 3, 15); // Higher volume = Higher score
                      signalSide = 'LONG';
                      detectionNote = `Meme Pump: Volumen Explosivo (x${rvol.toFixed(1)}) + Precio sobre VWAP.`;
+                     specificTrigger = `RVOL > 1.8 (${rvol.toFixed(2)}x) + RSI Uptrend (${rsi.toFixed(0)})`;
                  }
                  // ESTRATEGIA 2: THE DIP (REBOTE) - NOW WITH STOCH RSI
-                 // Usamos StochRSI < 10 para entrada Sniper en lugar de RSI normal
                  else {
                      const { lower } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
                      if (currentPrice < lower && stochRsi.k < 15) {
                          score = 80;
                          signalSide = 'LONG'; // Catch the knife safely
                          detectionNote = `Meme Oversold: Precio fuera de Bandas + StochRSI en Suelo (${stochRsi.k.toFixed(0)}).`;
+                         specificTrigger = `StochRSI Sobrevendido (${stochRsi.k.toFixed(0)} < 15) + Break Banda Inf.`;
                      }
                  }
 
             } else if (style === 'ICHIMOKU_CLOUD') {
-                const currentPrice = prices[checkIndex];
                 const { tenkan, kijun } = calculateIchimokuLines(highs, lows, 1); // offset 1 for closed candle
                 const offset = 26;
                 const pastHighs = highs.slice(0, highs.length - offset - 1);
@@ -502,53 +510,49 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                          score = 85;
                          signalSide = 'LONG';
                          detectionNote = "Zen Dragon: Precio sobre Nube + Cruce TK + Soporte VWAP.";
+                         specificTrigger = "Cruce Tenkan/Kijun sobre Nube Kumo (Tendencia Pura)";
                      } else if (belowCloud && tkCrossBearish) {
                           score = 85;
                           signalSide = 'SHORT';
                           detectionNote = "Zen Dragon: Tendencia Bajista Pura bajo Nube.";
+                          specificTrigger = "Cruce Bajista Tenkan/Kijun bajo Nube Kumo";
                      }
                 }
 
             } else if (style === 'SWING_INSTITUTIONAL') {
                 const lastLow = lows[checkIndex];
                 const lastHigh = highs[checkIndex];
-                const lastClose = prices[checkIndex];
                 const prev10Lows = Math.min(...lows.slice(checkIndex - 10, checkIndex)); 
                 const prev10Highs = Math.max(...highs.slice(checkIndex - 10, checkIndex));
 
                 const ema50 = calculateEMA(prices.slice(0, checkIndex + 1), 50);
-                const ema200 = calculateEMA(prices.slice(0, checkIndex + 1), 200);
                 const isBullishTrend = ema50 > ema200;
 
                 // CHECK FIBONACCI PROXIMITY (Golden Pocket)
-                // Is price near 0.618 level?
-                const distToGolden = Math.abs((lastClose - fibs.level0_618) / lastClose);
+                const distToGolden = Math.abs((currentPrice - fibs.level0_618) / currentPrice);
                 const nearGoldenPocket = distToGolden < 0.015; // Within 1.5%
 
                 // SFP Logic
-                if (isBullishTrend && lastLow < prev10Lows && lastClose > prev10Lows) {
+                if (isBullishTrend && lastLow < prev10Lows && currentPrice > prev10Lows) {
                     score = 80;
                     if (nearGoldenPocket) {
                         score += 10;
                         detectionNote = "SMC Sniper: Barrido de Liquidez justo en Golden Pocket (0.618).";
+                        specificTrigger = "SFP (Swing Failure Pattern) en Fib 0.618";
                     } else {
                         detectionNote = "SMC Setup: Golden Cross + Barrido de Liquidez.";
+                        specificTrigger = "Toma de liquidez (Mínimo previo barrido)";
                     }
                     signalSide = 'LONG';
-                } else if (!isBullishTrend && lastHigh > prev10Highs && lastClose < prev10Highs) {
+                } else if (!isBullishTrend && lastHigh > prev10Highs && currentPrice < prev10Highs) {
                     score = 80;
                     signalSide = 'SHORT';
                     detectionNote = "SMC Setup: Rechazo de Estructura Bajista.";
+                    specificTrigger = "SFP Bajista (Máximo previo barrido)";
                 }
 
             } else if (style === 'BREAKOUT_MOMENTUM') {
-                const avgVol = calculateSMA(volumes, 20);
-                const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
-                
-                // EMA 20 Trend Check & VWAP Check
                 const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
-                const currentPrice = prices[checkIndex];
-                
                 // Only take breakouts if we are on the right side of VWAP
                 const validTrend = currentPrice > vwap;
 
@@ -556,13 +560,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                      score = 70 + Math.min((rvol * 5), 25); 
                      signalSide = 'LONG';
                      detectionNote = `Breakout Confirmado: Volumen (x${rvol.toFixed(1)}) + Precio > VWAP.`;
+                     specificTrigger = `Ruptura de volatilidad con RVOL ${rvol.toFixed(1)}x`;
                 }
             } else {
                 // SCALP: BOLLINGER SQUEEZE + VWAP FILTER
                 const { bandwidth, lower, upper } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
-                const close = prices[checkIndex];
-                const currentVwap = vwap;
-
+                
                 const historicalBandwidths = [];
                 for(let i = 20; i < 50; i++) {
                     const slice = prices.slice(0, checkIndex + 1 - i);
@@ -573,8 +576,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 if (bandwidth <= minHistBandwidth * 1.1) {
                     score = 80;
                     detectionNote = "Quant Squeeze: Compresión de volatilidad.";
+                    specificTrigger = `Bandwidth (${bandwidth.toFixed(2)}%) en mínimos históricos`;
                     // Filter direction by VWAP
-                    signalSide = close > currentVwap ? 'LONG' : 'SHORT';
+                    signalSide = currentPrice > vwap ? 'LONG' : 'SHORT';
                 }
             }
 
@@ -584,7 +588,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
             if (score >= threshold) {
-                const currentPrice = prices[prices.length - 1]; // Use live price for entry
+                const livePrice = prices[prices.length - 1]; // Use live price for entry
                 const atr = calculateATR(highs, lows, prices, 14);
                 
                 // Algorithmic SL/TP Calculation (Exact Maths)
@@ -594,30 +598,26 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const slMult = style === 'MEME_SCALP' ? 2.5 : (interval === '15m' ? 1.5 : 2.0);
 
                 if (signalSide === 'LONG') {
-                    // SL below recent low or ATR
-                    sl = currentPrice - (atr * slMult);
-                    
-                    // TP Targets using Fib Extensions if available, otherwise ATR
-                    const risk = currentPrice - sl;
-                    
-                    // Logic: TP1 = Risk 1:1, TP2 = Next Fib Level, TP3 = Runner
-                    tp1 = currentPrice + risk;
-                    tp2 = currentPrice + (risk * 2);
-                    tp3 = currentPrice + (risk * 3); 
-
+                    sl = livePrice - (atr * slMult);
+                    const risk = livePrice - sl;
+                    tp1 = livePrice + risk;
+                    tp2 = livePrice + (risk * 2);
+                    tp3 = livePrice + (risk * 3); 
                 } else {
-                    sl = currentPrice + (atr * slMult);
-                    const risk = sl - currentPrice;
-                    tp1 = currentPrice - risk;
-                    tp2 = currentPrice - (risk * 2);
-                    tp3 = currentPrice - (risk * 3);
+                    sl = livePrice + (atr * slMult);
+                    const risk = sl - livePrice;
+                    tp1 = livePrice - risk;
+                    tp2 = livePrice - (risk * 2);
+                    tp3 = livePrice - (risk * 3);
                 }
 
-                const decimals = currentPrice > 1000 ? 2 : currentPrice > 1 ? 4 : 6;
+                const decimals = livePrice > 1000 ? 2 : livePrice > 1 ? 4 : 6;
                 const format = (n: number) => parseFloat(n.toFixed(decimals));
                 
-                // Add warning to reasoning if Risk is High but passed threshold
                 const finalNote = isHighRisk ? `[⚠️ RIESGO ALTO] ${detectionNote}` : detectionNote;
+
+                // VWAP Dist % calculation
+                const vwapDist = ((livePrice - vwap) / vwap) * 100;
 
                 const mathOpp: AIOpportunity = {
                     id: Date.now().toString() + Math.random(),
@@ -626,12 +626,20 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     strategy: style,
                     side: signalSide,
                     confidenceScore: Math.floor(score), 
-                    entryZone: { min: format(currentPrice * 0.999), max: format(currentPrice * 1.001) },
-                    dcaLevel: signalSide === 'LONG' ? format(currentPrice - (atr * 0.5)) : format(currentPrice + (atr * 0.5)),
+                    entryZone: { min: format(livePrice * 0.999), max: format(livePrice * 1.001) },
+                    dcaLevel: signalSide === 'LONG' ? format(livePrice - (atr * 0.5)) : format(livePrice + (atr * 0.5)),
                     stopLoss: format(sl),
                     takeProfits: { tp1: format(tp1), tp2: format(tp2), tp3: format(tp3) },
                     technicalReasoning: finalNote,
-                    invalidated: false
+                    invalidated: false,
+                    // NEW: METRICS POPULATION
+                    metrics: {
+                        rvol: format(rvol),
+                        rsi: format(rsi),
+                        vwapDist: format(vwapDist),
+                        structure: structureNote,
+                        specificTrigger: specificTrigger
+                    }
                 };
 
                 validMathCandidates.push(mathOpp);

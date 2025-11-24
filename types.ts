@@ -137,6 +137,15 @@ export interface AIOpportunity {
     
     technicalReasoning: string;
     invalidated: boolean; // Si el precio ya tocó SL o TP
+
+    // NEW: Detailed metrics for educational modal
+    metrics?: {
+        rvol: number;
+        rsi: number;
+        vwapDist: number; // Distance to VWAP %
+        structure: string; // e.g. "Above EMA200"
+        specificTrigger: string; // e.g. "Bollinger Bandwidth < 3%"
+    };
 }
 
 export enum TabView {

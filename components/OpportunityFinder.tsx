@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
 import { scanMarketOpportunities, getMarketRisk } from '../services/cryptoService';
-import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Clock, Cpu, Rocket, Eye } from 'lucide-react';
+import { STRATEGIES } from '../services/strategyContext';
+import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity } from 'lucide-react';
 
 interface OpportunityFinderProps {
     onSelectOpportunity: (symbol: string) => void;
@@ -16,6 +17,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     const [style, setStyle] = useState<TradingStyle>('SCALP_AGRESSIVE');
     const [cooldown, setCooldown] = useState(0);
     const [currentRisk, setCurrentRisk] = useState<MarketRisk | null>(null);
+    const [selectedSignal, setSelectedSignal] = useState<AIOpportunity | null>(null);
 
     const scan = async () => {
         if (cooldown > 0) return;
@@ -46,7 +48,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     }, [style]);
 
     return (
-        <div className="h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col overflow-hidden">
+        <div className="h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col overflow-hidden relative">
             {/* Header / Controls */}
             <div className="p-4 border-b border-border bg-background/50 backdrop-blur-sm flex flex-col gap-4">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
@@ -177,17 +179,138 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                         {opportunities.map((opp) => (
-                            <SignalCard key={opp.id} data={opp} onSelect={() => onSelectOpportunity(opp.symbol.split('/')[0])} />
+                            <SignalCard 
+                                key={opp.id} 
+                                data={opp} 
+                                onSelect={() => onSelectOpportunity(opp.symbol.split('/')[0])}
+                                onShowDetails={() => setSelectedSignal(opp)}
+                            />
                         ))}
                     </div>
                 )}
             </div>
+
+            {/* EDUCATIONAL MODAL */}
+            {selectedSignal && (
+                <div className="absolute inset-0 bg-background/95 backdrop-blur-md z-50 p-6 flex flex-col animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex justify-between items-start mb-6 border-b border-border pb-4">
+                        <div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <BookOpen size={18} className="text-accent" />
+                                <h3 className="text-lg font-mono font-bold text-white uppercase">Análisis Táctico: {selectedSignal.symbol}</h3>
+                            </div>
+                            <p className="text-xs text-secondary">Desglose educativo de la señal detectada</p>
+                        </div>
+                        <button 
+                            onClick={() => setSelectedSignal(null)}
+                            className="p-2 bg-surface hover:bg-white/10 rounded-full transition-colors"
+                        >
+                            <X size={20} className="text-secondary" />
+                        </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
+                        {/* 1. STRATEGY CONTEXT */}
+                        <div className="bg-surface rounded-xl p-5 border border-border">
+                            <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
+                                <Activity size={14} /> La Estrategia Usada
+                            </h4>
+                            <div className="space-y-2">
+                                <p className="text-sm font-mono font-bold text-primary">
+                                    {STRATEGIES.find(s => s.id === selectedSignal.strategy.toLowerCase())?.name || selectedSignal.strategy}
+                                </p>
+                                <p className="text-xs text-secondary leading-relaxed border-l-2 border-accent/50 pl-3">
+                                    {STRATEGIES.find(s => s.id === selectedSignal.strategy.toLowerCase())?.description || "Algoritmo de detección de patrones matemáticos avanzados."}
+                                </p>
+                            </div>
+                        </div>
+
+                         {/* 2. THE TRIGGER (WHY?) */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-surface rounded-xl p-5 border border-border col-span-2 md:col-span-1">
+                                <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
+                                    <Calculator size={14} /> El Gatillo (Datos Duros)
+                                </h4>
+                                {selectedSignal.metrics ? (
+                                    <div className="space-y-3 font-mono text-xs">
+                                        <div className="flex justify-between border-b border-border/50 pb-1">
+                                            <span className="text-secondary">Disparador:</span>
+                                            <span className="text-accent font-bold text-right">{selectedSignal.metrics.specificTrigger}</span>
+                                        </div>
+                                        <div className="flex justify-between border-b border-border/50 pb-1">
+                                            <span className="text-secondary">RSI:</span>
+                                            <span className={selectedSignal.metrics.rsi > 70 || selectedSignal.metrics.rsi < 30 ? 'text-warning font-bold' : 'text-primary'}>
+                                                {selectedSignal.metrics.rsi}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between border-b border-border/50 pb-1">
+                                            <span className="text-secondary">Volumen (RVOL):</span>
+                                            <span className={selectedSignal.metrics.rvol > 1.5 ? 'text-success font-bold' : 'text-primary'}>
+                                                {selectedSignal.metrics.rvol}x
+                                            </span>
+                                        </div>
+                                         <div className="flex justify-between border-b border-border/50 pb-1">
+                                            <span className="text-secondary">Estructura:</span>
+                                            <span className="text-primary">{selectedSignal.metrics.structure}</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-secondary italic">Métricas detalladas no disponibles para este tick.</p>
+                                )}
+                            </div>
+
+                            {/* 3. INTERPRETATION */}
+                             <div className="bg-blue-500/5 rounded-xl p-5 border border-blue-500/20 col-span-2 md:col-span-1 flex flex-col justify-center">
+                                <h4 className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center gap-2">
+                                    <Cpu size={14} /> Interpretación Institucional
+                                </h4>
+                                <p className="text-xs text-secondary leading-relaxed">
+                                    "{selectedSignal.technicalReasoning}"
+                                </p>
+                                <p className="text-[10px] text-blue-300/60 mt-2 italic">
+                                    *El algoritmo detectó esta oportunidad porque la confluencia matemática supera el 70% de probabilidad.*
+                                </p>
+                            </div>
+                        </div>
+
+                         {/* 4. RISK MANAGEMENT */}
+                         <div className="bg-surface rounded-xl p-5 border border-border">
+                            <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
+                                <Shield size={14} /> Gestión de Riesgo Sugerida
+                            </h4>
+                            <div className="flex items-center gap-4 text-xs">
+                                <div className="flex-1 bg-background p-3 rounded border border-border">
+                                    <span className="block text-[10px] text-secondary uppercase mb-1">Entrada Óptima</span>
+                                    <span className="font-mono font-bold text-primary">${selectedSignal.entryZone.min}</span>
+                                </div>
+                                <ArrowRight size={16} className="text-secondary" />
+                                <div className="flex-1 bg-danger/10 p-3 rounded border border-danger/20">
+                                    <span className="block text-[10px] text-danger uppercase mb-1">Stop Loss (Invalidación)</span>
+                                    <span className="font-mono font-bold text-danger">${selectedSignal.stopLoss}</span>
+                                </div>
+                            </div>
+                         </div>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-border flex justify-end">
+                        <button 
+                            onClick={() => {
+                                onSelectOpportunity(selectedSignal.symbol.split('/')[0]);
+                                setSelectedSignal(null);
+                            }}
+                            className="px-6 py-2 bg-accent hover:bg-accentHover text-white rounded font-bold text-xs font-mono uppercase transition-colors"
+                        >
+                            Ver Gráfico en Vivo
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 // Sub-component for the "Signal Ticket" look
-const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void }> = ({ data, onSelect }) => {
+const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDetails: () => void }> = ({ data, onSelect, onShowDetails }) => {
     const isLong = data.side === 'LONG';
     const mainColor = isLong ? 'text-success' : 'text-danger';
     const bgColor = isLong ? 'bg-success/5' : 'bg-danger/5';
@@ -213,11 +336,21 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void }> = ({ d
                         </p>
                     </div>
                 </div>
-                <div className="flex flex-col items-end">
-                    <span className="text-[9px] text-secondary uppercase tracking-widest mb-1">Estrategia</span>
-                    <span className="text-[10px] font-mono font-bold text-primary bg-background px-2 py-1 rounded border border-border">
-                        {data.strategy.split('_')[0]}
-                    </span>
+                <div className="flex flex-col items-end gap-1">
+                    <div className="flex flex-col items-end">
+                        <span className="text-[9px] text-secondary uppercase tracking-widest mb-1">Estrategia</span>
+                        <span className="text-[10px] font-mono font-bold text-primary bg-background px-2 py-1 rounded border border-border">
+                            {data.strategy.split('_')[0]}
+                        </span>
+                    </div>
+                    {/* INFO BUTTON */}
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onShowDetails(); }}
+                        className="mt-1 p-1 text-secondary hover:text-accent transition-colors"
+                        title="Ver Explicación Educativa"
+                    >
+                        <BookOpen size={14} />
+                    </button>
                 </div>
             </div>
 
@@ -276,7 +409,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void }> = ({ d
                 </div>
                 
                 <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg">
-                    <p className="text-[10px] text-secondary italic leading-relaxed">
+                    <p className="text-[10px] text-secondary italic leading-relaxed line-clamp-2">
                         <span className="text-blue-400 not-italic font-bold mr-1">[ALGORITMO]:</span> 
                         {data.technicalReasoning}
                     </p>
