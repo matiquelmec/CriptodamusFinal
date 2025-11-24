@@ -1,8 +1,10 @@
+
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles, Loader2, BookOpen, ChevronDown, Check, RefreshCw } from 'lucide-react';
 import { streamMarketAnalysis } from '../services/geminiService';
 import { ChatMessage, Strategy } from '../types';
-import { getMarketContextForAI, getTechnicalAnalysis, getFearAndGreedIndex } from '../services/cryptoService';
+import { getMarketContextForAI, getRawTechnicalIndicators, getFearAndGreedIndex } from '../services/cryptoService';
 import { STRATEGIES } from '../services/strategyContext';
 
 interface AIChatProps {
@@ -79,21 +81,28 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
     }]);
 
     try {
+      // UPGRADE: Fetch RAW data objects, not just strings
       const contextPromise = Promise.all([
           getMarketContextForAI(),
-          getTechnicalAnalysis(selectedSymbol),
+          getRawTechnicalIndicators(selectedSymbol), // New robust function
           getFearAndGreedIndex()
       ]);
 
-      const [marketContext, techAnalysis, sentimentData] = await Promise.race([
+      const [marketContext, techData, sentimentData] = await Promise.race([
           contextPromise,
-          new Promise<any[]>((resolve) => setTimeout(() => resolve(["Contexto timeout", "Análisis técnico parcial", null]), 4000))
+          new Promise<any[]>((resolve) => setTimeout(() => resolve(["Contexto timeout", null, null]), 4000))
       ]);
 
-      const sentimentString = sentimentData ? `Valor ${sentimentData.value}` : "N/A";
-      const combinedContext = `${marketContext}\n${sentimentString}\n${techAnalysis}`;
+      const sentimentString = sentimentData ? `Fear & Greed: ${sentimentData.value}` : "Sentiment N/A";
+      const combinedContextString = `${marketContext}\n${sentimentString}`;
       
-      const stream = streamMarketAnalysis(userMsg.content, combinedContext, currentStrategy.systemInstruction);
+      // Pass structured data + Strategy ID to the improved engine
+      const stream = streamMarketAnalysis(
+          userMsg.content, 
+          combinedContextString, 
+          techData, // Passing the object directly
+          currentStrategy.id
+      );
       
       let botResponse = '';
 
@@ -105,8 +114,9 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
       }
 
     } catch (error) {
+      console.error(error);
       setMessages(prev => prev.map(msg => 
-          msg.id === botMsgId ? { ...msg, content: 'Error en motor matemático. Intente nuevamente.', isThinking: false } : msg
+          msg.id === botMsgId ? { ...msg, content: 'Error crítico en motor matemático. Los datos del mercado no son accesibles.', isThinking: false } : msg
       ));
     } finally {
       setIsLoading(false);
@@ -200,7 +210,7 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
               {msg.isThinking ? (
                   <div className="flex items-center gap-2 text-secondary py-1">
                       <Loader2 size={12} className="animate-spin" />
-                      <span className="font-mono text-[10px]">Procesando datos macro y técnicos...</span>
+                      <span className="font-mono text-[10px]">Computando EMAs, RSI, MACD y Estructura...</span>
                   </div>
               ) : (
                 <div className="markdown-body font-mono whitespace-pre-wrap">

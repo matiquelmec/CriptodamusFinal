@@ -1,6 +1,6 @@
 
 
-import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle } from '../types';
+import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle, TechnicalIndicators } from '../types';
 import { hasActiveSession } from './geminiService';
 
 // PRIMARY: Binance Vision (CORS friendly for public data)
@@ -254,71 +254,99 @@ const mapBinanceToCoinCap = (symbol: string) => {
     return map[symbol];
 }
 
-export const getTechnicalAnalysis = async (symbolDisplay: string): Promise<string> => {
+// NEW: Returns STRUCTURED DATA for the AI (No String parsing needed)
+export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<TechnicalIndicators | null> => {
     const rawSymbol = symbolDisplay.replace('/USDT', ''); 
     const binanceSymbol = `${rawSymbol}USDT`; 
 
     try {
         const candles = await fetchCandles(binanceSymbol, '15m');
-        if (candles.length < 50) return `Datos insuficientes para análisis técnico de ${symbolDisplay}.`;
+        if (candles.length < 50) return null;
 
         const prices = candles.map(c => c.close);
         const volumes = candles.map(c => c.volume);
         const highs = candles.map(c => c.high);
         const lows = candles.map(c => c.low);
         
-        return calculateTechnicalString(rawSymbol, prices, volumes, highs, lows);
-    } catch (e) {
-        return `No se pudo conectar al mercado para ${symbolDisplay}.`;
-    }
-};
-
-const calculateTechnicalString = (symbol: string, prices: number[], volumes: number[], highs: number[], lows: number[], extraInfo: string = ""): string => {
+        // Calcs
         const currentPrice = prices[prices.length - 1];
-        // Using Wilder's RSI for professional grade accuracy
         const rsi = calculateRSI(prices, 14);
+        const adx = calculateADX(highs, lows, prices, 14);
+        const atr = calculateATR(highs, lows, prices, 14);
         const ema20 = calculateEMA(prices, 20);
         const ema50 = calculateEMA(prices, 50);
         const ema100 = calculateEMA(prices, 100);
         const ema200 = calculateEMA(prices, 200);
-
-        const sma20 = calculateSMA(prices, 20);
-        const stdDev = calculateStdDev(prices, 20, sma20);
-        const upperBand = sma20 + (stdDev * 2);
-        const lowerBand = sma20 - (stdDev * 2);
         
         const avgVol = calculateSMA(volumes, 20);
         const rvol = avgVol > 0 ? (volumes[volumes.length - 1] / avgVol) : 0;
-
-        // Check Golden Cross / Death Cross status
-        const isGoldenCross = ema50 > ema200;
-        const crossStatus = isGoldenCross ? "GOLDEN CROSS (Alcista Macro)" : "DEATH CROSS (Bajista Macro)";
         
-        // --- NEW ADVANCED METRICS FOR AI ---
-        const atr = calculateATR(highs, lows, prices, 14);
-        const adx = calculateADX(highs, lows, prices, 14);
+        const macd = calculateMACD(prices);
         const pivots = calculatePivotPoints(highs, lows, prices);
-        
-        // Calculate Distance to EMA 20 (Mean Reversion)
-        const distEma20 = ((currentPrice - ema20) / ema20) * 100;
+        const bb = calculateBollingerStats(prices);
 
-        return `
-DATOS TÉCNICOS AVANZADOS PARA ${symbol}:
-- Precio Actual: $${currentPrice}
-- Estructura EMA (20/50/100/200): $${ema20.toFixed(4)} / $${ema50.toFixed(4)} / $${ema100.toFixed(4)} / $${ema200.toFixed(4)}
-- Distancia EMA20: ${distEma20.toFixed(2)}%
-- Estado Cruce Macro: ${crossStatus}
-- RSI (14, Wilder): ${rsi.toFixed(2)} ${rsi > 70 ? '(SOBRECOMPRA)' : rsi < 30 ? '(SOBREVENTA)' : '(NEUTRO)'}
-- RVOL (Fuerza Relativa): ${rvol.toFixed(2)} ${rvol > 1.5 ? 'VOLUMEN ALTO' : 'VOLUMEN BAJO'}
-- Bollinger: Sup $${upperBand.toFixed(4)} / Inf $${lowerBand.toFixed(4)}
+        // Determine Alignment
+        let emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC' = 'CHAOTIC';
+        if (ema20 > ema50 && ema50 > ema100 && ema100 > ema200) emaAlignment = 'BULLISH';
+        if (ema20 < ema50 && ema50 < ema100 && ema100 < ema200) emaAlignment = 'BEARISH';
 
-MÉTRICAS INSTITUCIONALES (Úsalas para SL y TP):
-- ATR (Volatilidad): $${atr.toFixed(4)} (Multiplica x1.5 para SL seguro)
-- ADX (Fuerza Tendencia): ${adx.toFixed(2)} ${adx > 25 ? '(TENDENCIA FUERTE)' : '(RANGO/DÉBIL)'}
-- PIVOTS (Soportes/Resistencias): P=$${pivots.p.toFixed(4)}, S1=$${pivots.s1.toFixed(4)}, R1=$${pivots.r1.toFixed(4)}
-${extraInfo}
-        `.trim();
+        return {
+            symbol: symbolDisplay,
+            price: currentPrice,
+            rsi,
+            adx,
+            atr,
+            rvol,
+            ema20,
+            ema50,
+            ema100,
+            ema200,
+            macd: {
+                line: macd.macdLine,
+                signal: macd.signalLine,
+                histogram: macd.histogram
+            },
+            bollinger: {
+                upper: bb.upper,
+                lower: bb.lower,
+                middle: bb.sma, // Using SMA as middle band
+                bandwidth: bb.bandwidth
+            },
+            pivots: {
+                p: pivots.p,
+                r1: pivots.r1,
+                s1: pivots.s1,
+                r2: (pivots.p - pivots.s1) + pivots.r1, // Simple R2 approx
+                s2: pivots.p - (pivots.r1 - pivots.s1)  // Simple S2 approx
+            },
+            trendStatus: {
+                emaAlignment,
+                goldenCross: ema50 > ema200,
+                deathCross: ema50 < ema200
+            }
+        };
+
+    } catch (e) {
+        return null;
+    }
 }
+
+// Legacy function kept for string compatibility if needed elsewhere, 
+// but upgraded to use the structured data to ensure consistency.
+export const getTechnicalAnalysis = async (symbolDisplay: string): Promise<string> => {
+    const data = await getRawTechnicalIndicators(symbolDisplay);
+    if (!data) return `No se pudo conectar al mercado para ${symbolDisplay}.`;
+
+    return `
+DATOS TÉCNICOS AVANZADOS PARA ${data.symbol}:
+- Precio Actual: $${data.price}
+- Estructura EMA (20/50/100/200): $${data.ema20.toFixed(4)} / $${data.ema50.toFixed(4)} / $${data.ema100.toFixed(4)} / $${data.ema200.toFixed(4)}
+- RSI (14, Wilder): ${data.rsi.toFixed(2)}
+- MACD Hist: ${data.macd.histogram.toFixed(4)}
+- Bollinger: Sup $${data.bollinger.upper.toFixed(4)} / Inf $${data.bollinger.lower.toFixed(4)}
+- ATR: $${data.atr.toFixed(4)}
+`.trim();
+};
 
 // --- AUTONOMOUS QUANT ENGINE v4.0 (API INDEPENDENT) ---
 
@@ -625,7 +653,7 @@ const calculateBollingerStats = (prices: number[]) => {
     // Bandwidth %: (Upper - Lower) / Middle * 100
     const bandwidth = sma20 > 0 ? ((upper - lower) / sma20) * 100 : 0;
     
-    return { upper, lower, bandwidth };
+    return { upper, lower, bandwidth, sma: sma20 };
 };
 
 const calculateSMA = (data: number[], period: number) => {
@@ -641,6 +669,35 @@ const calculateEMA = (data: number[], period: number) => {
         ema = (data[i] * k) + (ema * (1 - k));
     }
     return ema;
+};
+
+const calculateMACD = (prices: number[], fast = 12, slow = 26, signal = 9) => {
+    const emaFast = calculateEMAArray(prices, fast);
+    const emaSlow = calculateEMAArray(prices, slow);
+    
+    const macdLine = [];
+    for(let i=0; i < prices.length; i++) {
+        macdLine.push(emaFast[i] - emaSlow[i]);
+    }
+    
+    const signalLine = calculateEMAArray(macdLine, signal);
+    const histogram = macdLine[macdLine.length-1] - signalLine[signalLine.length-1];
+
+    return {
+        macdLine: macdLine[macdLine.length-1],
+        signalLine: signalLine[signalLine.length-1],
+        histogram: histogram
+    };
+}
+
+// Helper to return array of EMAs for MACD calculation
+const calculateEMAArray = (data: number[], period: number) => {
+    const k = 2 / (period + 1);
+    const emaArray = [data[0]];
+    for (let i = 1; i < data.length; i++) {
+        emaArray.push((data[i] * k) + (emaArray[i - 1] * (1 - k)));
+    }
+    return emaArray;
 };
 
 const calculateStdDev = (data: number[], period: number, mean: number) => {

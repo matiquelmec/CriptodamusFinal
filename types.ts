@@ -54,6 +54,42 @@ export interface MacroData {
     goldPrice: number;
 }
 
+export interface TechnicalIndicators {
+    symbol: string;
+    price: number;
+    rsi: number;
+    adx: number;
+    atr: number;
+    rvol: number;
+    ema20: number;
+    ema50: number;
+    ema100: number;
+    ema200: number;
+    macd: {
+        line: number;
+        signal: number;
+        histogram: number;
+    };
+    bollinger: {
+        upper: number;
+        lower: number;
+        middle: number;
+        bandwidth: number; // percentage
+    };
+    pivots: {
+        p: number;
+        r1: number;
+        s1: number;
+        r2: number;
+        s2: number;
+    };
+    trendStatus: {
+        emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC';
+        goldenCross: boolean;
+        deathCross: boolean;
+    };
+}
+
 // Nueva interfaz robusta para señales de IA
 export interface AIOpportunity {
     id: string;
