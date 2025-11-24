@@ -1,3 +1,5 @@
+
+
 import { AIOpportunity, TradingStyle, TechnicalIndicators } from "../types";
 
 // --- MOTOR AUTÓNOMO (OFFLINE) ---
@@ -74,15 +76,26 @@ export const streamMarketAnalysis = async function* (
 
         // SECCIÓN 1: SALUD DE LA TENDENCIA (Contexto)
         response += `#### 1. Estructura & Tendencia\n`;
-        const trendStrength = adx > 25 ? "Fuerte" : "Débil/Rango";
+        
+        // ADX Interpretation
+        let trendDesc = "Rango/Ruido (Peligroso)";
+        if (adx > 20) trendDesc = "Tendencia en Desarrollo";
+        if (adx > 30) trendDesc = "Tendencia Fuerte";
+        if (adx > 50) trendDesc = "Tendencia Extrema (Clímax)";
+        
         const emaState = trendStatus.emaAlignment === 'BULLISH' ? "Alineación Perfecta (20>50>100>200)" : 
                         trendStatus.emaAlignment === 'BEARISH' ? "Alineación Bajista (20<50<100<200)" : "Caótica (Cruce de medias)";
         
         response += `- **Tendencia Macro (EMA 200):** ${price > ema200 ? '✅ Alcista' : '🔻 Bajista'}\n`;
-        response += `- **Fuerza (ADX):** ${adx.toFixed(1)} (${trendStrength})\n`;
+        response += `- **Fuerza ADX (14):** ${adx.toFixed(1)} (${trendDesc})\n`;
         response += `- **Estructura EMA:** ${emaState}\n`;
         if (trendStatus.goldenCross) response += `- **⚠️ Golden Cross Detectado:** Señal alcista de largo plazo.\n`;
         if (trendStatus.deathCross) response += `- **⚠️ Death Cross Detectado:** Señal bajista de largo plazo.\n`;
+        
+        // Macro Context Check
+        if (marketContext.includes("Dominancia Bitcoin") && parseFloat(marketContext.split(':')[1]) > 58) {
+            response += `- **⚠️ Macro Warn:** Dominancia BTC alta. Altcoins pueden sufrir volatilidad extra.\n`;
+        }
         response += `\n`;
 
         // SECCIÓN 2: MOMENTO & VOLATILIDAD (El "Timing")
@@ -108,8 +121,13 @@ export const streamMarketAnalysis = async function* (
         response += `- **Bandas Bollinger:** ${volText} (Ancho: ${bbWidth}%)\n`;
         response += `- **RVOL (Volumen):** ${rvol.toFixed(2)}x ${rvol > 1.5 ? '✅ Interés Institucional' : '❌ Sin volumen relevante'}\n\n`;
 
-        // SECCIÓN 3: RECOMENDACIÓN ESTRATÉGICA (El "Alpha")
-        response += `#### 3. Plan de Acción Sugerido\n`;
+        // SECCIÓN 3: NIVELES CLAVE (Table)
+        response += `#### 🎯 Niveles Clave (Soportes y Resistencias)\n`;
+        response += generateLevelsTable(price, pivots, ema200);
+        response += `\n`;
+
+        // SECCIÓN 4: RECOMENDACIÓN ESTRATÉGICA (El "Alpha")
+        response += `#### 🛡️ Setup Sugerido (Gestión de Riesgo)\n`;
         
         // Generate strategy based on logic + selected strategy context
         response += generateStrategicAdvice(techData, sentiment, strategyId);
@@ -136,70 +154,117 @@ const formatStrategyName = (id: string) => {
     }
 }
 
+const generateLevelsTable = (price: number, pivots: any, ema200: number) => {
+    // Generate a markdown table
+    const r2 = (pivots.p - pivots.s1) + pivots.r1;
+    const s2 = pivots.p - (pivots.r1 - pivots.s1);
+
+    const levels = [
+        { name: "R2 (Resistencia)", price: r2 },
+        { name: "R1 (Objetivo Corto)", price: pivots.r1 },
+        { name: "P (Pivote Central)", price: pivots.p },
+        { name: "S1 (Soporte)", price: pivots.s1 },
+        { name: "S2 (Fondo)", price: s2 },
+        { name: "EMA 200 (Dinámico)", price: ema200 },
+    ].sort((a,b) => b.price - a.price); // Sort descending
+
+    let table = `| Nivel | Precio | Distancia |\n|---|---|---|\n`;
+    
+    levels.forEach(l => {
+        const dist = ((l.price - price) / price) * 100;
+        const icon = l.price > price ? "🔴" : "🟢";
+        const distStr = dist > 0 ? `+${dist.toFixed(2)}%` : `${dist.toFixed(2)}%`;
+        const style = Math.abs(dist) < 0.5 ? "**" : ""; // Highlight close levels
+        
+        table += `| ${icon} ${l.name} | ${style}$${l.price.toFixed(4)}${style} | ${distStr} |\n`;
+    });
+
+    return table;
+}
+
 // --- CORE BRAIN: Generates the actual advice based on numbers ---
 const generateStrategicAdvice = (data: TechnicalIndicators, sentiment: string, strategyId: string): string => {
-    const { price, rsi, ema20, ema50, ema100, ema200, pivots, bollinger } = data;
+    const { price, rsi, ema20, ema50, ema100, ema200, pivots, bollinger, atr } = data;
     const isBullish = sentiment.includes("ALCISTA");
     let advice = "";
+
+    // Helper for decimals
+    const dec = price > 1000 ? 2 : 4;
 
     // LOGIC BRANCH: SMC (Liquidity Hunter)
     if (strategyId === 'smc_liquidity') {
         if (isBullish) {
-            advice += `**🟢 SETUP SMC LONG:**\n`;
-            advice += `Busca un retroceso al Order Block cercano a **$${ema50.toFixed(4)}** o al Pivote **$${pivots.p.toFixed(4)}**.\n`;
-            advice += `1. **Entrada:** Esperar barrido de liquidez en $${pivots.s1.toFixed(4)} y recuperación.\n`;
-            advice += `2. **SL:** Bajo el mínimo reciente o EMA 100 ($${data.ema100.toFixed(4)}).\n`;
+            advice += `**🟢 OPORTUNIDAD SMC LONG:**\n`;
+            advice += `El precio muestra estructura alcista. Buscamos entrar en la corrección.\n\n`;
+            advice += `> **Zona de Entrada (POI):** $${ema50.toFixed(dec)} - $${pivots.p.toFixed(dec)}\n`;
+            advice += `> **Confirmación:** Esperar mecha de rechazo en esta zona en 15m.\n`;
+            advice += `> **Invalidación (SL):** Cierre debajo de EMA 100 ($${data.ema100.toFixed(dec)}).\n`;
+            advice += `> **Target (TP):** R1 ($${pivots.r1.toFixed(dec)}) o máximo anterior.`;
         } else {
-            advice += `**🔴 SETUP SMC SHORT:**\n`;
-            advice += `El precio rompió estructura. Busca ventas en el retest de **$${ema20.toFixed(4)}**.\n`;
-            advice += `1. **Entrada:** Zona de oferta entre $${pivots.p.toFixed(4)} y $${pivots.r1.toFixed(4)}.\n`;
-            advice += `2. **TP:** Liquidez en mínimos iguales (Equal Lows) o S1 ($${pivots.s1.toFixed(4)}).\n`;
+            advice += `**🔴 OPORTUNIDAD SMC SHORT:**\n`;
+            advice += `Ruptura de estructura confirmada (ChoCH).\n\n`;
+            advice += `> **Zona de Entrada (Breaker):** $${pivots.p.toFixed(dec)} - $${pivots.r1.toFixed(dec)}\n`;
+            advice += `> **Invalidación (SL):** Por encima del último alto ($${(price + atr*2).toFixed(dec)}).\n`;
+            advice += `> **Target (TP):** Liquidez en S1 ($${pivots.s1.toFixed(dec)}).`;
         }
     } 
     // LOGIC BRANCH: SCALP / QUANT (Volatility)
     else if (strategyId === 'quant_volatility') {
         if (data.bollinger.bandwidth < 5) {
             advice += `**⚠️ ALERTA DE SQUEEZE (COMPRESIÓN):**\n`;
-            advice += `El mercado está acumulando energía. **NO OPERAR RANGO.**\n`;
-            advice += `Pon Buy Stop en $${bollinger.upper.toFixed(4)} y Sell Stop en $${bollinger.lower.toFixed(4)}.\n`;
+            advice += `La volatilidad ha muerto. **NO OPERAR RANGO.**\n`;
+            advice += `Coloca órdenes de ruptura (Stop Orders):\n`;
+            advice += `1. **Buy Stop:** $${bollinger.upper.toFixed(dec)} (Ruptura Alcista)\n`;
+            advice += `2. **Sell Stop:** $${bollinger.lower.toFixed(dec)} (Ruptura Bajista)\n`;
         } else if (isBullish) {
-            advice += `**🚀 MOMENTUM SCALP:**\n`;
-            advice += `Mientras el precio respete la EMA 20 ($${ema20.toFixed(4)}), mantén longs.\n`;
-            advice += `**TP Rápido:** Banda Superior Bollinger ($${bollinger.upper.toFixed(4)}).\n`;
+            advice += `**🚀 MOMENTUM SCALP LONG:**\n`;
+            advice += `Precio sobre EMA 20. El momentum es tu amigo.\n`;
+            advice += `> **Trailing Stop:** EMA 20 ($${ema20.toFixed(dec)}).\n`;
+            advice += `> **Take Profit:** Banda Superior ($${bollinger.upper.toFixed(dec)}).\n`;
         } else {
-            advice += `**🐻 MOMENTUM SHORT:**\n`;
-            advice += `El precio perdió la EMA 20. Short hasta la Banda Inferior ($${bollinger.lower.toFixed(4)}).\n`;
+            advice += `**🐻 MOMENTUM SCALP SHORT:**\n`;
+            advice += `Precio bajo EMA 20. Busca cortos rápidos.\n`;
+            advice += `> **Stop Loss:** EMA 50 ($${ema50.toFixed(dec)}).\n`;
+            advice += `> **Take Profit:** Banda Inferior ($${bollinger.lower.toFixed(dec)}).`;
         }
     }
     // LOGIC BRANCH: ICHIMOKU (Trend)
     else if (strategyId === 'ichimoku_dragon') {
         // Simple proxy for Kumo if precise cloud data isn't fully calculated here (using EMA proxies)
         if (isBullish && price > ema100) {
-            advice += `**🐉 DRAGON RUN:**\n`;
-            advice += `Tendencia saludable. El precio está sobre el equilibrio.\n`;
-            advice += `**Zona de Recompra:** Si el precio toca la EMA 50 ($${ema50.toFixed(4)}) (Kijun Proxy).\n`;
+            advice += `**🐉 ESTRATEGIA DRAGON (TREND):**\n`;
+            advice += `El activo está en tendencia saludable sobre el equilibrio.\n\n`;
+            advice += `> **Zona de Recompra (Kijun):** $${ema50.toFixed(dec)}\n`;
+            advice += `> **Objetivo:** Expansión de Fibonacci ($${(price + atr*3).toFixed(dec)}).`;
         } else {
-            advice += `**☁️ BAJO LA NUBE:**\n`;
-            advice += `Resistencia fuerte en medias móviles. Evitar compras hasta recuperar $${ema100.toFixed(4)}.\n`;
+            advice += `**☁️ BAJO LA NUBE (RESISTENCIA):**\n`;
+            advice += `La tendencia es bajista o neutra. Operar largos es arriesgado.\n`;
+            advice += `> **Resistencia Clave:** EMA 100 ($${ema100.toFixed(dec)}). Solo comprar si rompe y apoya.`;
         }
     }
     // DEFAULT LOGIC
     else {
         if (isBullish) {
              if (rsi > 70) {
-                 advice += `**⚠️ PRECAUCIÓN (FOMO):** Tendencia alcista pero sobreextendida.\n`;
-                 advice += `Esperar retroceso a $${ema20.toFixed(4)} antes de entrar.`;
+                 advice += `**⚠️ ESCENARIO DE FOMO:**\n`;
+                 advice += `Tendencia fuerte pero RSI en sobrecompra. No perseguir el precio.\n`;
+                 advice += `**Acción:** Esperar pullback a $${ema20.toFixed(dec)} para entrar.`;
              } else {
-                 advice += `**✅ CONTINUACIÓN DE TENDENCIA:**\n`;
-                 advice += `Soportes clave en $${pivots.p.toFixed(4)} y EMA 50.\nObjetivo: $${pivots.r1.toFixed(4)}.`;
+                 advice += `**✅ CONTINUACIÓN ALCISTA:**\n`;
+                 advice += `Soportes respetados. Estructura de máximos crecientes.\n`;
+                 advice += `> **Entrada:** Precio de mercado.\n`;
+                 advice += `> **SL:** $${(price - atr*1.5).toFixed(dec)}\n`;
+                 advice += `> **TP:** $${pivots.r1.toFixed(dec)}`;
              }
         } else {
              if (rsi < 30) {
-                 advice += `**⚠️ POSIBLE SUELO (REBOTE):**\n`;
-                 advice += `Sobreventa extrema. Riesgo de Short Squeeze. No vender aquí.`;
+                 advice += `**⚠️ RIESGO DE REBOTE (SUELO):**\n`;
+                 advice += `Sobreventa extrema. Riesgo de "Short Squeeze".\n`;
+                 advice += `**Acción:** No vender en pánico. Esperar rebote a $${ema20.toFixed(dec)} para evaluar cortos.`;
              } else {
-                 advice += `**🔻 VENTA EN REBOTES:**\n`;
-                 advice += `Usar cualquier subida a $${ema20.toFixed(4)} como oportunidad de venta/cierre de longs.`;
+                 advice += `**🔻 ESTRATEGIA DE VENTA:**\n`;
+                 advice += `Debilidad estructural. Los rebotes son oportunidades de venta.\n`;
+                 advice += `> **Venta Limit:** $${ema20.toFixed(dec)} (Si el precio sube ahí).`;
              }
         }
     }

@@ -776,20 +776,61 @@ const calculateATR = (highs: number[], lows: number[], closes: number[], period:
     return atr;
 }
 
-// Simplified ADX (Trend Strength)
+// REAL ADX (Directional Movement System)
 const calculateADX = (highs: number[], lows: number[], closes: number[], period: number) => {
+    if (highs.length < period * 2) return 20; // Not enough data, return neutral
     
-    // Heuristic: Use EMA spread to approximate Trend Strength and avoid 0.0 values
-    const ema20 = calculateEMA(closes, 20);
-    const ema50 = calculateEMA(closes, 50);
-    const spread = Math.abs(ema20 - ema50);
+    // 1. Calculate TR, +DM, -DM per candle
+    // We use a simplified Wilder's smoothing logic to avoid massive arrays overhead in browser
+    let tr = 0;
+    let plusDM = 0;
+    let minusDM = 0;
     
-    // Normalize based on volatility (ATR proxy) or price to get a 0-100 score
-    // Factor boosted to provide actionable signals
-    const score = (spread / closes[closes.length-1]) * 1000 * 5; 
-    
-    // Clamp to ensure visual stability
-    return Math.max(5.5, Math.min(score, 99.9));
+    // Initial accumulation (SMA)
+    for (let i = 1; i <= period; i++) {
+        const up = highs[i] - highs[i-1];
+        const down = lows[i-1] - lows[i];
+        
+        const pdm = (up > down && up > 0) ? up : 0;
+        const mdm = (down > up && down > 0) ? down : 0;
+        const trueRange = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i-1]), Math.abs(lows[i] - closes[i-1]));
+
+        tr += trueRange;
+        plusDM += pdm;
+        minusDM += mdm;
+    }
+
+    // Smooth over time
+    let smTR = tr;
+    let smPlusDM = plusDM;
+    let smMinusDM = minusDM;
+    let lastADX = 0;
+
+    // Calculate DX series
+    for (let i = period + 1; i < highs.length; i++) {
+        const up = highs[i] - highs[i-1];
+        const down = lows[i-1] - lows[i];
+        const pdm = (up > down && up > 0) ? up : 0;
+        const mdm = (down > up && down > 0) ? down : 0;
+        const trueRange = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i-1]), Math.abs(lows[i] - closes[i-1]));
+
+        smTR = smTR - (smTR / period) + trueRange;
+        smPlusDM = smPlusDM - (smPlusDM / period) + pdm;
+        smMinusDM = smMinusDM - (smMinusDM / period) + mdm;
+
+        const pDI = (smPlusDM / smTR) * 100;
+        const mDI = (smMinusDM / smTR) * 100;
+        
+        const dx = (Math.abs(pDI - mDI) / (pDI + mDI)) * 100;
+        
+        if (i === period * 2 - 1) {
+            lastADX = dx; // First ADX is DX
+        } else if (i >= period * 2) {
+            lastADX = ((lastADX * (period - 1)) + dx) / period;
+        }
+    }
+
+    return lastADX;
 }
 
 const calculatePivotPoints = (highs: number[], lows: number[], closes: number[]) => {
