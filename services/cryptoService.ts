@@ -553,6 +553,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     detectionNote = `SMC Sniper: Barrido de Liquidez${extraNotes.length > 0 ? ' + ' + extraNotes.join(' + ') : ''}.`;
                     specificTrigger = `SFP (Swing Failure Pattern)${hasBullishDiv ? ' + Bull Div' : ''}`;
 
+
                     signalSide = 'LONG';
                 } else if (!isBullishTrend && lastHigh > prev20Highs && currentPrice < prev20Highs) {
                     score = 80;
@@ -573,8 +574,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     specificTrigger = `Ruptura de volatilidad con RVOL ${rvol.toFixed(1)}x`;
                 }
             } else {
-                // SCALP: BOLLINGER SQUEEZE + VWAP FILTER
-                const { bandwidth, lower, upper } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
+                // SCALP: BOLLINGER SQUEEZE + MOMENTUM + VWAP
+                const { bandwidth, sma: sma20 } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
 
                 const historicalBandwidths = [];
                 for (let i = 20; i < 50; i++) {
@@ -583,12 +584,25 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
                 const minHistBandwidth = Math.min(...historicalBandwidths);
 
-                if (bandwidth <= minHistBandwidth * 1.1) {
-                    score = 80;
-                    detectionNote = "Quant Squeeze: Compresión de volatilidad.";
-                    specificTrigger = `Bandwidth (${bandwidth.toFixed(2)}%) en mínimos históricos`;
-                    // Filter direction by VWAP
-                    signalSide = currentPrice > vwap ? 'LONG' : 'SHORT';
+                // Allow slightly more breathing room (1.2x) because we have strict momentum filters now
+                const isSqueeze = bandwidth <= minHistBandwidth * 1.2;
+
+                if (isSqueeze) {
+                    // ROBUST FILTER: Price must be on the correct side of VWAP AND SMA20, with RSI supporting
+                    const isBullish = currentPrice > vwap && currentPrice > sma20 && rsi > 52;
+                    const isBearish = currentPrice < vwap && currentPrice < sma20 && rsi < 48;
+
+                    if (isBullish) {
+                        score = 80;
+                        signalSide = 'LONG';
+                        detectionNote = "Quant Squeeze: Compresión de volatilidad con Momentum Alcista.";
+                        specificTrigger = `Squeeze (BW ${bandwidth.toFixed(2)}%) + RSI > 52 + Price > VWAP`;
+                    } else if (isBearish) {
+                        score = 80;
+                        signalSide = 'SHORT';
+                        detectionNote = "Quant Squeeze: Compresión de volatilidad con Momentum Bajista.";
+                        specificTrigger = `Squeeze (BW ${bandwidth.toFixed(2)}%) + RSI < 48 + Price < VWAP`;
+                    }
                 }
             }
 
