@@ -1,5 +1,4 @@
 
-
 import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from '../types';
 import { hasActiveSession } from './geminiService';
 
@@ -12,7 +11,7 @@ const COINCAP_API_BASE = 'https://api.coincap.io/v2';
 
 // List of known major memes to filter for the "Meme" view
 const MEME_SYMBOLS = [
-    'DOGE', 'SHIB', 'PEPE', 'WIF', 'FLOKI', 'BONK', 'BOME', 'MEME', 'PEOPLE', 
+    'DOGE', 'SHIB', 'PEPE', 'WIF', 'FLOKI', 'BONK', 'BOME', 'MEME', 'PEOPLE',
     'DOGS', 'TURBO', 'MYRO', 'NEIRO', '1000SATS', 'ORDI', 'BABYDOGE', 'MOODENG',
     'PNUT', 'ACT', 'POPCAT', 'SLERF', 'BRETT', 'GOAT', 'MOG', 'SPX', 'HIPPO', 'LADYS',
     'CHILLGUY', 'LUCE', 'PENGU'
@@ -33,14 +32,14 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout 
 };
 
 export const fetchCryptoData = async (mode: 'volume' | 'memes' = 'volume'): Promise<MarketData[]> => {
-  try {
-    const data = await fetchBinanceMarkets(mode);
-    if (data.length === 0) throw new Error("Empty Binance Data");
-    return data;
-  } catch (error) {
-    console.warn("Binance API failed/blocked, switching to CoinCap fallback...", error);
-    return await fetchCoinCapMarkets(mode);
-  }
+    try {
+        const data = await fetchBinanceMarkets(mode);
+        if (data.length === 0) throw new Error("Empty Binance Data");
+        return data;
+    } catch (error) {
+        console.warn("Binance API failed/blocked, switching to CoinCap fallback...", error);
+        return await fetchCoinCapMarkets(mode);
+    }
 };
 
 // --- BINANCE FETCH STRATEGY ---
@@ -48,17 +47,17 @@ const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
     try {
         const response = await fetchWithTimeout(`${BINANCE_API_BASE}/ticker/24hr`);
         if (!response.ok) throw new Error(`Binance returned ${response.status}`);
-        
+
         const data = await response.json();
-        
+
         // Ignored symbols
         const ignoredPatterns = ['USDCUSDT', 'FDUSDUSDT', 'TUSDUSDT', 'USDPUSDT', 'EURUSDT', 'DAIUSDT', 'BUSDUSDT', 'UPUSDT', 'DOWNUSDT', 'BULLUSDT', 'BEARUSDT', 'USDT', 'PAXGUSDT'];
 
         let filteredData = data.filter((ticker: any) => {
             const symbol = ticker.symbol;
-            return symbol.endsWith('USDT') && 
+            return symbol.endsWith('USDT') &&
                 !ignoredPatterns.includes(symbol) &&
-                !symbol.includes('DOWN') && 
+                !symbol.includes('DOWN') &&
                 !symbol.includes('UP');
         });
 
@@ -68,7 +67,7 @@ const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
                 // Check specific list or 1000-prefix (e.g. 1000SATS, 1000PEPE sometimes used)
                 return MEME_SYMBOLS.includes(baseSymbol) || MEME_SYMBOLS.includes(baseSymbol.replace('1000', ''));
             });
-             // Sort memes by Volume too
+            // Sort memes by Volume too
             filteredData = filteredData.sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
         } else {
             // Default: Top 50 by Volume
@@ -99,12 +98,12 @@ const fetchCoinCapMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
     try {
         const response = await fetchWithTimeout(`${COINCAP_API_BASE}/assets?limit=100`);
         if (!response.ok) return [];
-        
+
         const json = await response.json();
         let assets = json.data;
 
         if (mode === 'memes') {
-             assets = assets.filter((asset: any) => 
+            assets = assets.filter((asset: any) =>
                 MEME_SYMBOLS.includes(asset.symbol.toUpperCase())
             );
         } else {
@@ -127,53 +126,53 @@ const fetchCoinCapMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
 
 // General subscription for the main scanner
 export const subscribeToLivePrices = (marketData: MarketData[], callback: (data: Record<string, number>) => void) => {
-  const sampleId = marketData[0]?.id || '';
-  const isBinance = sampleId === sampleId.toUpperCase() && sampleId.includes('USDT');
+    const sampleId = marketData[0]?.id || '';
+    const isBinance = sampleId === sampleId.toUpperCase() && sampleId.includes('USDT');
 
-  if (isBinance) {
-      const validStreams = marketData.map(m => `${m.id.toLowerCase()}@miniTicker`);
-      const url = `${BINANCE_WS_BASE}${validStreams.join('/')}`;
-      const ws = new WebSocket(url);
-      
-      ws.onmessage = (event) => {
-        try {
-            const msg = JSON.parse(event.data);
-            if (msg.data && msg.data.s && msg.data.c) {
-                const displaySymbol = msg.data.s.replace('USDT', '/USDT');
-                callback({ [displaySymbol]: parseFloat(msg.data.c) });
-            }
-        } catch(e) {}
-      };
-      return () => ws.close();
-  } else {
-      const ids = marketData.map(m => m.id).join(',');
-      const ws = new WebSocket(`wss://ws.coincap.io/prices?assets=${ids}`);
-      ws.onmessage = (event) => {
-          try {
-              const msg = JSON.parse(event.data);
-              const update: Record<string, number> = {};
-              Object.keys(msg).forEach(key => {
-                  const item = marketData.find(m => m.id === key);
-                  if (item) {
-                      update[item.symbol] = parseFloat(msg[key]);
-                  }
-              });
-              callback(update);
-          } catch(e) {}
-      };
-      return () => ws.close();
-  }
+    if (isBinance) {
+        const validStreams = marketData.map(m => `${m.id.toLowerCase()}@miniTicker`);
+        const url = `${BINANCE_WS_BASE}${validStreams.join('/')}`;
+        const ws = new WebSocket(url);
+
+        ws.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                if (msg.data && msg.data.s && msg.data.c) {
+                    const displaySymbol = msg.data.s.replace('USDT', '/USDT');
+                    callback({ [displaySymbol]: parseFloat(msg.data.c) });
+                }
+            } catch (e) { }
+        };
+        return () => ws.close();
+    } else {
+        const ids = marketData.map(m => m.id).join(',');
+        const ws = new WebSocket(`wss://ws.coincap.io/prices?assets=${ids}`);
+        ws.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                const update: Record<string, number> = {};
+                Object.keys(msg).forEach(key => {
+                    const item = marketData.find(m => m.id === key);
+                    if (item) {
+                        update[item.symbol] = parseFloat(msg[key]);
+                    }
+                });
+                callback(update);
+            } catch (e) { }
+        };
+        return () => ws.close();
+    }
 };
 
 export const getFearAndGreedIndex = async (): Promise<FearAndGreedData | null> => {
-  try {
-    const response = await fetchWithTimeout('https://api.alternative.me/fng/', {}, 3000);
-    if (!response.ok) return null;
-    const json = await response.json();
-    return json.data[0];
-  } catch (e) {
-    return null;
-  }
+    try {
+        const response = await fetchWithTimeout('https://api.alternative.me/fng/', {}, 3000);
+        if (!response.ok) return null;
+        const json = await response.json();
+        return json.data[0];
+    } catch (e) {
+        return null;
+    }
 };
 
 // NEW: Market Risk Detector (Volatility & Manipulation Proxy)
@@ -185,7 +184,7 @@ export const getMarketRisk = async (): Promise<MarketRisk> => {
 
         const currentCandle = candles[candles.length - 1]; // Latest open candle
         const prevCandles = candles.slice(candles.length - 25, candles.length - 1);
-        
+
         // 1. VOLATILITY CHECK
         const ranges = prevCandles.map(c => (c.high - c.low) / c.open);
         const avgRange = ranges.reduce((a, b) => a + b, 0) / ranges.length;
@@ -202,30 +201,30 @@ export const getMarketRisk = async (): Promise<MarketRisk> => {
         // Case A: Whale Manipulation (Massive Volume + Potential Churn)
         // If volume is > 3.5x average, someone is aggressively entering/exiting BTC
         if (volumeRatio > 3.5) {
-             return { 
-                 level: 'HIGH', 
-                 note: `🐋 BALLENAS DETECTADAS: Volumen BTC anormal (x${volumeRatio.toFixed(1)}). Posible manipulación.`,
-                 riskType: 'MANIPULATION'
-             };
+            return {
+                level: 'HIGH',
+                note: `🐋 BALLENAS DETECTADAS: Volumen BTC anormal (x${volumeRatio.toFixed(1)}). Posible manipulación.`,
+                riskType: 'MANIPULATION'
+            };
         }
 
         // Case B: High Volatility (News Impact)
         // If volatility is 3x avg or > 2.5% absolute in 1h
         if (currentRange > avgRange * 3 || currentRange > 0.025) {
-             return { 
-                 level: 'HIGH', 
-                 note: '🚨 NOTICIAS/VOLATILIDAD: BTC moviéndose agresivamente. Mercado inestable.',
-                 riskType: 'VOLATILITY'
-             };
+            return {
+                level: 'HIGH',
+                note: '🚨 NOTICIAS/VOLATILIDAD: BTC moviéndose agresivamente. Mercado inestable.',
+                riskType: 'VOLATILITY'
+            };
         }
-        
+
         // Case C: Medium Caution
         if (currentRange > avgRange * 1.8) {
-             return { level: 'MEDIUM', note: '⚠️ Volatilidad superior al promedio.', riskType: 'VOLATILITY' };
+            return { level: 'MEDIUM', note: '⚠️ Volatilidad superior al promedio.', riskType: 'VOLATILITY' };
         }
-        
+
         if (volumeRatio > 2.0) {
-             return { level: 'MEDIUM', note: '⚠️ Volumen BTC elevado. Precaución.', riskType: 'MANIPULATION' };
+            return { level: 'MEDIUM', note: '⚠️ Volumen BTC elevado. Precaución.', riskType: 'MANIPULATION' };
         }
 
         return { level: 'LOW', note: 'Condiciones estables.', riskType: 'NORMAL' };
@@ -254,7 +253,7 @@ export const getMarketContextForAI = async (): Promise<string> => {
 
 // --- TECHNICAL ANALYSIS ENGINE ---
 
-const fetchCandles = async (symbolId: string, interval: string): Promise<{close: number, volume: number, high: number, low: number, open: number}[]> => {
+const fetchCandles = async (symbolId: string, interval: string): Promise<{ close: number, volume: number, high: number, low: number, open: number }[]> => {
     const isBinance = symbolId === symbolId.toUpperCase() && symbolId.endsWith('USDT');
 
     try {
@@ -263,24 +262,24 @@ const fetchCandles = async (symbolId: string, interval: string): Promise<{close:
             const res = await fetchWithTimeout(`${BINANCE_API_BASE}/klines?symbol=${symbolId}&interval=${interval}&limit=205`, {}, 4000);
             if (!res.ok) throw new Error("Binance Candle Error");
             const data = await res.json();
-            return data.map((d: any[]) => ({ 
+            return data.map((d: any[]) => ({
                 open: parseFloat(d[1]),
                 high: parseFloat(d[2]),
                 low: parseFloat(d[3]),
-                close: parseFloat(d[4]), 
-                volume: parseFloat(d[5]) 
+                close: parseFloat(d[4]),
+                volume: parseFloat(d[5])
             }));
         } else {
-            const ccInterval = interval === '15m' ? 'm15' : 'h1'; 
+            const ccInterval = interval === '15m' ? 'm15' : 'h1';
             const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${symbolId}&quoteId=tether`, {}, 4000);
             if (!res.ok) return [];
             const json = await res.json();
-            return json.data.map((d: any) => ({ 
+            return json.data.map((d: any) => ({
                 open: parseFloat(d.open),
                 high: parseFloat(d.high),
                 low: parseFloat(d.low),
-                close: parseFloat(d.close), 
-                volume: parseFloat(d.volume) 
+                close: parseFloat(d.close),
+                volume: parseFloat(d.volume)
             }));
         }
     } catch (e) {
@@ -288,19 +287,19 @@ const fetchCandles = async (symbolId: string, interval: string): Promise<{close:
         if (isBinance) {
             const fallbackId = mapBinanceToCoinCap(symbolId);
             if (fallbackId) {
-                 try {
-                    const ccInterval = interval === '15m' ? 'm15' : 'h1'; 
+                try {
+                    const ccInterval = interval === '15m' ? 'm15' : 'h1';
                     const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${fallbackId}&quoteId=tether`, {}, 4000);
                     if (!res.ok) return [];
                     const json = await res.json();
-                    return json.data.map((d: any) => ({ 
+                    return json.data.map((d: any) => ({
                         open: parseFloat(d.open),
                         high: parseFloat(d.high),
                         low: parseFloat(d.low),
-                        close: parseFloat(d.close), 
-                        volume: parseFloat(d.volume) 
+                        close: parseFloat(d.close),
+                        volume: parseFloat(d.volume)
                     }));
-                 } catch(err) { return []; }
+                } catch (err) { return []; }
             }
         }
         return [];
@@ -314,8 +313,8 @@ const mapBinanceToCoinCap = (symbol: string) => {
 
 // NEW: Returns STRUCTURED DATA for the AI (No String parsing needed)
 export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<TechnicalIndicators | null> => {
-    const rawSymbol = symbolDisplay.replace('/USDT', ''); 
-    const binanceSymbol = `${rawSymbol}USDT`; 
+    const rawSymbol = symbolDisplay.replace('/USDT', '');
+    const binanceSymbol = `${rawSymbol}USDT`;
 
     try {
         const candles = await fetchCandles(binanceSymbol, '15m');
@@ -325,7 +324,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         const volumes = candles.map(c => c.volume);
         const highs = candles.map(c => c.high);
         const lows = candles.map(c => c.low);
-        
+
         // Calcs
         const currentPrice = prices[prices.length - 1];
         const rsi = calculateRSI(prices, 14);
@@ -337,10 +336,10 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         const ema100 = calculateEMA(prices, 100);
         const ema200 = calculateEMA(prices, 200);
         const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes); // NEW
-        
+
         const avgVol = calculateSMA(volumes, 20);
         const rvol = avgVol > 0 ? (volumes[volumes.length - 1] / avgVol) : 0;
-        
+
         const macd = calculateMACD(prices);
         const pivots = calculatePivotPoints(highs, lows, prices);
         const bb = calculateBollingerStats(prices);
@@ -419,23 +418,23 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     // MEME_SCALP uses specific meme list, others use top volume
     const mode = style === 'MEME_SCALP' ? 'memes' : 'volume';
     const market = await fetchCryptoData(mode);
-    
+
     // 2. CHECK MARKET RISK (News Filter)
     const risk = await getMarketRisk();
     const isHighRisk = risk.level === 'HIGH';
 
     if (!market || market.length === 0) throw new Error("No market data available");
-    
+
     // Scan all candidates if Memes (usually < 40), or top 40 for general
     const topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 40);
-    
+
     const validMathCandidates: AIOpportunity[] = [];
 
     await Promise.all(topCandidates.map(async (coin) => {
         try {
             // Determine interval based on strategy
             const interval = style === 'SWING_INSTITUTIONAL' || style === 'ICHIMOKU_CLOUD' ? '4h' : '15m';
-            
+
             const candles = await fetchCandles(coin.id, interval);
             if (candles.length < 200) return; // Need deeper history for EMA 200
 
@@ -443,17 +442,17 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const volumes = candles.map(c => c.volume);
             const highs = candles.map(c => c.high);
             const lows = candles.map(c => c.low);
-            
+
             let score = 0;
             let detectionNote = "";
             let signalSide: 'LONG' | 'SHORT' = 'LONG'; // Default
-            
+
             // Educational Metrics to pass to UI
             let specificTrigger = "";
             let structureNote = "";
 
             // Use Closed Candle for Confirmation (No Repainting)
-            const checkIndex = prices.length - 2; 
+            const checkIndex = prices.length - 2;
 
             // CALCULATE NEW PRECISION METRICS FOR SCANNER
             const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes);
@@ -472,58 +471,59 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             // --- DETERMINISTIC MATH DETECTORS ---
 
             if (style === 'MEME_SCALP') {
-                 // MEME HUNTER LOGIC
-                 const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
+                // MEME HUNTER LOGIC
+                const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
 
-                 // ESTRATEGIA 1: EL PUMP (MOMENTUM) - NOW WITH VWAP SAFETY
-                 if (currentPrice > ema20 && currentPrice > vwap && rvol > 1.8 && rsi > 55) {
-                     score = 80 + Math.min(rvol * 3, 15); // Higher volume = Higher score
-                     signalSide = 'LONG';
-                     detectionNote = `Meme Pump: Volumen Explosivo (x${rvol.toFixed(1)}) + Precio sobre VWAP.`;
-                     specificTrigger = `RVOL > 1.8 (${rvol.toFixed(2)}x) + RSI Uptrend (${rsi.toFixed(0)})`;
-                 }
-                 // ESTRATEGIA 2: THE DIP (REBOTE) - NOW WITH STOCH RSI
-                 else {
-                     const { lower } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
-                     if (currentPrice < lower && stochRsi.k < 15) {
-                         score = 80;
-                         signalSide = 'LONG'; // Catch the knife safely
-                         detectionNote = `Meme Oversold: Precio fuera de Bandas + StochRSI en Suelo (${stochRsi.k.toFixed(0)}).`;
-                         specificTrigger = `StochRSI Sobrevendido (${stochRsi.k.toFixed(0)} < 15) + Break Banda Inf.`;
-                     }
-                 }
+                // ESTRATEGIA 1: EL PUMP (MOMENTUM) - NOW WITH VWAP SAFETY
+                if (currentPrice > ema20 && currentPrice > vwap && rvol > 1.8 && rsi > 55) {
+                    score = 80 + Math.min(rvol * 3, 15); // Higher volume = Higher score
+                    signalSide = 'LONG';
+                    detectionNote = `Meme Pump: Volumen Explosivo (x${rvol.toFixed(1)}) + Precio sobre VWAP.`;
+                    specificTrigger = `RVOL > 1.8 (${rvol.toFixed(2)}x) + RSI Uptrend (${rsi.toFixed(0)})`;
+                }
+                // ESTRATEGIA 2: THE DIP (REBOTE) - NOW WITH STOCH RSI
+                else {
+                    const { lower } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
+                    if (currentPrice < lower && stochRsi.k < 15) {
+                        score = 80;
+                        signalSide = 'LONG'; // Catch the knife safely
+                        detectionNote = `Meme Oversold: Precio fuera de Bandas + StochRSI en Suelo (${stochRsi.k.toFixed(0)}).`;
+                        specificTrigger = `StochRSI Sobrevendido (${stochRsi.k.toFixed(0)} < 15) + Break Banda Inf.`;
+                    }
+                }
 
             } else if (style === 'ICHIMOKU_CLOUD') {
                 const { tenkan, kijun } = calculateIchimokuLines(highs, lows, 1); // offset 1 for closed candle
                 const offset = 26;
                 const pastHighs = highs.slice(0, highs.length - offset - 1);
                 const pastLows = lows.slice(0, lows.length - offset - 1);
-                
-                if (pastHighs.length > 52) {
-                     const { senkouA, senkouB } = calculateIchimokuCloud(pastHighs, pastLows);
-                     const aboveCloud = currentPrice > senkouA && currentPrice > senkouB;
-                     const belowCloud = currentPrice < senkouA && currentPrice < senkouB;
-                     const tkCrossBullish = tenkan > kijun;
-                     const tkCrossBearish = tenkan < kijun;
 
-                     if (aboveCloud && tkCrossBullish) {
-                         score = 85;
-                         signalSide = 'LONG';
-                         detectionNote = "Zen Dragon: Precio sobre Nube + Cruce TK + Soporte VWAP.";
-                         specificTrigger = "Cruce Tenkan/Kijun sobre Nube Kumo (Tendencia Pura)";
-                     } else if (belowCloud && tkCrossBearish) {
-                          score = 85;
-                          signalSide = 'SHORT';
-                          detectionNote = "Zen Dragon: Tendencia Bajista Pura bajo Nube.";
-                          specificTrigger = "Cruce Bajista Tenkan/Kijun bajo Nube Kumo";
-                     }
+                if (pastHighs.length > 52) {
+                    const { senkouA, senkouB } = calculateIchimokuCloud(pastHighs, pastLows);
+                    const aboveCloud = currentPrice > senkouA && currentPrice > senkouB;
+                    const belowCloud = currentPrice < senkouA && currentPrice < senkouB;
+                    const tkCrossBullish = tenkan > kijun;
+                    const tkCrossBearish = tenkan < kijun;
+
+                    if (aboveCloud && tkCrossBullish) {
+                        score = 85;
+                        signalSide = 'LONG';
+                        detectionNote = "Zen Dragon: Precio sobre Nube + Cruce TK + Soporte VWAP.";
+                        specificTrigger = "Cruce Tenkan/Kijun sobre Nube Kumo (Tendencia Pura)";
+                    } else if (belowCloud && tkCrossBearish) {
+                        score = 85;
+                        signalSide = 'SHORT';
+                        detectionNote = "Zen Dragon: Tendencia Bajista Pura bajo Nube.";
+                        specificTrigger = "Cruce Bajista Tenkan/Kijun bajo Nube Kumo";
+                    }
                 }
 
             } else if (style === 'SWING_INSTITUTIONAL') {
                 const lastLow = lows[checkIndex];
                 const lastHigh = highs[checkIndex];
-                const prev10Lows = Math.min(...lows.slice(checkIndex - 10, checkIndex)); 
-                const prev10Highs = Math.max(...highs.slice(checkIndex - 10, checkIndex));
+                // Lookback increased to 20 for better swing structure detection
+                const prev20Lows = Math.min(...lows.slice(checkIndex - 20, checkIndex));
+                const prev20Highs = Math.max(...highs.slice(checkIndex - 20, checkIndex));
 
                 const ema50 = calculateEMA(prices.slice(0, checkIndex + 1), 50);
                 const isBullishTrend = ema50 > ema200;
@@ -532,22 +532,32 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const distToGolden = Math.abs((currentPrice - fibs.level0_618) / currentPrice);
                 const nearGoldenPocket = distToGolden < 0.015; // Within 1.5%
 
-                // SFP Logic
-                if (isBullishTrend && lastLow < prev10Lows && currentPrice > prev10Lows) {
+                // CHECK DIVERGENCES
+                const rsiArray = calculateRSIArray(prices.slice(0, checkIndex + 1), 14);
+                const hasBullishDiv = detectBullishDivergence(prices.slice(0, checkIndex + 1), rsiArray, lows.slice(0, checkIndex + 1));
+
+                // SFP Logic (Swing Failure Pattern)
+                if (isBullishTrend && lastLow < prev20Lows && currentPrice > prev20Lows) {
                     score = 80;
+                    let extraNotes = [];
+
                     if (nearGoldenPocket) {
                         score += 10;
-                        detectionNote = "SMC Sniper: Barrido de Liquidez justo en Golden Pocket (0.618).";
-                        specificTrigger = "SFP (Swing Failure Pattern) en Fib 0.618";
-                    } else {
-                        detectionNote = "SMC Setup: Golden Cross + Barrido de Liquidez.";
-                        specificTrigger = "Toma de liquidez (Mínimo previo barrido)";
+                        extraNotes.push("Golden Pocket");
                     }
+                    if (hasBullishDiv) {
+                        score += 5;
+                        extraNotes.push("Divergencia RSI");
+                    }
+
+                    detectionNote = `SMC Sniper: Barrido de Liquidez${extraNotes.length > 0 ? ' + ' + extraNotes.join(' + ') : ''}.`;
+                    specificTrigger = `SFP (Swing Failure Pattern)${hasBullishDiv ? ' + Bull Div' : ''}`;
+
                     signalSide = 'LONG';
-                } else if (!isBullishTrend && lastHigh > prev10Highs && currentPrice < prev10Highs) {
+                } else if (!isBullishTrend && lastHigh > prev20Highs && currentPrice < prev20Highs) {
                     score = 80;
                     signalSide = 'SHORT';
-                    detectionNote = "SMC Setup: Rechazo de Estructura Bajista.";
+                    detectionNote = "SMC Setup: Rechazo de Estructura Bajista (SFP).";
                     specificTrigger = "SFP Bajista (Máximo previo barrido)";
                 }
 
@@ -557,17 +567,17 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const validTrend = currentPrice > vwap;
 
                 if (rvol > 2.0 && currentPrice > ema20 && validTrend) {
-                     score = 70 + Math.min((rvol * 5), 25); 
-                     signalSide = 'LONG';
-                     detectionNote = `Breakout Confirmado: Volumen (x${rvol.toFixed(1)}) + Precio > VWAP.`;
-                     specificTrigger = `Ruptura de volatilidad con RVOL ${rvol.toFixed(1)}x`;
+                    score = 70 + Math.min((rvol * 5), 25);
+                    signalSide = 'LONG';
+                    detectionNote = `Breakout Confirmado: Volumen (x${rvol.toFixed(1)}) + Precio > VWAP.`;
+                    specificTrigger = `Ruptura de volatilidad con RVOL ${rvol.toFixed(1)}x`;
                 }
             } else {
                 // SCALP: BOLLINGER SQUEEZE + VWAP FILTER
                 const { bandwidth, lower, upper } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
-                
+
                 const historicalBandwidths = [];
-                for(let i = 20; i < 50; i++) {
+                for (let i = 20; i < 50; i++) {
                     const slice = prices.slice(0, checkIndex + 1 - i);
                     historicalBandwidths.push(calculateBollingerStats(slice).bandwidth);
                 }
@@ -590,7 +600,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             if (score >= threshold) {
                 const livePrice = prices[prices.length - 1]; // Use live price for entry
                 const atr = calculateATR(highs, lows, prices, 14);
-                
+
                 // Algorithmic SL/TP Calculation (Exact Maths)
                 let sl = 0;
                 let tp1 = 0, tp2 = 0, tp3 = 0;
@@ -602,7 +612,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     const risk = livePrice - sl;
                     tp1 = livePrice + risk;
                     tp2 = livePrice + (risk * 2);
-                    tp3 = livePrice + (risk * 3); 
+                    tp3 = livePrice + (risk * 3);
                 } else {
                     sl = livePrice + (atr * slMult);
                     const risk = sl - livePrice;
@@ -613,7 +623,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                 const decimals = livePrice > 1000 ? 2 : livePrice > 1 ? 4 : 6;
                 const format = (n: number) => parseFloat(n.toFixed(decimals));
-                
+
                 const finalNote = isHighRisk ? `[⚠️ RIESGO ALTO] ${detectionNote}` : detectionNote;
 
                 // VWAP Dist % calculation
@@ -625,7 +635,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     timestamp: Date.now(),
                     strategy: style,
                     side: signalSide,
-                    confidenceScore: Math.floor(score), 
+                    confidenceScore: Math.floor(score),
                     entryZone: { min: format(livePrice * 0.999), max: format(livePrice * 1.001) },
                     dcaLevel: signalSide === 'LONG' ? format(livePrice - (atr * 0.5)) : format(livePrice + (atr * 0.5)),
                     stopLoss: format(sl),
@@ -645,7 +655,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 validMathCandidates.push(mathOpp);
             }
 
-        } catch(e) { return null; }
+        } catch (e) { return null; }
     }));
 
     // Return pure math results instantly
@@ -658,11 +668,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 const detectBullishDivergence = (prices: number[], rsiSeries: number[], lows: number[]) => {
     // Need at least 20 periods
     if (prices.length < 20 || rsiSeries.length < 20) return false;
-    
+
     // 1. Find recent low (current or last 3 candles)
     let recentLowIndex = -1;
     let recentLowPrice = Infinity;
-    
+
     // Check last 3 closed candles
     const startCheck = prices.length - 2; // Avoid live candle
     for (let i = startCheck; i > startCheck - 3; i--) {
@@ -675,22 +685,22 @@ const detectBullishDivergence = (prices: number[], rsiSeries: number[], lows: nu
     // 2. Find a previous swing low (look back 5 to 20 candles)
     let pastLowIndex = -1;
     let pastLowPrice = Infinity;
-    
+
     const lookbackStart = recentLowIndex - 5;
     const lookbackEnd = Math.max(0, recentLowIndex - 25);
-    
+
     for (let i = lookbackStart; i > lookbackEnd; i--) {
         // Is this a pivot low? (Lower than neighbors)
-        if (lows[i] < lows[i-1] && lows[i] < lows[i+1]) {
+        if (lows[i] < lows[i - 1] && lows[i] < lows[i + 1]) {
             // Regular Bullish Divergence: Price Lower Low, RSI Higher Low
-            if (lows[i] > recentLowPrice) { 
+            if (lows[i] > recentLowPrice) {
                 pastLowPrice = lows[i];
                 pastLowIndex = i;
                 break; // Found the most recent structural low
             }
         }
     }
-    
+
     if (pastLowIndex === -1) return false;
 
     // 3. Compare RSI
@@ -722,7 +732,7 @@ const calculateIchimokuCloud = (highs: number[], lows: number[]) => {
     const senkouA = (tenkan + kijun) / 2;
     // Senkou Span B (52 periods)
     const senkouB = (Math.max(...highs.slice(highs.length - 52)) + Math.min(...lows.slice(lows.length - 52))) / 2;
-    
+
     return { senkouA, senkouB };
 };
 
@@ -733,17 +743,17 @@ const calculateBollingerStats = (prices: number[]) => {
     const lower = sma20 - (stdDev * 2);
     // Bandwidth %: (Upper - Lower) / Middle * 100
     const bandwidth = sma20 > 0 ? ((upper - lower) / sma20) * 100 : 0;
-    
+
     return { upper, lower, bandwidth, sma: sma20 };
 };
 
 const calculateSMA = (data: number[], period: number) => {
-    if (data.length < period) return data[data.length-1];
+    if (data.length < period) return data[data.length - 1];
     return data.slice(-period).reduce((a, b) => a + b, 0) / period;
 };
 
 const calculateEMA = (data: number[], period: number) => {
-    if (data.length < period) return data[data.length-1];
+    if (data.length < period) return data[data.length - 1];
     const k = 2 / (period + 1);
     let ema = data[0]; // Initialization could be improved with SMA of first N, but this converges enough for 100 candles
     for (let i = 1; i < data.length; i++) {
@@ -755,18 +765,18 @@ const calculateEMA = (data: number[], period: number) => {
 const calculateMACD = (prices: number[], fast = 12, slow = 26, signal = 9) => {
     const emaFast = calculateEMAArray(prices, fast);
     const emaSlow = calculateEMAArray(prices, slow);
-    
+
     const macdLine = [];
-    for(let i=0; i < prices.length; i++) {
+    for (let i = 0; i < prices.length; i++) {
         macdLine.push(emaFast[i] - emaSlow[i]);
     }
-    
+
     const signalLine = calculateEMAArray(macdLine, signal);
-    const histogram = macdLine[macdLine.length-1] - signalLine[signalLine.length-1];
+    const histogram = macdLine[macdLine.length - 1] - signalLine[signalLine.length - 1];
 
     return {
-        macdLine: macdLine[macdLine.length-1],
-        signalLine: signalLine[signalLine.length-1],
+        macdLine: macdLine[macdLine.length - 1],
+        signalLine: signalLine[signalLine.length - 1],
         histogram: histogram
     };
 }
@@ -797,14 +807,14 @@ const calculateRSI = (data: number[], period: number) => {
 const calculateStochRSI = (prices: number[], period: number = 14) => {
     const rsiArray = calculateRSIArray(prices, period);
     // Need at least period amount of RSIs to calc stoch
-    const relevantRSI = rsiArray.slice(-period); 
+    const relevantRSI = rsiArray.slice(-period);
     const minRSI = Math.min(...relevantRSI);
     const maxRSI = Math.max(...relevantRSI);
-    
+
     // StochRSI K
     let k = 0;
     if (maxRSI !== minRSI) {
-        k = ((relevantRSI[relevantRSI.length-1] - minRSI) / (maxRSI - minRSI)) * 100;
+        k = ((relevantRSI[relevantRSI.length - 1] - minRSI) / (maxRSI - minRSI)) * 100;
     }
     // D is usually 3-period SMA of K
     const d = k; // Simplified for now, real D requires array of Ks
@@ -815,7 +825,7 @@ const calculateStochRSI = (prices: number[], period: number = 14) => {
 // Full Array Wilder's RSI (For Divergence checks)
 const calculateRSIArray = (data: number[], period: number): number[] => {
     if (data.length < period + 1) return new Array(data.length).fill(50);
-    
+
     let gains = 0;
     let losses = 0;
     const rsiArray = new Array(data.length).fill(0);
@@ -829,9 +839,9 @@ const calculateRSIArray = (data: number[], period: number): number[] => {
 
     let avgGain = gains / period;
     let avgLoss = losses / period;
-    
+
     // First RSI
-    rsiArray[period] = 100 - (100 / (1 + (avgGain/avgLoss)));
+    rsiArray[period] = 100 - (100 / (1 + (avgGain / avgLoss)));
 
     // Smoothed averages (Wilder's Smoothing)
     for (let i = period + 1; i < data.length; i++) {
@@ -841,7 +851,7 @@ const calculateRSIArray = (data: number[], period: number): number[] => {
 
         avgGain = ((avgGain * (period - 1)) + currentGain) / period;
         avgLoss = ((avgLoss * (period - 1)) + currentLoss) / period;
-        
+
         if (avgLoss === 0) {
             rsiArray[i] = 100;
         } else {
@@ -857,15 +867,15 @@ const calculateCumulativeVWAP = (highs: number[], lows: number[], closes: number
     // Typical Price
     let cumTPV = 0;
     let cumVol = 0;
-    
+
     // We calculate for the whole loaded dataset (mimicking session start)
-    for(let i = 0; i < closes.length; i++) {
+    for (let i = 0; i < closes.length; i++) {
         const tp = (highs[i] + lows[i] + closes[i]) / 3;
         cumTPV += (tp * volumes[i]);
         cumVol += volumes[i];
     }
-    
-    return cumVol > 0 ? cumTPV / cumVol : closes[closes.length-1];
+
+    return cumVol > 0 ? cumTPV / cumVol : closes[closes.length - 1];
 };
 
 // NEW: Auto Fibonacci Retracements
@@ -873,18 +883,17 @@ const calculateAutoFibs = (highs: number[], lows: number[], ema200: number) => {
     // Lookback 100 periods
     const lookback = Math.min(highs.length, 100);
     const subsetHighs = highs.slice(-lookback);
-    const subsetLows = highs.slice(-lookback); // Corrected: should be lows
     const realSubsetLows = lows.slice(-lookback);
-    
+
     const maxHigh = Math.max(...subsetHighs);
     const minLow = Math.min(...realSubsetLows);
-    const currentPrice = highs[highs.length-1];
+    const currentPrice = highs[highs.length - 1];
 
     // Determine Trend direction relative to EMA200
     const isUptrend = currentPrice > ema200;
-    
+
     const diff = maxHigh - minLow;
-    
+
     if (isUptrend) {
         // Low to High (Supports)
         return {
@@ -918,18 +927,18 @@ const calculateATR = (highs: number[], lows: number[], closes: number[], period:
     if (highs.length < period) return 0;
     let trSum = 0;
     // Simple average for first TR (could be improved, but sufficient)
-    for(let i = 1; i < period + 1; i++) {
+    for (let i = 1; i < period + 1; i++) {
         const hl = highs[i] - lows[i];
-        const hc = Math.abs(highs[i] - closes[i-1]);
-        const lc = Math.abs(lows[i] - closes[i-1]);
+        const hc = Math.abs(highs[i] - closes[i - 1]);
+        const lc = Math.abs(lows[i] - closes[i - 1]);
         trSum += Math.max(hl, hc, lc);
     }
     let atr = trSum / period;
     // Smoothed ATR
-    for(let i = period + 1; i < highs.length; i++) {
-         const hl = highs[i] - lows[i];
-        const hc = Math.abs(highs[i] - closes[i-1]);
-        const lc = Math.abs(lows[i] - closes[i-1]);
+    for (let i = period + 1; i < highs.length; i++) {
+        const hl = highs[i] - lows[i];
+        const hc = Math.abs(highs[i] - closes[i - 1]);
+        const lc = Math.abs(lows[i] - closes[i - 1]);
         const tr = Math.max(hl, hc, lc);
         atr = ((atr * (period - 1)) + tr) / period;
     }
@@ -939,21 +948,21 @@ const calculateATR = (highs: number[], lows: number[], closes: number[], period:
 // REAL ADX (Directional Movement System)
 const calculateADX = (highs: number[], lows: number[], closes: number[], period: number) => {
     if (highs.length < period * 2) return 20; // Not enough data, return neutral
-    
+
     // 1. Calculate TR, +DM, -DM per candle
     // We use a simplified Wilder's smoothing logic to avoid massive arrays overhead in browser
     let tr = 0;
     let plusDM = 0;
     let minusDM = 0;
-    
+
     // Initial accumulation (SMA)
     for (let i = 1; i <= period; i++) {
-        const up = highs[i] - highs[i-1];
-        const down = lows[i-1] - lows[i];
-        
+        const up = highs[i] - highs[i - 1];
+        const down = lows[i - 1] - lows[i];
+
         const pdm = (up > down && up > 0) ? up : 0;
         const mdm = (down > up && down > 0) ? down : 0;
-        const trueRange = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i-1]), Math.abs(lows[i] - closes[i-1]));
+        const trueRange = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1]));
 
         tr += trueRange;
         plusDM += pdm;
@@ -968,11 +977,11 @@ const calculateADX = (highs: number[], lows: number[], closes: number[], period:
 
     // Calculate DX series
     for (let i = period + 1; i < highs.length; i++) {
-        const up = highs[i] - highs[i-1];
-        const down = lows[i-1] - lows[i];
+        const up = highs[i] - highs[i - 1];
+        const down = lows[i - 1] - lows[i];
         const pdm = (up > down && up > 0) ? up : 0;
         const mdm = (down > up && down > 0) ? down : 0;
-        const trueRange = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i-1]), Math.abs(lows[i] - closes[i-1]));
+        const trueRange = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1]));
 
         smTR = smTR - (smTR / period) + trueRange;
         smPlusDM = smPlusDM - (smPlusDM / period) + pdm;
@@ -980,9 +989,9 @@ const calculateADX = (highs: number[], lows: number[], closes: number[], period:
 
         const pDI = (smPlusDM / smTR) * 100;
         const mDI = (smMinusDM / smTR) * 100;
-        
+
         const dx = (Math.abs(pDI - mDI) / (pDI + mDI)) * 100;
-        
+
         if (i === period * 2 - 1) {
             lastADX = dx; // First ADX is DX
         } else if (i >= period * 2) {
@@ -998,7 +1007,7 @@ const calculatePivotPoints = (highs: number[], lows: number[], closes: number[])
     const h = highs[highs.length - 2]; // Previous completed candle
     const l = lows[lows.length - 2];
     const c = closes[closes.length - 2];
-    
+
     const p = (h + l + c) / 3;
     const r1 = (2 * p) - l;
     const s1 = (2 * p) - h;
