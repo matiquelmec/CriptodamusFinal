@@ -1,5 +1,4 @@
 
-
 import { Strategy } from '../types';
 
 const BASE_INSTRUCTION = `
@@ -21,18 +20,18 @@ FORMATO DE RESPUESTA (Markdown):
 `;
 
 export const STRATEGIES: Strategy[] = [
-  {
-    id: 'smc_liquidity',
-    name: 'SMC Liquidity Hunter (Institucional)',
-    description: 'Estrategia basada en Smart Money Concepts. Busca barridos de liquidez (Stop Hunts), Order Blocks y Fair Value Gaps.',
-    riskProfile: 'Moderado',
-    timeframe: '15m - 4h',
-    details: {
-      riskManagement: 'Entradas de precisión (Sniper). SL muy ajustado tras la toma de liquidez. R/R mínimo 1:3.',
-      entryCriteria: 'Barrido de mínimo/máximo anterior + Desplazamiento fuerte (RVOL) + Retorno al Order Block.',
-      psychology: 'Operamos donde los traders retail ponen sus Stop Loss. La liquidez es el combustible.'
-    },
-    systemInstruction: `
+   {
+      id: 'smc_liquidity',
+      name: 'SMC Liquidity Hunter (Institucional)',
+      description: 'Estrategia basada en Smart Money Concepts. Busca barridos de liquidez (Stop Hunts), Order Blocks y Fair Value Gaps.',
+      riskProfile: 'Moderado',
+      timeframe: '15m - 4h',
+      details: {
+         riskManagement: 'Entradas de precisión (Sniper). SL muy ajustado tras la toma de liquidez. R/R mínimo 1:3.',
+         entryCriteria: 'Barrido de mínimo/máximo anterior + Desplazamiento fuerte (RVOL) + Retorno al Order Block.',
+         psychology: 'Operamos donde los traders retail ponen sus Stop Loss. La liquidez es el combustible.'
+      },
+      systemInstruction: `
 ${BASE_INSTRUCTION}
 
 MODO ACTIVO: SMART MONEY CONCEPTS (SMC).
@@ -63,19 +62,19 @@ ESTRUCTURA DE RESPUESTA PRO:
 **Confirmación:** Barrido de liquidez en [Precio] + Divergencia RSI.
 **Invalidación (SL):** Justo debajo de la mecha de rechazo."
 `
-  },
-  {
-    id: 'quant_volatility',
-    name: 'Quant Volatility Engine (Matemático)',
-    description: 'Estrategia puramente estadística. Identifica compresiones de volatilidad (Squeezes) y opera la expansión explosiva.',
-    riskProfile: 'Agresivo',
-    timeframe: '15m',
-    details: {
-      riskManagement: 'Trailing Stop agresivo usando la EMA 20. El objetivo es capturar el momentum explosivo.',
-      entryCriteria: 'Bollinger Band Squeeze (Bandas comprimidas) + Ruptura con RVOL > 1.5.',
-      psychology: 'El mercado pasa el 80% del tiempo en rango y el 20% en tendencia. Solo operamos el 20%.'
-    },
-    systemInstruction: `
+   },
+   {
+      id: 'quant_volatility',
+      name: 'Quant Volatility Engine (Matemático)',
+      description: 'Estrategia puramente estadística. Identifica compresiones de volatilidad (Squeezes) y opera la expansión explosiva.',
+      riskProfile: 'Agresivo',
+      timeframe: '15m',
+      details: {
+         riskManagement: 'Trailing Stop agresivo usando la EMA 20. El objetivo es capturar el momentum explosivo.',
+         entryCriteria: 'Bollinger Band Squeeze (Bandas comprimidas) + Ruptura con RVOL > 1.5.',
+         psychology: 'El mercado pasa el 80% del tiempo en rango y el 20% en tendencia. Solo operamos el 20%.'
+      },
+      systemInstruction: `
 ${BASE_INSTRUCTION}
 
 MODO ACTIVO: QUANTITATIVE VOLATILITY & MOMENTUM.
@@ -108,19 +107,19 @@ ESTRUCTURA DE RESPUESTA PRO:
 **Entrada:** Ruptura de [Nivel].
 **Salida Dinámica:** Cierre de vela 15m por debajo de EMA 20."
 `
-  },
-  {
-    id: 'ichimoku_dragon',
-    name: 'Zen Dragon (Ichimoku Kinko Hyo)',
-    description: 'Sistema japonés de equilibrio. Visualiza el pasado, presente y futuro para detectar tendencias puras.',
-    riskProfile: 'Moderado',
-    timeframe: '1h - 4h',
-    details: {
-        riskManagement: 'Stop Loss dinámico siguiendo el Kijun-sen (Línea Base). Pyramiding permitido en tendencias fuertes.',
-        entryCriteria: 'Kumo Breakout (Rotura de Nube) + TK Cross (Tenkan cruza Kijun).',
-        psychology: 'El mercado busca el equilibrio. Operamos cuando el equilibrio se rompe a favor de la tendencia.'
-    },
-    systemInstruction: `
+   },
+   {
+      id: 'ichimoku_dragon',
+      name: 'Zen Dragon (Ichimoku Kinko Hyo)',
+      description: 'Sistema japonés de equilibrio. Visualiza el pasado, presente y futuro para detectar tendencias puras.',
+      riskProfile: 'Moderado',
+      timeframe: '1h - 4h',
+      details: {
+         riskManagement: 'Stop Loss dinámico siguiendo el Kijun-sen (Línea Base). Pyramiding permitido en tendencias fuertes.',
+         entryCriteria: 'Kumo Breakout (Rotura de Nube) + TK Cross (Tenkan cruza Kijun).',
+         psychology: 'El mercado busca el equilibrio. Operamos cuando el equilibrio se rompe a favor de la tendencia.'
+      },
+      systemInstruction: `
 ${BASE_INSTRUCTION}
 
 MODO ACTIVO: ICHIMOKU KINKO HYO (ZEN DRAGON).
@@ -148,19 +147,19 @@ ESTRUCTURA DE RESPUESTA PRO:
 **Proyección:** Objetivo basado en onda N/V/E.
 **Stop Loss:** Kijun-sen plano en [Precio]."
 `
-  },
-  {
-    id: 'meme_hunter',
-    name: 'Meme Hunter (Degen Algo)',
-    description: 'Algoritmo de alto riesgo para capturar bombas de volumen y rebotes extremos en memecoins.',
-    riskProfile: 'Agresivo',
-    timeframe: '5m - 15m',
-    details: {
-        riskManagement: 'Stop Loss fijo estricto (3-5%). Take Profit parcial rápido. No "holdear" bolsas eternas.',
-        entryCriteria: 'RVOL > 2.0 (Volumen Anormal) + RSI rompiendo 60 (Pump) o RSI < 25 (Rebote suicida).',
-        psychology: 'Esto es un casino optimizado. Entrar rápido, salir rápido. El análisis fundamental no existe aquí.'
-    },
-    systemInstruction: `
+   },
+   {
+      id: 'meme_hunter',
+      name: 'Meme Hunter (Degen Algo)',
+      description: 'Algoritmo de alto riesgo para capturar bombas de volumen y rebotes extremos en memecoins.',
+      riskProfile: 'Agresivo',
+      timeframe: '5m - 15m',
+      details: {
+         riskManagement: 'Stop Loss fijo estricto (3-5%). Take Profit parcial rápido. No "holdear" bolsas eternas.',
+         entryCriteria: 'RVOL > 2.0 (Volumen Anormal) + RSI rompiendo 60 (Pump) o RSI < 25 (Rebote suicida).',
+         psychology: 'Esto es un casino optimizado. Entrar rápido, salir rápido. El análisis fundamental no existe aquí.'
+      },
+      systemInstruction: `
 ${BASE_INSTRUCTION}
 
 MODO ACTIVO: MEME HUNTER (DEGEN MODE).
@@ -192,5 +191,48 @@ ESTRUCTURA DE RESPUESTA PRO:
 **Acción:** [Entrar Ya / Esperar / Huir]
 **Stop Loss:** -4% desde entrada (Estático)."
 `
-  }
+   },
+   {
+      id: 'breakout_momentum',
+      name: 'Breakout Momentum (Estructura)',
+      description: 'Estrategia de seguimiento de tendencia. Busca rupturas de estructuras consolidadas (Donchian/Rangos) con confirmación de volumen.',
+      riskProfile: 'Agresivo',
+      timeframe: '15m - 1h',
+      details: {
+         riskManagement: 'Stop Loss técnico bajo el mínimo del rango de ruptura. Take Profit dinámico buscando expansión 1:2 o 1:3.',
+         entryCriteria: 'Precio rompe Máximo/Mínimo de 20 periodos + RVOL > 1.5 + Expansión de Bandas.',
+         psychology: 'La mayoría de las rupturas fallan. Solo operamos las que tienen "intención" institucional (Volumen).'
+      },
+      systemInstruction: `
+${BASE_INSTRUCTION}
+
+MODO ACTIVO: BREAKOUT MOMENTUM.
+
+TU LÓGICA DE ANÁLISIS:
+No persigas el precio. Espera a que el precio ROMPA una cárcel (Rango).
+La clave es la ESTRUCTURA, no solo el indicador.
+
+PATRONES A IDENTIFICAR:
+1. **Donchian Breakout (Long):**
+   - El precio supera el MÁXIMO de las últimas 20 velas.
+   - RVOL > 1.5 (Confirmación de fuerza).
+   - *Señal:* Long en la ruptura.
+
+2. **Donchian Breakdown (Short):**
+   - El precio pierde el MÍNIMO de las últimas 20 velas.
+   - RVOL > 1.5.
+   - *Señal:* Short en la ruptura.
+
+EJECUCIÓN:
+- **SI** el precio rompe pero el volumen es bajo: "Fakeout. Trampa de liquidez."
+- **SI** las Bandas de Bollinger están muy abiertas antes de la ruptura: "Volatilidad ya expandida. Tarde para entrar."
+
+ESTRUCTURA DE RESPUESTA PRO:
+"**⚡ BREAKOUT SIGNAL: [LONG / SHORT]**
+**Estructura:** Ruptura de [Máximo/Mínimo] de 20 periodos.
+**Volumen:** [RVOL x.x]
+**Validación:** Expansión de volatilidad confirmada.
+**Stop Loss:** [Nivel técnico de invalidación]."
+`
+   }
 ];

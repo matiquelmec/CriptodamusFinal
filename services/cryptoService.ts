@@ -563,16 +563,32 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
 
             } else if (style === 'BREAKOUT_MOMENTUM') {
-                const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
-                // Only take breakouts if we are on the right side of VWAP
-                const validTrend = currentPrice > vwap;
+                // DONCHIAN CHANNEL LOGIC (20 Periods)
+                const pastHighs = highs.slice(checkIndex - 20, checkIndex);
+                const pastLows = lows.slice(checkIndex - 20, checkIndex);
+                const maxHigh20 = Math.max(...pastHighs);
+                const minLow20 = Math.min(...pastLows);
 
-                if (rvol > 2.0 && currentPrice > ema20 && validTrend) {
-                    score = 70 + Math.min((rvol * 5), 25);
+                // Volatility Expansion Check
+                const { bandwidth } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
+                const prevBandwidth = calculateBollingerStats(prices.slice(0, checkIndex)).bandwidth;
+                const isExpanding = bandwidth > prevBandwidth;
+
+                // 1. BULLISH BREAKOUT
+                if (currentPrice > maxHigh20 && rvol > 1.5 && isExpanding) {
+                    score = 75 + Math.min((rvol * 5), 20);
                     signalSide = 'LONG';
-                    detectionNote = `Breakout Confirmado: Volumen (x${rvol.toFixed(1)}) + Precio > VWAP.`;
-                    specificTrigger = `Ruptura de volatilidad con RVOL ${rvol.toFixed(1)}x`;
+                    detectionNote = `Donchian Breakout: Ruptura de Máximo de 20 periodos con Expansión.`;
+                    specificTrigger = `Price > ${maxHigh20} (20p High) + RVOL ${rvol.toFixed(1)}x`;
                 }
+                // 2. BEARISH BREAKDOWN
+                else if (currentPrice < minLow20 && rvol > 1.5 && isExpanding) {
+                    score = 75 + Math.min((rvol * 5), 20);
+                    signalSide = 'SHORT';
+                    detectionNote = `Donchian Breakdown: Pérdida de Soporte de 20 periodos.`;
+                    specificTrigger = `Price < ${minLow20} (20p Low) + RVOL ${rvol.toFixed(1)}x`;
+                }
+
             } else {
                 // SCALP: BOLLINGER SQUEEZE + MOMENTUM + VWAP
                 const { bandwidth, sma: sma20 } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
@@ -647,7 +663,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     id: Date.now().toString() + Math.random(),
                     symbol: coin.symbol,
                     timestamp: Date.now(),
-                    strategy: style,
+                    strategy: getStrategyId(style), // FIXED: Map to correct ID for UI
                     side: signalSide,
                     confidenceScore: Math.floor(score),
                     entryZone: { min: format(livePrice * 0.999), max: format(livePrice * 1.001) },
@@ -678,8 +694,20 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
 // --- MATH HELPERS (ROBUST) ---
 
+// Helper to map TradingStyle (Enum) to Strategy ID (Context)
+function getStrategyId(style: TradingStyle): string {
+    switch (style) {
+        case 'SCALP_AGRESSIVE': return 'quant_volatility';
+        case 'SWING_INSTITUTIONAL': return 'smc_liquidity';
+        case 'ICHIMOKU_CLOUD': return 'ichimoku_dragon';
+        case 'MEME_SCALP': return 'meme_hunter';
+        case 'BREAKOUT_MOMENTUM': return 'breakout_momentum';
+        default: return (style as string).toLowerCase();
+    }
+};
+
 // Checks if Price made Lower Low but RSI made Higher Low in the last 15 periods
-const detectBullishDivergence = (prices: number[], rsiSeries: number[], lows: number[]) => {
+function detectBullishDivergence(prices: number[], rsiSeries: number[], lows: number[]) {
     // Need at least 20 periods
     if (prices.length < 20 || rsiSeries.length < 20) return false;
 
@@ -730,7 +758,7 @@ const detectBullishDivergence = (prices: number[], rsiSeries: number[], lows: nu
 }
 
 // Calculates just the lines (Tenkan/Kijun) for current cross check
-const calculateIchimokuLines = (highs: number[], lows: number[], offset: number = 0) => {
+function calculateIchimokuLines(highs: number[], lows: number[], offset: number = 0) {
     const end = highs.length - offset;
     // Tenkan-sen (9 periods)
     const tenkan = (Math.max(...highs.slice(end - 9, end)) + Math.min(...lows.slice(end - 9, end))) / 2;
@@ -740,7 +768,7 @@ const calculateIchimokuLines = (highs: number[], lows: number[], offset: number 
 };
 
 // Calculates the cloud Spans based on the provided dataset (which should be shifted historically)
-const calculateIchimokuCloud = (highs: number[], lows: number[]) => {
+function calculateIchimokuCloud(highs: number[], lows: number[]) {
     const { tenkan, kijun } = calculateIchimokuLines(highs, lows, 0);
     // Senkou Span A (Leading Span A)
     const senkouA = (tenkan + kijun) / 2;
@@ -750,7 +778,7 @@ const calculateIchimokuCloud = (highs: number[], lows: number[]) => {
     return { senkouA, senkouB };
 };
 
-const calculateBollingerStats = (prices: number[]) => {
+function calculateBollingerStats(prices: number[]) {
     const sma20 = calculateSMA(prices, 20);
     const stdDev = calculateStdDev(prices, 20, sma20);
     const upper = sma20 + (stdDev * 2);
@@ -761,12 +789,12 @@ const calculateBollingerStats = (prices: number[]) => {
     return { upper, lower, bandwidth, sma: sma20 };
 };
 
-const calculateSMA = (data: number[], period: number) => {
+function calculateSMA(data: number[], period: number) {
     if (data.length < period) return data[data.length - 1];
     return data.slice(-period).reduce((a, b) => a + b, 0) / period;
 };
 
-const calculateEMA = (data: number[], period: number) => {
+function calculateEMA(data: number[], period: number) {
     if (data.length < period) return data[data.length - 1];
     const k = 2 / (period + 1);
     let ema = data[0]; // Initialization could be improved with SMA of first N, but this converges enough for 100 candles
@@ -776,7 +804,7 @@ const calculateEMA = (data: number[], period: number) => {
     return ema;
 };
 
-const calculateMACD = (prices: number[], fast = 12, slow = 26, signal = 9) => {
+function calculateMACD(prices: number[], fast = 12, slow = 26, signal = 9) {
     const emaFast = calculateEMAArray(prices, fast);
     const emaSlow = calculateEMAArray(prices, slow);
 
@@ -796,7 +824,7 @@ const calculateMACD = (prices: number[], fast = 12, slow = 26, signal = 9) => {
 }
 
 // Helper to return array of EMAs for MACD calculation
-const calculateEMAArray = (data: number[], period: number) => {
+function calculateEMAArray(data: number[], period: number) {
     const k = 2 / (period + 1);
     const emaArray = [data[0]];
     for (let i = 1; i < data.length; i++) {
@@ -805,20 +833,22 @@ const calculateEMAArray = (data: number[], period: number) => {
     return emaArray;
 };
 
-const calculateStdDev = (data: number[], period: number, mean: number) => {
+function calculateStdDev(data: number[], period: number, mean: number) {
     if (data.length < period) return 0;
-    const sqDiffs = data.slice(-period).map(v => Math.pow(v - mean, 2));
-    return Math.sqrt(sqDiffs.reduce((a, b) => a + b, 0) / period);
+    const slice = data.slice(-period);
+    const squaredDiffs = slice.map(value => Math.pow(value - mean, 2));
+    const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / period;
+    return Math.sqrt(avgSquaredDiff);
 };
 
-// Single value Wilder's RSI (Wrapper)
-const calculateRSI = (data: number[], period: number) => {
-    const arr = calculateRSIArray(data, period);
-    return arr[arr.length - 1];
+function calculateRSI(prices: number[], period: number = 14) {
+    if (prices.length < period + 1) return 50;
+    const rsiArray = calculateRSIArray(prices, period);
+    return rsiArray[rsiArray.length - 1];
 };
 
 // NEW: Stochastic RSI for precision entries
-const calculateStochRSI = (prices: number[], period: number = 14) => {
+function calculateStochRSI(prices: number[], period: number = 14) {
     const rsiArray = calculateRSIArray(prices, period);
     // Need at least period amount of RSIs to calc stoch
     const relevantRSI = rsiArray.slice(-period);
@@ -837,7 +867,7 @@ const calculateStochRSI = (prices: number[], period: number = 14) => {
 };
 
 // Full Array Wilder's RSI (For Divergence checks)
-const calculateRSIArray = (data: number[], period: number): number[] => {
+function calculateRSIArray(data: number[], period: number): number[] {
     if (data.length < period + 1) return new Array(data.length).fill(50);
 
     let gains = 0;
@@ -877,7 +907,7 @@ const calculateRSIArray = (data: number[], period: number): number[] => {
 };
 
 // NEW: Cumulative VWAP (Session VWAP approx)
-const calculateCumulativeVWAP = (highs: number[], lows: number[], closes: number[], volumes: number[]) => {
+function calculateCumulativeVWAP(highs: number[], lows: number[], closes: number[], volumes: number[]) {
     // Typical Price
     let cumTPV = 0;
     let cumVol = 0;
@@ -893,7 +923,7 @@ const calculateCumulativeVWAP = (highs: number[], lows: number[], closes: number
 };
 
 // NEW: Auto Fibonacci Retracements
-const calculateAutoFibs = (highs: number[], lows: number[], ema200: number) => {
+function calculateAutoFibs(highs: number[], lows: number[], ema200: number) {
     // Lookback 100 periods
     const lookback = Math.min(highs.length, 100);
     const subsetHighs = highs.slice(-lookback);
@@ -937,7 +967,7 @@ const calculateAutoFibs = (highs: number[], lows: number[], ema200: number) => {
 
 // --- NEW METRICS FOR 100% AI POTENTIAL ---
 
-const calculateATR = (highs: number[], lows: number[], closes: number[], period: number) => {
+function calculateATR(highs: number[], lows: number[], closes: number[], period: number) {
     if (highs.length < period) return 0;
     let trSum = 0;
     // Simple average for first TR (could be improved, but sufficient)
@@ -960,7 +990,7 @@ const calculateATR = (highs: number[], lows: number[], closes: number[], period:
 }
 
 // REAL ADX (Directional Movement System)
-const calculateADX = (highs: number[], lows: number[], closes: number[], period: number) => {
+function calculateADX(highs: number[], lows: number[], closes: number[], period: number) {
     if (highs.length < period * 2) return 20; // Not enough data, return neutral
 
     // 1. Calculate TR, +DM, -DM per candle
@@ -1016,7 +1046,7 @@ const calculateADX = (highs: number[], lows: number[], closes: number[], period:
     return lastADX;
 }
 
-const calculatePivotPoints = (highs: number[], lows: number[], closes: number[]) => {
+function calculatePivotPoints(highs: number[], lows: number[], closes: number[]) {
     // Standard Pivot Points based on previous candle (High/Low/Close)
     const h = highs[highs.length - 2]; // Previous completed candle
     const l = lows[lows.length - 2];
@@ -1028,4 +1058,4 @@ const calculatePivotPoints = (highs: number[], lows: number[], closes: number[])
     return { p, r1, s1 };
 }
 
-const formatVolume = (vol: number) => vol >= 1e9 ? (vol / 1e9).toFixed(1) + 'B' : (vol / 1e6).toFixed(1) + 'M';
+function formatVolume(vol: number) { return vol >= 1e9 ? (vol / 1e9).toFixed(1) + 'B' : (vol / 1e6).toFixed(1) + 'M'; }
