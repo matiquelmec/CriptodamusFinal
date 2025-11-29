@@ -1,4 +1,3 @@
-
 import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from '../types';
 import { hasActiveSession } from './geminiService';
 import { analyzeIchimoku } from './strategies/IchimokuAdapter';
@@ -6,6 +5,7 @@ import { analyzeMemeSignal } from './strategies/MemeStrategy';
 import { analyzeSwingSignal } from './strategies/SwingStrategy';
 import { analyzeBreakoutSignal } from './strategies/BreakoutStrategy';
 import { analyzeScalpSignal } from './strategies/ScalpStrategy';
+import { getMacroContext, type MacroContext } from './macroService';
 import {
     detectBullishDivergence, calculateIchimokuLines, calculateIchimokuCloud,
     calculateBollingerStats, calculateSMA, calculateEMA, calculateMACD,
@@ -448,6 +448,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     const risk = await getMarketRisk();
     const isHighRisk = risk.level === 'HIGH';
 
+    // 3. GET MACRO CONTEXT (NEW: Correlaciones macroeconómicas)
+    let macroContext: MacroContext | null = null;
+    try {
+        macroContext = await getMacroContext();
+        console.log(`[Scanner] Macro Context: BTC ${macroContext.btcRegime.regime} (${macroContext.btcRegime.strength}%), BTC.D ${macroContext.btcDominance.current.toFixed(1)}% (${macroContext.btcDominance.trend})`);
+    } catch (error) {
+        console.warn('[Scanner] Macro context unavailable, proceeding without macro filters:', error);
+    }
+
     if (!market || market.length === 0) throw new Error("No market data available");
 
     // Scan all candidates if Memes (usually < 40), or top 40 for general
@@ -564,8 +573,17 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             // If Risk is High (News OR Manipulation), we only accept VERY high scores
             const threshold = isHighRisk ? 85 : 70;
 
+            // --- APPLY MACRO FILTERS (NEW) ---
+            let finalScore = score;
+            if (macroContext) {
+                finalScore = applyMacroFilters(score, coin.symbol, signalSide, macroContext);
+            }
+
+            // Re-check threshold after macro adjustment
+            const adjustedThreshold = isHighRisk ? 85 : 70;
+
             // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
-            if (score >= threshold) {
+            if (finalScore >= adjustedThreshold) {
                 const livePrice = prices[prices.length - 1]; // Use live price for entry
                 const atr = calculateATR(highs, lows, prices, 14);
 
@@ -603,7 +621,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     timestamp: Date.now(),
                     strategy: getStrategyId(style), // FIXED: Map to correct ID for UI
                     side: signalSide,
-                    confidenceScore: Math.floor(score),
+                    confidenceScore: Math.floor(finalScore),
                     entryZone: { min: format(livePrice * 0.999), max: format(livePrice * 1.001) },
                     dcaLevel: signalSide === 'LONG' ? format(livePrice - (atr * 0.5)) : format(livePrice + (atr * 0.5)),
                     stopLoss: format(sl),
@@ -642,4 +660,63 @@ function getStrategyId(style: TradingStyle): string {
         case 'BREAKOUT_MOMENTUM': return 'breakout_momentum';
         default: return (style as string).toLowerCase();
     }
-};
+}
+
+/**
+ * Aplica filtros macroeconómicos al score de una señal
+ * @param baseScore - Score original de la estrategia (0-100)
+ * @param symbol - Símbolo del activo (ej: "BTC/USDT")
+ * @param signalSide - Dirección de la señal ('LONG' | 'SHORT')
+ * @param macro - Contexto macroeconómico
+ * @returns Score ajustado por correlaciones macro
+ */
+function applyMacroFilters(
+    baseScore: number,
+    symbol: string,
+    signalSide: 'LONG' | 'SHORT',
+    macro: MacroContext
+): number {
+    let adjustedScore = baseScore;
+    const isBTC = symbol === 'BTC/USDT' || symbol === 'BTCUSDT';
+
+    // REGLA 1: Régimen de BTC afecta a TODAS las altcoins
+    if (!isBTC && signalSide === 'LONG') {
+        if (macro.btcRegime.regime === 'BEAR') {
+            // En bear market de BTC, penalizar LONGs en altcoins fuertemente
+            adjustedScore *= 0.5;
+        } else if (macro.btcRegime.regime === 'RANGE') {
+            // En rango, penalizar levemente
+            adjustedScore *= 0.85;
+        }
+        // En BULL, no penalizar (incluso podríamos premiar)
+    }
+
+    // REGLA 2: BTC Dominance afecta a altcoins
+    if (!isBTC) {
+        const { trend, current } = macro.btcDominance;
+
+        if (trend === 'RISING' || current > 55) {
+            // Capital fluyendo hacia BTC, altcoins débiles
+            adjustedScore *= 0.75;
+        } else if (trend === 'FALLING' && current < 50) {
+            // Alt season: premiar altcoins
+            adjustedScore *= 1.15;
+        }
+    }
+
+    // REGLA 3: En BTC mismo, régimen afecta señales
+    if (isBTC && signalSide === 'LONG') {
+        if (macro.btcRegime.regime === 'BEAR') {
+            adjustedScore *= 0.7; // Penalizar LONGs en bear
+        } else if (macro.btcRegime.regime === 'BULL') {
+            adjustedScore *= 1.1; // Premiar LONGs en bull
+        }
+    }
+
+    // REGLA 4: SHORTs en bear market son más confiables
+    if (signalSide === 'SHORT' && macro.btcRegime.regime === 'BEAR') {
+        adjustedScore *= 1.15;
+    }
+
+    return Math.min(adjustedScore, 100); // Cap a 100
+}
