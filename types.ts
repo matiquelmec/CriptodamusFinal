@@ -50,102 +50,102 @@ export interface FearAndGreedData {
 }
 
 export interface MacroData {
-    btcDominance: number;
-    goldPrice: number;
+  btcDominance: number;
+  goldPrice: number;
 }
 
 export interface MarketRisk {
-    level: 'LOW' | 'MEDIUM' | 'HIGH';
-    note: string;
-    riskType?: 'VOLATILITY' | 'MANIPULATION' | 'NORMAL'; // New logic
+  level: 'LOW' | 'MEDIUM' | 'HIGH';
+  note: string;
+  riskType?: 'VOLATILITY' | 'MANIPULATION' | 'NORMAL'; // New logic
 }
 
 export interface TechnicalIndicators {
-    symbol: string;
-    price: number;
-    rsi: number;
-    stochRsi: { // NEW: Faster momentum
-        k: number;
-        d: number;
-    };
-    adx: number;
-    atr: number;
-    rvol: number;
-    vwap: number; // NEW: Volume Weighted Average Price
-    ema20: number;
-    ema50: number;
-    ema100: number;
-    ema200: number;
-    macd: {
-        line: number;
-        signal: number;
-        histogram: number;
-    };
-    bollinger: {
-        upper: number;
-        lower: number;
-        middle: number;
-        bandwidth: number; // percentage
-    };
-    pivots: {
-        p: number;
-        r1: number;
-        s1: number;
-        r2: number;
-        s2: number;
-    };
-    fibonacci: { // NEW: Auto-Fibs
-        level0: number;
-        level0_236: number;
-        level0_382: number;
-        level0_5: number;
-        level0_618: number; // Golden Pocket
-        level0_786: number;
-        level1: number;
-        trend: 'UP' | 'DOWN';
-    };
-    trendStatus: {
-        emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC';
-        goldenCross: boolean;
-        deathCross: boolean;
-    };
+  symbol: string;
+  price: number;
+  rsi: number;
+  stochRsi: { // NEW: Faster momentum
+    k: number;
+    d: number;
+  };
+  adx: number;
+  atr: number;
+  rvol: number;
+  vwap: number; // NEW: Volume Weighted Average Price
+  ema20: number;
+  ema50: number;
+  ema100: number;
+  ema200: number;
+  macd: {
+    line: number;
+    signal: number;
+    histogram: number;
+  };
+  bollinger: {
+    upper: number;
+    lower: number;
+    middle: number;
+    bandwidth: number; // percentage
+  };
+  pivots: {
+    p: number;
+    r1: number;
+    s1: number;
+    r2: number;
+    s2: number;
+  };
+  fibonacci: { // NEW: Auto-Fibs
+    level0: number;
+    level0_236: number;
+    level0_382: number;
+    level0_5: number;
+    level0_618: number; // Golden Pocket
+    level0_786: number;
+    level1: number;
+    trend: 'UP' | 'DOWN';
+  };
+  trendStatus: {
+    emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC';
+    goldenCross: boolean;
+    deathCross: boolean;
+  };
 }
 
 // Nueva interfaz robusta para señales de IA
 export interface AIOpportunity {
-    id: string;
-    symbol: string;
-    timestamp: number;
-    strategy: string; // "Scalp", "Swing", etc.
-    side: 'LONG' | 'SHORT';
-    confidenceScore: number; // 0-100
-    
-    // Gestión de Entrada
-    entryZone: {
-        min: number;
-        max: number;
-    };
-    dcaLevel?: number; // Nivel sugerido para promediar (Entry 2)
-    
-    // Gestión de Salida
-    stopLoss: number;
-    takeProfits: {
-        tp1: number;
-        tp2: number;
-        tp3: number; // Moonbag
-    };
-    
-    technicalReasoning: string;
-    invalidated: boolean; // Si el precio ya tocó SL o TP
+  id: string;
+  symbol: string;
+  timestamp: number;
+  strategy: string; // "Scalp", "Swing", etc.
+  side: 'LONG' | 'SHORT';
+  confidenceScore: number; // 0-100
 
-    // NEW: Detailed metrics for educational modal
-    metrics?: {
-        rvol: number;
-        rsi: number;
-        vwapDist: number; // Distance to VWAP %
-        structure: string; // e.g. "Above EMA200"
-        specificTrigger: string; // e.g. "Bollinger Bandwidth < 3%"
-    };
+  // Gestión de Entrada
+  entryZone: {
+    min: number;
+    max: number;
+  };
+  dcaLevel?: number; // Nivel sugerido para promediar (Entry 2)
+
+  // Gestión de Salida
+  stopLoss: number;
+  takeProfits: {
+    tp1: number;
+    tp2: number;
+    tp3: number; // Moonbag
+  };
+
+  technicalReasoning: string;
+  invalidated: boolean; // Si el precio ya tocó SL o TP
+
+  // NEW: Detailed metrics for educational modal
+  metrics?: {
+    rvol: number;
+    rsi: number;
+    vwapDist: number; // Distance to VWAP %
+    structure: string; // e.g. "Above EMA200"
+    specificTrigger: string; // e.g. "Bollinger Bandwidth < 3%"
+  };
 }
 
 export enum TabView {
@@ -156,3 +156,10 @@ export enum TabView {
 }
 
 export type TradingStyle = 'SCALP_AGRESSIVE' | 'SWING_INSTITUTIONAL' | 'BREAKOUT_MOMENTUM' | 'ICHIMOKU_CLOUD' | 'MEME_SCALP';
+
+export interface AppNotification {
+  id: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  title: string;
+  message: string;
+}

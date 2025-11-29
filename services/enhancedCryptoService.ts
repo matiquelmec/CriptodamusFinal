@@ -287,7 +287,7 @@ export const getServiceMetrics = () => {
   return {
     ...metrics,
     cacheSize: memoryCache.size,
-    uptime: process.uptime ? process.uptime() : 0,
+    uptime: 0, // process.uptime() not available in browser
   };
 };
 

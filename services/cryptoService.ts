@@ -423,6 +423,19 @@ DATOS TÉCNICOS AVANZADOS PARA ${data.symbol}:
 `.trim();
 };
 
+export const fetchDetailedMarketData = getRawTechnicalIndicators;
+
+export const subscribeToSymbol = (symbol: string, onUpdate: (data: any) => void, onError: (error: any) => void) => {
+    // Implementación básica de suscripción para un solo símbolo
+    // Reutiliza la lógica de subscribeToLivePrices pero filtrando
+    const dummyMarketData: MarketData[] = [{ id: symbol, symbol: symbol, price: 0, change24h: 0, rsi: 0, volume: '0', trend: 'neutral' }];
+    return subscribeToLivePrices(dummyMarketData, (data) => {
+        if (data[symbol]) {
+            onUpdate({ symbol, price: data[symbol] });
+        }
+    });
+};
+
 // --- AUTONOMOUS QUANT ENGINE v4.0 (API INDEPENDENT) ---
 
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {

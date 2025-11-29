@@ -3,8 +3,16 @@
  * Incluye retry logic, caché y fallback chains
  */
 
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { cacheService, CacheTTL } from './cacheService';
+
+// Module Augmentation for Axios
+declare module 'axios' {
+  export interface InternalAxiosRequestConfig {
+    metadata?: { startTime: Date };
+    retry?: number;
+  }
+}
 
 interface ApiConfig {
   baseURL?: string;
