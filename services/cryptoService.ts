@@ -1,6 +1,18 @@
 
 import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from '../types';
 import { hasActiveSession } from './geminiService';
+import { analyzeIchimoku } from './strategies/IchimokuAdapter';
+import { analyzeMemeSignal } from './strategies/MemeStrategy';
+import { analyzeSwingSignal } from './strategies/SwingStrategy';
+import { analyzeBreakoutSignal } from './strategies/BreakoutStrategy';
+import { analyzeScalpSignal } from './strategies/ScalpStrategy';
+import {
+    detectBullishDivergence, calculateIchimokuLines, calculateIchimokuCloud,
+    calculateBollingerStats, calculateSMA, calculateEMA, calculateMACD,
+    calculateEMAArray, calculateStdDev, calculateRSI, calculateStochRSI,
+    calculateRSIArray, calculateCumulativeVWAP, calculateAutoFibs,
+    calculateATR, calculateADX, calculatePivotPoints, formatVolume
+} from './mathUtils';
 
 // PRIMARY: Binance Vision (CORS friendly for public data)
 const BINANCE_API_BASE = 'https://data-api.binance.vision/api/v3';
@@ -472,153 +484,66 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             if (style === 'MEME_SCALP') {
                 // MEME HUNTER LOGIC
-                const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
+                const memeResult = analyzeMemeSignal(prices.slice(0, checkIndex + 1), vwap, rvol, rsi, stochRsi);
 
-                // ESTRATEGIA 1: EL PUMP (MOMENTUM) - NOW WITH VWAP SAFETY
-                if (currentPrice > ema20 && currentPrice > vwap && rvol > 1.8 && rsi > 55) {
-                    score = 80 + Math.min(rvol * 3, 15); // Higher volume = Higher score
-                    signalSide = 'LONG';
-                    detectionNote = `Meme Pump: Volumen Explosivo (x${rvol.toFixed(1)}) + Precio sobre VWAP.`;
-                    specificTrigger = `RVOL > 1.8 (${rvol.toFixed(2)}x) + RSI Uptrend (${rsi.toFixed(0)})`;
-                }
-                // ESTRATEGIA 2: THE DIP (REBOTE) - NOW WITH STOCH RSI
-                else {
-                    const { lower } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
-                    if (currentPrice < lower && stochRsi.k < 15) {
-                        score = 80;
-                        signalSide = 'LONG'; // Catch the knife safely
-                        detectionNote = `Meme Oversold: Precio fuera de Bandas + StochRSI en Suelo (${stochRsi.k.toFixed(0)}).`;
-                        specificTrigger = `StochRSI Sobrevendido (${stochRsi.k.toFixed(0)} < 15) + Break Banda Inf.`;
-                    }
+                if (memeResult) {
+                    score = memeResult.score;
+                    signalSide = memeResult.signalSide;
+                    detectionNote = memeResult.detectionNote;
+                    specificTrigger = memeResult.specificTrigger;
                 }
 
             } else if (style === 'ICHIMOKU_CLOUD') {
-                const { tenkan, kijun } = calculateIchimokuLines(highs, lows, 1); // offset 1 for closed candle
-                const offset = 26;
-                const pastHighs = highs.slice(0, highs.length - offset - 1);
-                const pastLows = lows.slice(0, lows.length - offset - 1);
+                // USANDO EL CEREBRO REAL DE ICHIMOKU (Refactorizado)
+                const ichimokuResult = analyzeIchimoku(highs, lows, prices);
 
-                if (pastHighs.length > 52) {
-                    const { senkouA, senkouB } = calculateIchimokuCloud(pastHighs, pastLows);
-                    const aboveCloud = currentPrice > senkouA && currentPrice > senkouB;
-                    const belowCloud = currentPrice < senkouA && currentPrice < senkouB;
-                    const tkCrossBullish = tenkan > kijun;
-                    const tkCrossBearish = tenkan < kijun;
-
-                    if (aboveCloud && tkCrossBullish) {
-                        score = 85;
-                        signalSide = 'LONG';
-                        detectionNote = "Zen Dragon: Precio sobre Nube + Cruce TK + Soporte VWAP.";
-                        specificTrigger = "Cruce Tenkan/Kijun sobre Nube Kumo (Tendencia Pura)";
-                    } else if (belowCloud && tkCrossBearish) {
-                        score = 85;
-                        signalSide = 'SHORT';
-                        detectionNote = "Zen Dragon: Tendencia Bajista Pura bajo Nube.";
-                        specificTrigger = "Cruce Bajista Tenkan/Kijun bajo Nube Kumo";
-                    }
+                if (ichimokuResult) {
+                    score = ichimokuResult.score;
+                    signalSide = ichimokuResult.signalSide;
+                    detectionNote = ichimokuResult.detectionNote;
+                    specificTrigger = ichimokuResult.specificTrigger;
                 }
 
             } else if (style === 'SWING_INSTITUTIONAL') {
-                const lastLow = lows[checkIndex];
-                const lastHigh = highs[checkIndex];
-                // Lookback increased to 20 for better swing structure detection
-                const prev20Lows = Math.min(...lows.slice(checkIndex - 20, checkIndex));
-                const prev20Highs = Math.max(...highs.slice(checkIndex - 20, checkIndex));
+                const swingResult = analyzeSwingSignal(
+                    prices.slice(0, checkIndex + 1),
+                    highs.slice(0, checkIndex + 1),
+                    lows.slice(0, checkIndex + 1),
+                    fibs
+                );
 
-                const ema50 = calculateEMA(prices.slice(0, checkIndex + 1), 50);
-                const isBullishTrend = ema50 > ema200;
-
-                // CHECK FIBONACCI PROXIMITY (Golden Pocket)
-                const distToGolden = Math.abs((currentPrice - fibs.level0_618) / currentPrice);
-                const nearGoldenPocket = distToGolden < 0.015; // Within 1.5%
-
-                // CHECK DIVERGENCES
-                const rsiArray = calculateRSIArray(prices.slice(0, checkIndex + 1), 14);
-                const hasBullishDiv = detectBullishDivergence(prices.slice(0, checkIndex + 1), rsiArray, lows.slice(0, checkIndex + 1));
-
-                // SFP Logic (Swing Failure Pattern)
-                if (isBullishTrend && lastLow < prev20Lows && currentPrice > prev20Lows) {
-                    score = 80;
-                    let extraNotes = [];
-
-                    if (nearGoldenPocket) {
-                        score += 10;
-                        extraNotes.push("Golden Pocket");
-                    }
-                    if (hasBullishDiv) {
-                        score += 5;
-                        extraNotes.push("Divergencia RSI");
-                    }
-
-                    detectionNote = `SMC Sniper: Barrido de Liquidez${extraNotes.length > 0 ? ' + ' + extraNotes.join(' + ') : ''}.`;
-                    specificTrigger = `SFP (Swing Failure Pattern)${hasBullishDiv ? ' + Bull Div' : ''}`;
-
-
-                    signalSide = 'LONG';
-                } else if (!isBullishTrend && lastHigh > prev20Highs && currentPrice < prev20Highs) {
-                    score = 80;
-                    signalSide = 'SHORT';
-                    detectionNote = "SMC Setup: Rechazo de Estructura Bajista (SFP).";
-                    specificTrigger = "SFP Bajista (Máximo previo barrido)";
+                if (swingResult) {
+                    score = swingResult.score;
+                    signalSide = swingResult.signalSide;
+                    detectionNote = swingResult.detectionNote;
+                    specificTrigger = swingResult.specificTrigger;
                 }
 
             } else if (style === 'BREAKOUT_MOMENTUM') {
                 // DONCHIAN CHANNEL LOGIC (20 Periods)
-                const pastHighs = highs.slice(checkIndex - 20, checkIndex);
-                const pastLows = lows.slice(checkIndex - 20, checkIndex);
-                const maxHigh20 = Math.max(...pastHighs);
-                const minLow20 = Math.min(...pastLows);
+                const breakoutResult = analyzeBreakoutSignal(
+                    prices.slice(0, checkIndex + 1),
+                    highs.slice(0, checkIndex + 1),
+                    lows.slice(0, checkIndex + 1),
+                    rvol
+                );
 
-                // Volatility Expansion Check
-                const { bandwidth } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
-                const prevBandwidth = calculateBollingerStats(prices.slice(0, checkIndex)).bandwidth;
-                const isExpanding = bandwidth > prevBandwidth;
-
-                // 1. BULLISH BREAKOUT
-                if (currentPrice > maxHigh20 && rvol > 1.5 && isExpanding) {
-                    score = 75 + Math.min((rvol * 5), 20);
-                    signalSide = 'LONG';
-                    detectionNote = `Donchian Breakout: Ruptura de Máximo de 20 periodos con Expansión.`;
-                    specificTrigger = `Price > ${maxHigh20} (20p High) + RVOL ${rvol.toFixed(1)}x`;
-                }
-                // 2. BEARISH BREAKDOWN
-                else if (currentPrice < minLow20 && rvol > 1.5 && isExpanding) {
-                    score = 75 + Math.min((rvol * 5), 20);
-                    signalSide = 'SHORT';
-                    detectionNote = `Donchian Breakdown: Pérdida de Soporte de 20 periodos.`;
-                    specificTrigger = `Price < ${minLow20} (20p Low) + RVOL ${rvol.toFixed(1)}x`;
+                if (breakoutResult) {
+                    score = breakoutResult.score;
+                    signalSide = breakoutResult.signalSide;
+                    detectionNote = breakoutResult.detectionNote;
+                    specificTrigger = breakoutResult.specificTrigger;
                 }
 
             } else {
-                // SCALP: BOLLINGER SQUEEZE + MOMENTUM + VWAP
-                const { bandwidth, sma: sma20 } = calculateBollingerStats(prices.slice(0, checkIndex + 1));
+                // SCALP (Default)
+                const scalpResult = analyzeScalpSignal(prices.slice(0, checkIndex + 1), vwap, rsi);
 
-                const historicalBandwidths = [];
-                for (let i = 20; i < 50; i++) {
-                    const slice = prices.slice(0, checkIndex + 1 - i);
-                    historicalBandwidths.push(calculateBollingerStats(slice).bandwidth);
-                }
-                const minHistBandwidth = Math.min(...historicalBandwidths);
-
-                // Allow slightly more breathing room (1.2x) because we have strict momentum filters now
-                const isSqueeze = bandwidth <= minHistBandwidth * 1.2;
-
-                if (isSqueeze) {
-                    // ROBUST FILTER: Price must be on the correct side of VWAP AND SMA20, with RSI supporting
-                    const isBullish = currentPrice > vwap && currentPrice > sma20 && rsi > 52;
-                    const isBearish = currentPrice < vwap && currentPrice < sma20 && rsi < 48;
-
-                    if (isBullish) {
-                        score = 80;
-                        signalSide = 'LONG';
-                        detectionNote = "Quant Squeeze: Compresión de volatilidad con Momentum Alcista.";
-                        specificTrigger = `Squeeze (BW ${bandwidth.toFixed(2)}%) + RSI > 52 + Price > VWAP`;
-                    } else if (isBearish) {
-                        score = 80;
-                        signalSide = 'SHORT';
-                        detectionNote = "Quant Squeeze: Compresión de volatilidad con Momentum Bajista.";
-                        specificTrigger = `Squeeze (BW ${bandwidth.toFixed(2)}%) + RSI < 48 + Price < VWAP`;
-                    }
+                if (scalpResult) {
+                    score = scalpResult.score;
+                    signalSide = scalpResult.signalSide;
+                    detectionNote = scalpResult.detectionNote;
+                    specificTrigger = scalpResult.specificTrigger;
                 }
             }
 
@@ -705,357 +630,3 @@ function getStrategyId(style: TradingStyle): string {
         default: return (style as string).toLowerCase();
     }
 };
-
-// Checks if Price made Lower Low but RSI made Higher Low in the last 15 periods
-function detectBullishDivergence(prices: number[], rsiSeries: number[], lows: number[]) {
-    // Need at least 20 periods
-    if (prices.length < 20 || rsiSeries.length < 20) return false;
-
-    // 1. Find recent low (current or last 3 candles)
-    let recentLowIndex = -1;
-    let recentLowPrice = Infinity;
-
-    // Check last 3 closed candles
-    const startCheck = prices.length - 2; // Avoid live candle
-    for (let i = startCheck; i > startCheck - 3; i--) {
-        if (lows[i] < recentLowPrice) {
-            recentLowPrice = lows[i];
-            recentLowIndex = i;
-        }
-    }
-
-    // 2. Find a previous swing low (look back 5 to 20 candles)
-    let pastLowIndex = -1;
-    let pastLowPrice = Infinity;
-
-    const lookbackStart = recentLowIndex - 5;
-    const lookbackEnd = Math.max(0, recentLowIndex - 25);
-
-    for (let i = lookbackStart; i > lookbackEnd; i--) {
-        // Is this a pivot low? (Lower than neighbors)
-        if (lows[i] < lows[i - 1] && lows[i] < lows[i + 1]) {
-            // Regular Bullish Divergence: Price Lower Low, RSI Higher Low
-            if (lows[i] > recentLowPrice) {
-                pastLowPrice = lows[i];
-                pastLowIndex = i;
-                break; // Found the most recent structural low
-            }
-        }
-    }
-
-    if (pastLowIndex === -1) return false;
-
-    // 3. Compare RSI
-    const recentRSI = rsiSeries[recentLowIndex];
-    const pastRSI = rsiSeries[pastLowIndex];
-
-    // Bullish Div: Price made Lower Low (Verified above), RSI makes Higher Low
-    if (recentRSI > pastRSI + 1) { // +1 buffer to avoid noise
-        return true;
-    }
-
-    return false;
-}
-
-// Calculates just the lines (Tenkan/Kijun) for current cross check
-function calculateIchimokuLines(highs: number[], lows: number[], offset: number = 0) {
-    const end = highs.length - offset;
-    // Tenkan-sen (9 periods)
-    const tenkan = (Math.max(...highs.slice(end - 9, end)) + Math.min(...lows.slice(end - 9, end))) / 2;
-    // Kijun-sen (26 periods)
-    const kijun = (Math.max(...highs.slice(end - 26, end)) + Math.min(...lows.slice(end - 26, end))) / 2;
-    return { tenkan, kijun };
-};
-
-// Calculates the cloud Spans based on the provided dataset (which should be shifted historically)
-function calculateIchimokuCloud(highs: number[], lows: number[]) {
-    const { tenkan, kijun } = calculateIchimokuLines(highs, lows, 0);
-    // Senkou Span A (Leading Span A)
-    const senkouA = (tenkan + kijun) / 2;
-    // Senkou Span B (52 periods)
-    const senkouB = (Math.max(...highs.slice(highs.length - 52)) + Math.min(...lows.slice(lows.length - 52))) / 2;
-
-    return { senkouA, senkouB };
-};
-
-function calculateBollingerStats(prices: number[]) {
-    const sma20 = calculateSMA(prices, 20);
-    const stdDev = calculateStdDev(prices, 20, sma20);
-    const upper = sma20 + (stdDev * 2);
-    const lower = sma20 - (stdDev * 2);
-    // Bandwidth %: (Upper - Lower) / Middle * 100
-    const bandwidth = sma20 > 0 ? ((upper - lower) / sma20) * 100 : 0;
-
-    return { upper, lower, bandwidth, sma: sma20 };
-};
-
-function calculateSMA(data: number[], period: number) {
-    if (data.length < period) return data[data.length - 1];
-    return data.slice(-period).reduce((a, b) => a + b, 0) / period;
-};
-
-function calculateEMA(data: number[], period: number) {
-    if (data.length < period) return data[data.length - 1];
-    const k = 2 / (period + 1);
-    let ema = data[0]; // Initialization could be improved with SMA of first N, but this converges enough for 100 candles
-    for (let i = 1; i < data.length; i++) {
-        ema = (data[i] * k) + (ema * (1 - k));
-    }
-    return ema;
-};
-
-function calculateMACD(prices: number[], fast = 12, slow = 26, signal = 9) {
-    const emaFast = calculateEMAArray(prices, fast);
-    const emaSlow = calculateEMAArray(prices, slow);
-
-    const macdLine = [];
-    for (let i = 0; i < prices.length; i++) {
-        macdLine.push(emaFast[i] - emaSlow[i]);
-    }
-
-    const signalLine = calculateEMAArray(macdLine, signal);
-    const histogram = macdLine[macdLine.length - 1] - signalLine[signalLine.length - 1];
-
-    return {
-        macdLine: macdLine[macdLine.length - 1],
-        signalLine: signalLine[signalLine.length - 1],
-        histogram: histogram
-    };
-}
-
-// Helper to return array of EMAs for MACD calculation
-function calculateEMAArray(data: number[], period: number) {
-    const k = 2 / (period + 1);
-    const emaArray = [data[0]];
-    for (let i = 1; i < data.length; i++) {
-        emaArray.push((data[i] * k) + (emaArray[i - 1] * (1 - k)));
-    }
-    return emaArray;
-};
-
-function calculateStdDev(data: number[], period: number, mean: number) {
-    if (data.length < period) return 0;
-    const slice = data.slice(-period);
-    const squaredDiffs = slice.map(value => Math.pow(value - mean, 2));
-    const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / period;
-    return Math.sqrt(avgSquaredDiff);
-};
-
-function calculateRSI(prices: number[], period: number = 14) {
-    if (prices.length < period + 1) return 50;
-    const rsiArray = calculateRSIArray(prices, period);
-    return rsiArray[rsiArray.length - 1];
-};
-
-// NEW: Stochastic RSI for precision entries
-function calculateStochRSI(prices: number[], period: number = 14) {
-    const rsiArray = calculateRSIArray(prices, period);
-    // Need at least period amount of RSIs to calc stoch
-    const relevantRSI = rsiArray.slice(-period);
-    const minRSI = Math.min(...relevantRSI);
-    const maxRSI = Math.max(...relevantRSI);
-
-    // StochRSI K
-    let k = 0;
-    if (maxRSI !== minRSI) {
-        k = ((relevantRSI[relevantRSI.length - 1] - minRSI) / (maxRSI - minRSI)) * 100;
-    }
-    // D is usually 3-period SMA of K
-    const d = k; // Simplified for now, real D requires array of Ks
-
-    return { k, d };
-};
-
-// Full Array Wilder's RSI (For Divergence checks)
-function calculateRSIArray(data: number[], period: number): number[] {
-    if (data.length < period + 1) return new Array(data.length).fill(50);
-
-    let gains = 0;
-    let losses = 0;
-    const rsiArray = new Array(data.length).fill(0);
-
-    // First average (SMA)
-    for (let i = 1; i < period + 1; i++) {
-        const change = data[i] - data[i - 1];
-        if (change >= 0) gains += change;
-        else losses += Math.abs(change);
-    }
-
-    let avgGain = gains / period;
-    let avgLoss = losses / period;
-
-    // First RSI
-    rsiArray[period] = 100 - (100 / (1 + (avgGain / avgLoss)));
-
-    // Smoothed averages (Wilder's Smoothing)
-    for (let i = period + 1; i < data.length; i++) {
-        const change = data[i] - data[i - 1];
-        const currentGain = change > 0 ? change : 0;
-        const currentLoss = change < 0 ? Math.abs(change) : 0;
-
-        avgGain = ((avgGain * (period - 1)) + currentGain) / period;
-        avgLoss = ((avgLoss * (period - 1)) + currentLoss) / period;
-
-        if (avgLoss === 0) {
-            rsiArray[i] = 100;
-        } else {
-            const rs = avgGain / avgLoss;
-            rsiArray[i] = 100 - (100 / (1 + rs));
-        }
-    }
-    return rsiArray;
-};
-
-// NEW: Cumulative VWAP (Session VWAP approx)
-function calculateCumulativeVWAP(highs: number[], lows: number[], closes: number[], volumes: number[]) {
-    // Typical Price
-    let cumTPV = 0;
-    let cumVol = 0;
-
-    // We calculate for the whole loaded dataset (mimicking session start)
-    for (let i = 0; i < closes.length; i++) {
-        const tp = (highs[i] + lows[i] + closes[i]) / 3;
-        cumTPV += (tp * volumes[i]);
-        cumVol += volumes[i];
-    }
-
-    return cumVol > 0 ? cumTPV / cumVol : closes[closes.length - 1];
-};
-
-// NEW: Auto Fibonacci Retracements
-function calculateAutoFibs(highs: number[], lows: number[], ema200: number) {
-    // Lookback 100 periods
-    const lookback = Math.min(highs.length, 100);
-    const subsetHighs = highs.slice(-lookback);
-    const realSubsetLows = lows.slice(-lookback);
-
-    const maxHigh = Math.max(...subsetHighs);
-    const minLow = Math.min(...realSubsetLows);
-    const currentPrice = highs[highs.length - 1];
-
-    // Determine Trend direction relative to EMA200
-    const isUptrend = currentPrice > ema200;
-
-    const diff = maxHigh - minLow;
-
-    if (isUptrend) {
-        // Low to High (Supports)
-        return {
-            trend: 'UP' as const,
-            level0: maxHigh, // Top
-            level0_236: maxHigh - (diff * 0.236),
-            level0_382: maxHigh - (diff * 0.382),
-            level0_5: maxHigh - (diff * 0.5),
-            level0_618: maxHigh - (diff * 0.618), // GOLDEN POCKET
-            level0_786: maxHigh - (diff * 0.786),
-            level1: minLow
-        };
-    } else {
-        // High to Low (Resistances)
-        return {
-            trend: 'DOWN' as const,
-            level0: minLow, // Bottom
-            level0_236: minLow + (diff * 0.236),
-            level0_382: minLow + (diff * 0.382),
-            level0_5: minLow + (diff * 0.5),
-            level0_618: minLow + (diff * 0.618), // GOLDEN POCKET
-            level0_786: minLow + (diff * 0.786),
-            level1: maxHigh
-        };
-    }
-}
-
-// --- NEW METRICS FOR 100% AI POTENTIAL ---
-
-function calculateATR(highs: number[], lows: number[], closes: number[], period: number) {
-    if (highs.length < period) return 0;
-    let trSum = 0;
-    // Simple average for first TR (could be improved, but sufficient)
-    for (let i = 1; i < period + 1; i++) {
-        const hl = highs[i] - lows[i];
-        const hc = Math.abs(highs[i] - closes[i - 1]);
-        const lc = Math.abs(lows[i] - closes[i - 1]);
-        trSum += Math.max(hl, hc, lc);
-    }
-    let atr = trSum / period;
-    // Smoothed ATR
-    for (let i = period + 1; i < highs.length; i++) {
-        const hl = highs[i] - lows[i];
-        const hc = Math.abs(highs[i] - closes[i - 1]);
-        const lc = Math.abs(lows[i] - closes[i - 1]);
-        const tr = Math.max(hl, hc, lc);
-        atr = ((atr * (period - 1)) + tr) / period;
-    }
-    return atr;
-}
-
-// REAL ADX (Directional Movement System)
-function calculateADX(highs: number[], lows: number[], closes: number[], period: number) {
-    if (highs.length < period * 2) return 20; // Not enough data, return neutral
-
-    // 1. Calculate TR, +DM, -DM per candle
-    // We use a simplified Wilder's smoothing logic to avoid massive arrays overhead in browser
-    let tr = 0;
-    let plusDM = 0;
-    let minusDM = 0;
-
-    // Initial accumulation (SMA)
-    for (let i = 1; i <= period; i++) {
-        const up = highs[i] - highs[i - 1];
-        const down = lows[i - 1] - lows[i];
-
-        const pdm = (up > down && up > 0) ? up : 0;
-        const mdm = (down > up && down > 0) ? down : 0;
-        const trueRange = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1]));
-
-        tr += trueRange;
-        plusDM += pdm;
-        minusDM += mdm;
-    }
-
-    // Smooth over time
-    let smTR = tr;
-    let smPlusDM = plusDM;
-    let smMinusDM = minusDM;
-    let lastADX = 0;
-
-    // Calculate DX series
-    for (let i = period + 1; i < highs.length; i++) {
-        const up = highs[i] - highs[i - 1];
-        const down = lows[i - 1] - lows[i];
-        const pdm = (up > down && up > 0) ? up : 0;
-        const mdm = (down > up && down > 0) ? down : 0;
-        const trueRange = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1]));
-
-        smTR = smTR - (smTR / period) + trueRange;
-        smPlusDM = smPlusDM - (smPlusDM / period) + pdm;
-        smMinusDM = smMinusDM - (smMinusDM / period) + mdm;
-
-        const pDI = (smPlusDM / smTR) * 100;
-        const mDI = (smMinusDM / smTR) * 100;
-
-        const dx = (Math.abs(pDI - mDI) / (pDI + mDI)) * 100;
-
-        if (i === period * 2 - 1) {
-            lastADX = dx; // First ADX is DX
-        } else if (i >= period * 2) {
-            lastADX = ((lastADX * (period - 1)) + dx) / period;
-        }
-    }
-
-    return lastADX;
-}
-
-function calculatePivotPoints(highs: number[], lows: number[], closes: number[]) {
-    // Standard Pivot Points based on previous candle (High/Low/Close)
-    const h = highs[highs.length - 2]; // Previous completed candle
-    const l = lows[lows.length - 2];
-    const c = closes[closes.length - 2];
-
-    const p = (h + l + c) / 3;
-    const r1 = (2 * p) - l;
-    const s1 = (2 * p) - h;
-    return { p, r1, s1 };
-}
-
-function formatVolume(vol: number) { return vol >= 1e9 ? (vol / 1e9).toFixed(1) + 'B' : (vol / 1e6).toFixed(1) + 'M'; }
