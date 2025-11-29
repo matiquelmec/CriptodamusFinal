@@ -67,7 +67,7 @@ const MacroIndicators: React.FC = () => {
             {/* Tooltip */}
             <div className="group relative ml-auto">
                 <button className="text-gray-500 hover:text-gray-300">ℹ️</button>
-                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-56 p-2 bg-gray-900 border border-gray-700 rounded shadow-xl z-50">
+                <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-56 p-2 bg-gray-900 border border-gray-700 rounded shadow-xl z-50">
                     <div className="text-[10px] text-gray-400">{macro.btcRegime.reasoning}</div>
                 </div>
             </div>
