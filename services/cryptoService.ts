@@ -259,6 +259,8 @@ export const getMarketContextForAI = async (): Promise<string> => {
     return getMacroData();
 };
 
+export { getMacroContext }; // Re-export for AI Advisor structured access
+
 // --- TECHNICAL ANALYSIS ENGINE ---
 
 const fetchCandles = async (symbolId: string, interval: string): Promise<{ close: number, volume: number, high: number, low: number, open: number }[]> => {
