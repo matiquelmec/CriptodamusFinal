@@ -180,6 +180,74 @@ export const streamMarketAnalysis = async function* (
         response += `#### 1. Estructura & Tendencia (El Contexto)\n`;
 
         // ADX Interpretation
+        let trendDesc = "Mercado Lateral (Rango)";
+        let trendEdu = "El precio no tiene dirección clara. Peligroso para estrategias de tendencia.";
+        if (adx > 20) { trendDesc = "Tendencia en Desarrollo"; trendEdu = "La tendencia empieza a ganar tracción."; }
+        if (adx > 30) { trendDesc = "Tendencia Fuerte"; trendEdu = "El movimiento es sólido y direccional."; }
+        if (adx > 50) { trendDesc = "Tendencia Extrema (Clímax)"; trendEdu = "Posible agotamiento por exceso de euforia/pánico."; }
+
+        // DIVERGENCIA TEMPORAL (EDUCATIVO - LENGUAJE SIMPLE)
+        if (macroContext) {
+            const macroBear = macroContext.btcRegime.regime === 'BEAR';
+            const localBull = price > ema200;
+
+            if (macroBear && localBull) {
+                response += `> ⚠️ **DIVERGENCIA DETECTADA (Cuidado):**\n`;
+                response += `> El mercado general (Diario) está bajando, pero ahora mismo (15m) está subiendo. Esto se llama **"Rebote de Gato Muerto"**.\n`;
+                response += `> *¿Qué significa?* Imagina una pelota cayendo desde un edificio; al tocar el suelo rebota un poco, pero la tendencia principal sigue siendo caer. No te confíes, es probable que vuelva a bajar.\n\n`;
+            } else if (macroContext.btcRegime.regime === 'BULL' && !localBull) {
+                response += `> 📉 **OPORTUNIDAD DE "DIP" (Oferta):**\n`;
+                response += `> La tendencia general es alcista (subiendo), pero ahora mismo el precio ha caído un poco. Es como encontrar un buen producto en descuento.\n\n`;
+            }
+        }
+
+        response += `- **Tendencia Local (EMA 200):** ${price > ema200 ? '✅ Alcista (Subiendo)' : '🔻 Bajista (Bajando)'} ($${ema200.toFixed(2)})\n`;
+        response += `  > *Explicación: La EMA 200 es como la "gravedad" del precio. Si estamos arriba, flotamos (compras). Si estamos abajo, caemos (ventas).*\n`;
+
+        response += `- **VWAP (Precio Justo):** $${vwap.toFixed(4)} ${price > vwap ? '✅ Caro (Sobre el promedio)' : '❌ Barato (Bajo el promedio)'}\n`;
+        response += `  > *Explicación: Es el precio promedio que pagaron las grandes instituciones hoy. Si compras muy lejos de este precio, estás pagando un sobreprecio.*\n`;
+
+        response += `- **Fuerza de la Tendencia (ADX):** ${adx.toFixed(1)} (${trendDesc})\n`;
+
+        if (trendStatus.goldenCross) response += `- **⚠️ Golden Cross Local:** La media rápida cruzó la lenta hacia arriba. Es como poner primera marcha para arrancar.\n`;
+
+        response += `\n`;
+
+        // SECCIÓN 2: MOMENTO & VOLATILIDAD (El "Timing")
+        response += `#### 2. Momento & Volatilidad (¿Es buen momento?)\n`;
+
+        // RSI Analysis with Context
+        let rsiText = "Neutral (50)";
+        let rsiEdu = "Ni caro ni barato. El mercado está decidiendo.";
+        if (rsi > 60 && rsi < 70) { rsiText = "Compradores en Control"; rsiEdu = "Hay entusiasmo, la gente está comprando."; }
+        if (rsi > 70) { rsiText = "⚠️ Sobrecompra (Muy Caro)"; rsiEdu = "El precio ha subido muy rápido. Es como un corredor cansado, necesita descansar (bajar) pronto."; }
+        if (rsi < 30) { rsiText = "⚠️ Sobreventa (Muy Barato)"; rsiEdu = "El precio ha caído en picada. Podría rebotar pronto como un resorte estirado."; }
+
+        // Bollinger Analysis
+        const bbWidth = bollinger.bandwidth.toFixed(2);
+        let volText = "Normal";
+        if (parseFloat(bbWidth) < 5) volText = "🔥 SQUEEZE (Compresión)";
+
+        response += `- **RSI (Fuerza):** ${rsi.toFixed(1)} - ${rsiText}\n`;
+        response += `  > *Interpretación: ${rsiEdu}*\n`;
+
+        response += `- **StochRSI (Velocidad):** ${stochRsi.k.toFixed(0)}/100 ${stochRsi.k > 80 ? '(Techo)' : stochRsi.k < 20 ? '(Suelo)' : ''}\n`;
+
+        response += `- **Bandas Bollinger:** ${volText} (Ancho: ${bbWidth}%)\n`;
+        if (parseFloat(bbWidth) < 5) {
+            response += `  > *Atención: El precio está muy quieto (Squeeze). Imagina agitar una botella de soda; cuando la abras (se rompa el rango), saldrá disparada con fuerza.*\n`;
+        }
+
+        response += `- **Volumen Relativo (RVOL):** ${rvol.toFixed(2)}x ${rvol > 1.5 ? '✅ Interés Institucional' : '❌ Poco Interés'}\n`;
+        response += `  > *Explicación: Nos dice si hay "dinero real" moviendo el precio. Si sube sin volumen, es una trampa.*\n\n`;
+
+        // SECCIÓN 3: NIVELES CLAVE (Table)
+        response += `#### 🎯 Niveles Clave (Dónde poner tus órdenes)\n`;
+        response += generateLevelsTable(price, pivots, ema200, fibonacci);
+        response += `\n> *Estrategia: Busca reacciones (rebotes o rechazos) en estos niveles exactos, no operes en medio de la nada.*\n\n`;
+
+        // SECCIÓN 4: RECOMENDACIÓN ESTRATÉGICA (El "Alpha")
+        response += `#### 🛡️ Plan de Trading Educativo\n`;
 
         // Generate strategy based on logic + selected strategy context + macro
         response += generateStrategicAdvice(techData, sentiment, strategyId, macroContext, isHighRisk);
