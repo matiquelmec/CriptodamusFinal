@@ -202,6 +202,28 @@ export interface AppNotification {
   message: string;
 }
 
+// --- DCA (Dollar Cost Averaging) INTERFACES ---
+export interface DCAEntry {
+  level: number; // 1, 2, 3
+  price: number;
+  positionSize: number; // % del total (40, 30, 30)
+  confluenceScore: number;
+  factors: string[];
+  distanceFromCurrent: number; // % de descuento
+}
+
+export interface DCAPlan {
+  entries: DCAEntry[];
+  averageEntry: number; // Precio promedio ponderado (WAP)
+  totalRisk: number; // % de cuenta en riesgo
+  stopLoss: number; // SL ajustado al WAP
+  takeProfits: {
+    tp1: { price: number; exitSize: number }; // 40%
+    tp2: { price: number; exitSize: number }; // 30%
+    tp3: { price: number; exitSize: number }; // 30%
+  };
+}
+
 export interface AIOpportunity {
   id: string;
   symbol: string;

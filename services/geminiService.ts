@@ -2,6 +2,7 @@
 import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from "../types";
 import { MacroContext } from './macroService';
 import { analyzeIchimokuSignal } from './ichimokuStrategy'; // NEW: Expert Logic
+import { generateDCAExecutionPlan } from './dcaReportGenerator'; // NEW: DCA System
 
 // --- MOTOR AUTÓNOMO (OFFLINE) ---
 // Este servicio reemplaza a la IA de Google.
@@ -202,37 +203,8 @@ export const streamMarketAnalysis = async function* (
             response += `| **Point of Control (PoC)** | $\\approx$ $${pivots.p.toFixed(4)} | Nivel de equilibrio de volumen (Pivote Central). |\n\n`;
         }
 
-        // IV. PLAN DE EJECUCIÓN
-        response += `## IV. Plan de Ejecución de Clase Mundial: Protocolo de Riesgo Cero\n`;
-        response += `La ejecución debe evolucionar de una simple orden límite a un **Protocolo de Confirmación Activa**.\n\n`;
-
-        let entryPrice = fibonacci.level0_618;
-        let slPrice = fibonacci.level0_786;
-        let tp1Price = price + (atr * 2);
-        let tp2Price = price + (atr * 4);
-        let tp3Price = price + (atr * 8);
-
-        if (confluenceAnalysis && confluenceAnalysis.topSupports.length > 0) {
-            entryPrice = confluenceAnalysis.topSupports[0].price;
-            slPrice = entryPrice - (atr * 1.5); // Dynamic SL based on ATR below entry
-
-            if (confluenceAnalysis.topResistances.length > 0) {
-                tp1Price = confluenceAnalysis.topResistances[0].price;
-                if (confluenceAnalysis.topResistances.length > 1) tp2Price = confluenceAnalysis.topResistances[1].price;
-                if (confluenceAnalysis.topResistances.length > 2) tp3Price = confluenceAnalysis.topResistances[2].price;
-            }
-        }
-
-        response += `| Componente | Valor Propuesto | Justificación Experta |\n`;
-        response += `|---|---|---|\n`;
-        response += `| **1. Zona de Espera** | **$${entryPrice.toFixed(4)}** | Máxima confluencia detectada por el motor SMC. |\n`;
-        response += `| **2. El Gatillo (Entry)** | **CONDICIONAL (No Ciego)** | Esperar un **Bullish CHoCH** en 1m/3m. Confirma que la demanda institucional ha entrado. |\n`;
-        response += `| **3. Stop Loss (SL)** | **$${slPrice.toFixed(4)}** | Colocado estratégicamente (1.5 ATR) debajo del POI. |\n`;
-        response += `| **4. TP1 (40%)** | **$${tp1Price.toFixed(4)}** | Asegurar ganancia en la primera resistencia mayor. |\n`;
-        response += `| **5. TP2 (30%)** | **$${tp2Price.toFixed(4)}** | Objetivo de liquidez estructural secundaria. |\n`;
-        response += `| **6. TP3 (30%)** | **$${tp3Price.toFixed(4)}** | Extensión para capturar el "Surge" máximo. |\n`;
-
-        response += `\n> *Máxima Operativa: Respetar las señales que el mercado da, no las que se desean. Prioridad: Preservación de Capital.*`;
+        // IV. PLAN DE EJECUCIÓN DCA (Generado por módulo)
+        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any);
 
         yield response;
     }
