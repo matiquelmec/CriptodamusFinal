@@ -356,46 +356,75 @@ const generateStrategicAdvice = (
     if (strategyId === 'smc_liquidity') {
         const goldenPocket = fibonacci.level0_618;
 
-        advice += `**🧠 Lógica SMC:** Buscamos comprar donde los retail (traders novatos) ponen sus Stop Loss, es decir, en zonas de liquidez profunda.\n\n`;
+        advice += `**🧠 Lógica SMC (Smart Money Concepts):**\n`;
+        advice += `Las instituciones no compran "al mercado". Dejan órdenes limitadas en zonas de descuento profundo para obtener el mejor precio posible.\n\n`;
 
         if (isBullish) {
-            advice += `**📈 Setup Long:** Paciencia. Espera un retroceso al **Golden Pocket** ($${goldenPocket.toFixed(4)}).\n`;
-            advice += `- **¿Por qué aquí?:** Es el retroceso del 61.8% de Fibonacci. Los algoritmos bancarios suelen tener órdenes "Limit" esperando aquí.\n`;
-            advice += `- **Stop Loss ($${(goldenPocket - atr).toFixed(4)}):** Lo colocamos bajo el nivel 0.786 para darle "aire" al precio y evitar un barrido de mecha.\n`;
-            advice += `- **TP ($${(price + atr * 3).toFixed(4)}):** Apuntamos a los máximos anteriores donde hay liquidez de vendedores atrapados.`;
+            advice += `**📈 PLAN DE BATALLA LONG:**\n`;
+            advice += `1. **Zona de Espera:** Paciencia. Deja que el precio caiga al **Golden Pocket** ($${goldenPocket.toFixed(4)}).\n`;
+            advice += `2. **El Gatillo:** No entres ciegamente. Espera una vela de rechazo (mecha larga abajo) en esa zona.\n`;
+            advice += `3. **Gestión de Riesgo:**\n`;
+            advice += `   - **Stop Loss:** $${(goldenPocket - atr).toFixed(4)} (Bajo el nivel 0.786).\n`;
+            advice += `   - **Take Profit:** $${(price + atr * 3).toFixed(4)} (Máximos anteriores).\n`;
+            advice += `   - **Tamaño:** Si tu cuenta es de $1000, arriesga máx $10 (1%).\n`;
         } else {
-            advice += `**📉 Setup Short:** Buscar entrada si el precio barre un máximo anterior y pierde el VWAP ($${vwap.toFixed(4)}).\n`;
-            advice += `- **Confirmación:** Espera que una vela de 15m cierre por debajo del VWAP para confirmar que los vendedores tienen el control.`;
+            advice += `**📉 PLAN DE BATALLA SHORT:**\n`;
+            advice += `1. **Zona de Caza:** Busca que el precio suba a tomar liquidez (barrer stops) por encima de un máximo anterior.\n`;
+            advice += `2. **Confirmación:** Espera que el precio pierda el VWAP ($${vwap.toFixed(4)}) con fuerza.\n`;
+            advice += `3. **Ejecución:** Entra en el re-testeo del VWAP por debajo.`;
         }
     }
     // ESTRATEGIA: MEME HUNTER
     else if (strategyId === 'meme_hunter') {
-        advice += `**🧠 Lógica Degen:** Aquí ignoramos los fundamentales. Buscamos Volumen (Gasolina) y Momentum (Velocidad).\n\n`;
+        advice += `**🧠 Lógica Degen (Alto Riesgo):**\n`;
+        advice += `Aquí ignoramos los fundamentales. Buscamos Volumen (Gasolina) y Momentum (Velocidad). Si no hay volumen, no hay fiesta.\n\n`;
 
         if (data.rvol > 2.0 && isBullish && price > vwap) {
-            advice += `**🚀 MOMENTUM LONG:** El volumen es explosivo (x${data.rvol.toFixed(1)}). Las ballenas están entrando.\n`;
-            advice += `- **Entrada:** Mercado (Ya). El precio está rompiendo con fuerza.\n`;
-            advice += `- **Gestión:** Sube el Stop Loss a "Breakeven" (precio de entrada) en cuanto suba un 3%.\n`;
+            advice += `**🚀 MOMENTUM LONG DETECTADO:**\n`;
+            advice += `El volumen es explosivo (x${data.rvol.toFixed(1)}). Las ballenas están entrando agresivamente.\n\n`;
+            advice += `**📋 Checklist de Entrada:**\n`;
+            advice += `1. [x] Precio sobre VWAP ($${vwap.toFixed(4)}).\n`;
+            advice += `2. [x] Volumen relativo > 2.0.\n`;
+            advice += `3. [ ] **Acción:** Entra a mercado YA.\n\n`;
+            advice += `**🛡️ Gestión de Salida:**\n`;
+            advice += `- Sube el Stop Loss a "Breakeven" (precio de entrada) en cuanto suba un 3%.\n`;
+            advice += `- Toma ganancias parciales (50%) rápido. Estas monedas caen tan rápido como suben.`;
         } else if (rsi < 30 || stochRsi.k < 10) {
-            advice += `**🧲 REBOTE TÉCNICO:** El activo está sobrevendido (StochRSI ${stochRsi.k.toFixed(0)}).\n`;
-            advice += `- **Estrategia:** Compra el miedo. Busca un rebote rápido hacia la EMA 20 ($${data.ema20.toFixed(4)}).\n`;
-            advice += `- **Advertencia:** Esto es "atrapar un cuchillo". Usa stop loss ajustado.`;
+            advice += `**🧲 REBOTE TÉCNICO (Scalping):**\n`;
+            advice += `El activo está sobrevendido (StochRSI ${stochRsi.k.toFixed(0)}). Es como una liga estirada al máximo.\n\n`;
+            advice += `**Estrategia:** Compra el miedo.\n`;
+            advice += `- **Meta:** Rebote rápido hacia la EMA 20 ($${data.ema20.toFixed(4)}).\n`;
+            advice += `- **Stop Loss:** Muy ajustado. Si sigue cayendo, sal inmediatamente.`;
         } else {
-            advice += `⚠️ **NO TOCAR:** No hay volumen suficiente (RVOL bajo) ni extremos de RSI. Es zona de "tierra de nadie".`;
+            advice += `⚠️ **NO TOCAR:**\n`;
+            advice += `No hay volumen suficiente (RVOL bajo) ni extremos de RSI. Es zona de "tierra de nadie". Espera a que entre volumen.`;
         }
     }
     // DEFAULT: QUANT/GENERAL
     else {
         if (parseFloat(bollinger.bandwidth.toFixed(2)) < 5) {
-            advice += `🔥 **SQUEEZE PLAY:** Las Bandas de Bollinger están extremadamente cerradas. \n`;
-            advice += `**Interpretación:** El mercado está acumulando energía. No adivines la dirección. Pon una orden de compra (Buy Stop) encima de la banda superior y una venta (Sell Stop) bajo la inferior. Sigue la ruptura.`;
+            advice += `🔥 **SQUEEZE PLAY (Compresión):**\n`;
+            advice += `Las Bandas de Bollinger están extremadamente cerradas. El mercado está acumulando energía para un movimiento explosivo.\n\n`;
+            advice += `**Estrategia de Ruptura:**\n`;
+            advice += `1. No adivines la dirección.\n`;
+            advice += `2. Pon una orden **Buy Stop** encima de la banda superior.\n`;
+            advice += `3. Pon una orden **Sell Stop** bajo la banda inferior.\n`;
+            advice += `4. La que se active primero te meterá en la tendencia. Cancela la otra.`;
         } else if (isBullish) {
-            advice += `**🌊 Trend Following:** La tendencia es tu amiga.\n`;
-            advice += `- **Entrada:** Busca comprar cerca del VWAP ($${vwap.toFixed(4)}). Si el precio rebota ahí, es confirmación de fuerza.\n`;
-            advice += `- **Stop Loss:** Bajo la EMA 50 ($${ema50.toFixed(4)}). Si la pierde, la tendencia a corto plazo se invalida.`;
+            advice += `**🌊 Trend Following (Seguimiento de Tendencia):**\n`;
+            advice += `La tendencia es tu amiga hasta que se doble. No luches contra la corriente.\n\n`;
+            advice += `**📋 Checklist de Compra:**\n`;
+            advice += `1. **Tendencia:** El precio está sobre la EMA 200 (Alcista).\n`;
+            advice += `2. **Zona de Valor:** Espera un retroceso al VWAP ($${vwap.toFixed(4)}).\n`;
+            advice += `3. **Gatillo:** Busca un patrón de vela alcista (Martillo o Envolvente) sobre el VWAP.\n\n`;
+            advice += `**🛡️ Gestión de Riesgo:**\n`;
+            advice += `- **Stop Loss:** Bajo la EMA 50 ($${ema50.toFixed(4)}). Si la pierde, la tendencia a corto plazo se debilita.`;
         } else {
-            advice += `**📉 Trend Following:** La estructura es bajista.\n`;
-            advice += `- **Estrategia:** Vende (Short) cada vez que el precio suba a tocar el VWAP ($${vwap.toFixed(4)}) y sea rechazado.`;
+            advice += `**📉 Trend Following (Bajista):**\n`;
+            advice += `La estructura de mercado es de máximos y mínimos decrecientes.\n\n`;
+            advice += `**Estrategia:**\n`;
+            advice += `- Vende (Short) cada vez que el precio suba a tocar el VWAP ($${vwap.toFixed(4)}) y sea rechazado.\n`;
+            advice += `- No compres los rebotes, son "trampas de toros".`;
         }
     }
 
