@@ -122,135 +122,94 @@ export const streamMarketAnalysis = async function* (
             }
         }
 
-        // Final Sentiment Calculation
         let sentiment = "NEUTRO";
         let mainIcon = "⚪";
 
         if (bullishScore > bearishScore + 2) { sentiment = "ALCISTA (BULLISH)"; mainIcon = "🟢"; }
         else if (bearishScore > bullishScore + 2) { sentiment = "BAJISTA (BEARISH)"; mainIcon = "🔴"; }
 
-        // --- PHASE 2: GENERATE REPORT (EDUCATIONAL MODE) ---
+        // --- PHASE 2: GENERATE REPORT (INSTITUTIONAL FORMAT) ---
 
         // HEADER
-        response += `### ${mainIcon} Diagnóstico: ${sentiment}\n`;
-        if (isHighRisk) {
-            response += `🔥 **ALERTA DE MERCADO:** ${riskProfile.note}\n> *Contexto Educativo: En momentos de alta volatilidad macro, el análisis técnico pierde fiabilidad. Protege tu capital reduciendo el apalancamiento.*\n\n`;
-        }
-        response += `**Score de Fuerza:** Bulls ${bullishScore.toFixed(1)} vs Bears ${bearishScore.toFixed(1)}\n`;
-        response += `**Estrategia Activa:** ${formatStrategyName(strategyId)}\n\n`;
+        response += `# Evaluación de Riesgo y Estrategia Táctica para ${techData.symbol}\n\n`;
 
-        // SECCIÓN 0: CONTEXTO MACROECONÓMICO (NEW)
+        // I. DIAGNÓSTICO OPERACIONAL
+        response += `## I. Diagnóstico Operacional: Conflicto Estructural (Macro vs. Micro)\n\n`;
+        response += `| Métrica Clave | Lectura | Interpretación (Institutional Bias) |\n`;
+        response += `|---|---|---|\n`;
+        response += `| **Diagnóstico Táctico (15m)** | ${mainIcon} ${sentiment} | Impulso local, ideal para la captura de un rally de alivio. |\n`;
+        response += `| **Score de Fuerza** | Bulls ${bullishScore.toFixed(1)} vs Bears ${bearishScore.toFixed(1)} | Confirma el control momentáneo de la demanda. |\n`;
+
         if (macroContext) {
-            response += `#### 🌍 Contexto Macroeconómico (El Panorama General)\n`;
-
-            const { btcRegime, btcDominance, usdtDominance } = macroContext;
-
-            // BTC Regime
+            const { btcRegime } = macroContext;
             const regimeIcon = btcRegime.regime === 'BULL' ? '🟢' : btcRegime.regime === 'BEAR' ? '🔴' : '🟡';
-            response += `- **Régimen de BTC:** ${regimeIcon} ${btcRegime.regime} (${btcRegime.strength}% Fuerza)\n`;
-            response += `  > ${btcRegime.reasoning}\n`;
-
-            // Volatilidad
-            const volIcon = btcRegime.volatilityStatus === 'HIGH' ? '🔥' : btcRegime.volatilityStatus === 'LOW' ? '❄️' : '⚡';
-            response += `- **Volatilidad:** ${volIcon} ${btcRegime.volatilityStatus} (ATR: ${btcRegime.atr.toFixed(0)})\n`;
-
-            if (btcRegime.volatilityStatus === 'HIGH' && btcRegime.regime === 'RANGE') {
-                response += `  > ⚠️ **KILL SWITCH ACTIVO:** Mercado en rango con alta volatilidad. Condición peligrosa para operar.\n`;
-            }
-
-            // Flujo de Capital
-            response += `- **Flujo de Capital:**\n`;
-            response += `  • BTC.D: ${btcDominance.current.toFixed(1)}% (${btcDominance.trend})\n`;
-            response += `  • USDT.D: ${usdtDominance.current.toFixed(1)}% (${usdtDominance.trend})\n`;
-
-            // Condiciones Especiales
-            const isAlt = !techData.symbol.includes('BTC');
-            if (isAlt) {
-                if (btcRegime.regime === 'BEAR' && (btcDominance.trend === 'RISING' || usdtDominance.trend === 'RISING')) {
-                    response += `  > 🔥 **SNIPER SHORT ACTIVA:** Mercado bajista + drenaje de liquidez. Los shorts en altcoins tienen alta probabilidad.\n`;
-                } else if (btcRegime.regime === 'BULL' && btcDominance.trend === 'FALLING') {
-                    response += `  > 🚀 **ALT SEASON DETECTADA:** BTC alcista pero perdiendo dominancia. Capital rotando a altcoins.\n`;
-                }
-            }
-
-            response += `\n`;
+            response += `| **Régimen Macro (Diario)** | ${regimeIcon} ${btcRegime.regime} (${btcRegime.strength}% Fuerza) | El factor de riesgo predominante; todo long es un trade contra la "gravedad" macro. |\n`;
         }
 
-        // SECCIÓN 1: SALUD DE LA TENDENCIA (Contexto)
-        response += `#### 1. Estructura & Tendencia (El Contexto)\n`;
+        response += `| **Estrategia Primaria** | ${formatStrategyName(strategyId)} | Enfoque en la mitigación de órdenes institucionales no ejecutadas (POI). |\n\n`;
 
-        // ADX Interpretation
-        let trendDesc = "Mercado Lateral (Rango)";
-        let trendEdu = "El precio no tiene dirección clara. Peligroso para estrategias de tendencia.";
-        if (adx > 20) { trendDesc = "Tendencia en Desarrollo"; trendEdu = "La tendencia empieza a ganar tracción."; }
-        if (adx > 30) { trendDesc = "Tendencia Fuerte"; trendEdu = "El movimiento es sólido y direccional."; }
-        if (adx > 50) { trendDesc = "Tendencia Extrema (Clímax)"; trendEdu = "Posible agotamiento por exceso de euforia/pánico."; }
-
-        // DIVERGENCIA TEMPORAL (EDUCATIVO - LENGUAJE SIMPLE)
+        // II. CONTEXTO MACROECONÓMICO
         if (macroContext) {
-            const macroBear = macroContext.btcRegime.regime === 'BEAR';
-            const localBull = price > ema200;
+            const { btcRegime, btcDominance, usdtDominance } = macroContext;
+            response += `## II. Contexto Macroeconómico: La Gravedad Estructural\n`;
+            response += `El contexto macroeconómico exige una gestión de riesgo inflexible. La tendencia de largo plazo se encuentra bajo presión crítica.\n\n`;
 
-            if (macroBear && localBull) {
-                response += `> ⚠️ **DIVERGENCIA DETECTADA (Cuidado):**\n`;
-                response += `> El mercado general (Diario) está bajando, pero ahora mismo (15m) está subiendo. Esto se llama **"Rebote de Gato Muerto"**.\n`;
-                response += `> *¿Qué significa?* Imagina una pelota cayendo desde un edificio; al tocar el suelo rebota un poco, pero la tendencia principal sigue siendo caer. No te confíes, es probable que vuelva a bajar.\n\n`;
-            } else if (macroContext.btcRegime.regime === 'BULL' && !localBull) {
-                response += `> 📉 **OPORTUNIDAD DE "DIP" (Oferta):**\n`;
-                response += `> La tendencia general es alcista (subiendo), pero ahora mismo el precio ha caído un poco. Es como encontrar un buen producto en descuento.\n\n`;
-            }
+            response += `### 2.1. La Amenaza del Régimen ${btcRegime.regime}\n`;
+            response += `La estructura técnica diaria muestra un régimen **${btcRegime.regime}**. ${btcRegime.reasoning}\n`;
+            response += `**Implicación:** El objetivo de este trade no es la continuación alcista perpetua, sino la captura eficiente de un rally de alivio antes de que la presión estructural reanude.\n\n`;
+
+            response += `### 2.2. Correlación de Liquidez Global\n`;
+            response += `Bitcoin actúa como un "barómetro" de liquidez global.\n`;
+            response += `- **USDT.D (Miedo):** ${usdtDominance.current.toFixed(1)}% (${usdtDominance.trend}). Si sube, indica fuga a refugio (Risk-Off).\n`;
+            response += `- **BTC.D (Dominancia):** ${btcDominance.current.toFixed(1)}% (${btcDominance.trend}).\n\n`;
         }
 
-        response += `- **Tendencia Local (EMA 200):** ${price > ema200 ? '✅ Alcista (Subiendo)' : '🔻 Bajista (Bajando)'} ($${ema200.toFixed(2)})\n`;
-        response += `  > *Explicación: La EMA 200 es como la "gravedad" del precio. Si estamos arriba, flotamos (compras). Si estamos abajo, caemos (ventas).*\n`;
+        // III. ESTRUCTURA TÁCTICA
+        response += `## III. Estructura Táctica y Refinamiento del Punto de Interés (POI)\n`;
 
-        response += `- **VWAP (Precio Justo):** $${vwap.toFixed(4)} ${price > vwap ? '✅ Caro (Sobre el promedio)' : '❌ Barato (Bajo el promedio)'}\n`;
-        response += `  > *Explicación: Es el precio promedio que pagaron las grandes instituciones hoy. Si compras muy lejos de este precio, estás pagando un sobreprecio.*\n`;
+        // Divergence Logic
+        let divergenceText = "Alineación Confirmada";
+        if (macroContext && macroContext.btcRegime.regime === 'BEAR' && price > ema200) {
+            divergenceText = "⚠️ Divergencia Crítica (Posible Dead Cat Bounce)";
+        }
+        response += `El análisis del marco temporal de 15 minutos revela: **${divergenceText}**.\n\n`;
 
-        response += `- **Fuerza de la Tendencia (ADX):** ${adx.toFixed(1)} (${trendDesc})\n`;
+        response += `### 3.1. Validación del Riesgo\n`;
+        response += `- **Volumen Relativo (RVOL):** ${rvol.toFixed(2)}x ${rvol < 1 ? '(❌ Poco Interés)' : '(✅ Interés Real)'}. Un rally con bajo volumen es sospechoso.\n`;
 
-        if (trendStatus.goldenCross) response += `- **⚠️ Golden Cross Local:** La media rápida cruzó la lenta hacia arriba. Es como poner primera marcha para arrancar.\n`;
-
-        response += `\n`;
-
-        // SECCIÓN 2: MOMENTO & VOLATILIDAD (El "Timing")
-        response += `#### 2. Momento & Volatilidad (¿Es buen momento?)\n`;
-
-        // RSI Analysis with Context
-        let rsiText = "Neutral (50)";
-        let rsiEdu = "Ni caro ni barato. El mercado está decidiendo.";
-        if (rsi > 60 && rsi < 70) { rsiText = "Compradores en Control"; rsiEdu = "Hay entusiasmo, la gente está comprando."; }
-        if (rsi > 70) { rsiText = "⚠️ Sobrecompra (Muy Caro)"; rsiEdu = "El precio ha subido muy rápido. Es como un corredor cansado, necesita descansar (bajar) pronto."; }
-        if (rsi < 30) { rsiText = "⚠️ Sobreventa (Muy Barato)"; rsiEdu = "El precio ha caído en picada. Podría rebotar pronto como un resorte estirado."; }
-
-        // Bollinger Analysis
         const bbWidth = bollinger.bandwidth.toFixed(2);
-        let volText = "Normal";
-        if (parseFloat(bbWidth) < 5) volText = "🔥 SQUEEZE (Compresión)";
+        const squeezeStatus = parseFloat(bbWidth) < 5 ? "🔥 SQUEEZE (Compresión)" : "⚡ Expansión";
+        response += `- **Volatilidad:** Bandas Bollinger en **${squeezeStatus}**. Esta fase precede invariablemente a un movimiento violento.\n\n`;
 
-        response += `- **RSI (Fuerza):** ${rsi.toFixed(1)} - ${rsiText}\n`;
-        response += `  > *Interpretación: ${rsiEdu}*\n`;
+        // SMC Logic Table
+        const goldenPocket = fibonacci.level0_618;
+        response += `### 3.2. Lógica SMC: Confluencia del POI de Alta Probabilidad\n`;
+        response += `La filosofía SMC dicta que la entrada óptima se encuentra en una zona de descuento profundo.\n\n`;
+        response += `| Nivel Clave (POI) | Precio Objetivo | Confluencia Institucional |\n`;
+        response += `|---|---|---|\n`;
+        response += `| **Golden Pocket (Fib 0.618)** | $${goldenPocket.toFixed(4)} | Zona de descuento ideal para la reentrada. |\n`;
+        response += `| **EMA 200 Local** | $${ema200.toFixed(4)} | Soporte dinámico clave que refuerza la rigidez del POI. |\n`;
+        response += `| **Point of Control (PoC)** | $\\approx$ $${pivots.p.toFixed(4)} | Nivel de equilibrio de volumen (Pivote Central). |\n\n`;
 
-        response += `- **StochRSI (Velocidad):** ${stochRsi.k.toFixed(0)}/100 ${stochRsi.k > 80 ? '(Techo)' : stochRsi.k < 20 ? '(Suelo)' : ''}\n`;
+        // IV. PLAN DE EJECUCIÓN
+        response += `## IV. Plan de Ejecución de Clase Mundial: Protocolo de Riesgo Cero\n`;
+        response += `La ejecución debe evolucionar de una simple orden límite a un **Protocolo de Confirmación Activa**.\n\n`;
 
-        response += `- **Bandas Bollinger:** ${volText} (Ancho: ${bbWidth}%)\n`;
-        if (parseFloat(bbWidth) < 5) {
-            response += `  > *Atención: El precio está muy quieto (Squeeze). Imagina agitar una botella de soda; cuando la abras (se rompa el rango), saldrá disparada con fuerza.*\n`;
-        }
+        const tp1 = price + (atr * 2);
+        const tp2 = price + (atr * 4);
+        const tp3 = price + (atr * 8);
+        const sl = goldenPocket - atr;
 
-        response += `- **Volumen Relativo (RVOL):** ${rvol.toFixed(2)}x ${rvol > 1.5 ? '✅ Interés Institucional' : '❌ Poco Interés'}\n`;
-        response += `  > *Explicación: Nos dice si hay "dinero real" moviendo el precio. Si sube sin volumen, es una trampa.*\n\n`;
+        response += `| Componente | Valor Propuesto | Justificación Experta |\n`;
+        response += `|---|---|---|\n`;
+        response += `| **1. Zona de Espera** | **$${goldenPocket.toFixed(4)}** | Máxima confluencia (0.618 Fib, EMA 200). |\n`;
+        response += `| **2. El Gatillo (Entry)** | **CONDICIONAL (No Ciego)** | Esperar un **Bullish CHoCH** en 1m/3m. Confirma que la demanda institucional ha entrado. |\n`;
+        response += `| **3. Stop Loss (SL)** | **$${sl.toFixed(4)}** | Colocado debajo del nivel 0.786 Fib, protegiendo contra barridas. |\n`;
+        response += `| **4. TP1 (40%)** | **$${tp1.toFixed(4)}** | Asegurar ganancia (R:R 1.5) y **Mover SL a Breakeven**. Protocolo de Riesgo Cero. |\n`;
+        response += `| **5. TP2 (30%)** | **$${tp2.toFixed(4)}** | Objetivo de liquidez estructural (Máximos). |\n`;
+        response += `| **6. TP3 (30%)** | **$${tp3.toFixed(4)}** | Extensión para capturar el "Surge" máximo. |\n`;
 
-        // SECCIÓN 3: NIVELES CLAVE (Table)
-        response += `#### 🎯 Niveles Clave (Dónde poner tus órdenes)\n`;
-        response += generateLevelsTable(price, pivots, ema200, fibonacci);
-        response += `\n> *Estrategia: Busca reacciones (rebotes o rechazos) en estos niveles exactos, no operes en medio de la nada.*\n\n`;
-
-        // SECCIÓN 4: RECOMENDACIÓN ESTRATÉGICA (El "Alpha")
-        response += `#### 🛡️ Plan de Trading Educativo\n`;
-
-        // Generate strategy based on logic + selected strategy context + macro
-        response += generateStrategicAdvice(techData, sentiment, strategyId, macroContext, isHighRisk);
+        response += `\n> *Máxima Operativa: Respetar las señales que el mercado da, no las que se desean. Prioridad: Preservación de Capital.*`;
 
         yield response;
     }
@@ -272,6 +231,7 @@ export const streamMarketAnalysis = async function* (
     }
 }
 
+
 // Helper to format strategy name nicely
 const formatStrategyName = (id: string) => {
     switch (id) {
@@ -281,213 +241,4 @@ const formatStrategyName = (id: string) => {
         case 'meme_hunter': return "Meme Hunter (Alto Riesgo)";
         default: return "Acción de Precio Estándar";
     }
-}
-
-const generateLevelsTable = (price: number, pivots: any, ema200: number, fibs: any) => {
-    // Generate a markdown table merging Pivots AND Fibonacci
-    // We prioritize the GOLDEN POCKET (0.618)
-
-    const levels = [
-        { name: "R2 (Resistencia)", price: pivots.r1 + (pivots.p - pivots.s1), type: 'R' },
-        { name: "Fib 0.618 (Golden Pocket)", price: fibs.level0_618, type: 'FIB' },
-        { name: "Pivote Central", price: pivots.p, type: 'P' },
-        { name: "EMA 200 (Tendencia)", price: ema200, type: 'EMA' },
-        { name: "S1 (Soporte)", price: pivots.s1, type: 'S' },
-        { name: "Fib 0.786 (Zona de Descuento)", price: fibs.level0_786, type: 'FIB' }
-    ];
-
-    levels.sort((a, b) => b.price - a.price);
-
-    let table = "| Nivel | Precio | Estado Actual |\n|---|---|---|\n";
-    levels.forEach(l => {
-        const dist = ((l.price - price) / price) * 100;
-        const isAbove = l.price > price;
-
-        let status = "";
-        let icon = "⚪";
-
-        if (isAbove) {
-            status = `Resistencia (+${dist.toFixed(2)}%)`;
-            icon = "🔴";
-            // Educational logic: If a Support level is ABOVE price, it flipped to resistance
-            if (l.name.includes("S1") || l.name.includes("S2")) status += " (Soporte Roto ⚠️)";
-        } else {
-            status = `Soporte (${dist.toFixed(2)}%)`;
-            icon = "🟢";
-            // Educational logic: If a Resistance level is BELOW price, it flipped to support
-            if (l.name.includes("R1") || l.name.includes("R2")) status += " (Resistencia Rota ✅)";
-        }
-
-        // Highlight Golden Pocket special
-        const nameDisplay = l.name.includes("Golden") ? `✨ **${l.name}**` : l.name;
-
-        table += `| ${icon} ${nameDisplay} | $${l.price.toFixed(l.price > 100 ? 2 : 4)} | ${status} |\n`;
-    });
-    return table;
-}
-
-const generateStrategicAdvice = (
-    data: TechnicalIndicators,
-    sentiment: string,
-    strategyId: string,
-    macroContext: MacroContext | null, // NEW: Macro context for validation
-    highRisk: boolean
-): string => {
-    const { price, atr, bollinger, rsi, stochRsi, vwap, ema50, ema200, fibonacci, ichimokuData } = data;
-    const isBullish = sentiment.includes("ALCISTA");
-
-    let advice = "";
-
-    // --- MACRO VALIDATIONS (NEW) ---
-    if (macroContext) {
-        const { btcRegime, btcDominance, usdtDominance } = macroContext;
-        const isAlt = !data.symbol.includes('BTC');
-
-        // Validación Kill Switch
-        if (btcRegime.volatilityStatus === 'HIGH' && btcRegime.regime === 'RANGE') {
-            advice += `🚫 **KILL SWITCH MACRO:** El mercado está en rango con volatilidad extrema.\n`;
-            advice += `**Acción Recomendada:** NO OPERAR. Espera a que la volatilidad se normalice o que BTC defina una dirección clara.\n\n`;
-            return advice; // Early return
-        }
-
-        // Validación Bear Market para Alts
-        if (isAlt && isBullish && btcRegime.regime === 'BEAR') {
-            advice += `⚠️ **ADVERTENCIA MACRO:** Estás considerando un LONG en una altcoin, pero BTC está en régimen BAJISTA.\n`;
-            advice += `**Contexto Educativo:** Cuando BTC cae, las altcoins suelen caer más fuerte (correlación positiva). Reduce tu confianza o espera a que BTC se estabilice.\n\n`;
-        }
-
-        // Validación USDT Dominance Rising
-        if (usdtDominance.trend === 'RISING' && isBullish) {
-            advice += `⚠️ **SEÑAL DE MIEDO:** USDT Dominance está subiendo (${usdtDominance.current.toFixed(1)}%).\n`;
-            advice += `**Interpretación:** Los inversores están huyendo a stablecoins. Mercado en modo pánico. Los LONGs son muy arriesgados.\n\n`;
-        }
-    }
-
-    // FAILSAFE: Si hay riesgo extremo
-    if (highRisk && strategyId !== 'meme_hunter') {
-        advice += `⚠️ **MODO PROTECCIÓN:** La volatilidad actual es demasiado alta. \n`;
-        advice += `**Recomendación Educativa:** Los traders profesionales NO operan durante el caos. Espera a que el precio forme un rango estable (acumulación) antes de entrar.\n\n`;
-    }
-
-    // --- ESTRATEGIA: ICHIMOKU CLOUD (REAL EXPERT MODE) ---
-    if (strategyId === 'ichimoku_dragon' && ichimokuData) {
-        const ichimokuSignal = analyzeIchimokuSignal(ichimokuData);
-        const { tenkan, kijun, senkouA, senkouB, chikou } = ichimokuData;
-        const cloudTop = Math.max(senkouA, senkouB);
-        const cloudBottom = Math.min(senkouA, senkouB);
-
-        advice += `**🐉 Estrategia Ichimoku Kinko Hyo (Equilibrio):**\n`;
-        advice += `El sistema Ichimoku busca ver el equilibrio del mercado "de un vistazo".\n\n`;
-
-        advice += `**📊 Estado de la Nube (Kumo):**\n`;
-        if (ichimokuSignal.metrics.cloudStatus === 'ABOVE') {
-            advice += `✅ **Tendencia Alcista Fuerte:** El precio está sobre la nube. La nube actúa como soporte dinámico en $${cloudTop.toFixed(4)}.\n`;
-        } else if (ichimokuSignal.metrics.cloudStatus === 'BELOW') {
-            advice += `🔻 **Tendencia Bajista Fuerte:** El precio está bajo la nube. La nube actúa como resistencia en $${cloudBottom.toFixed(4)}.\n`;
-        } else {
-            advice += `⚠️ **Zona de Turbulencia:** El precio está DENTRO de la nube. El mercado no tiene tendencia clara. **NO OPERAR TENDENCIA.**\n`;
-        }
-
-        advice += `\n**⚔️ Cruce Tenkan-Kijun (El Gatillo):**\n`;
-        if (ichimokuSignal.metrics.tkCross === 'BULLISH') {
-            advice += `🟢 **Cruce Dorado (TK Cross):** La línea rápida (Tenkan) cruzó arriba de la lenta (Kijun). Señal de compra.\n`;
-        } else if (ichimokuSignal.metrics.tkCross === 'BEARISH') {
-            advice += `🔴 **Cruce de la Muerte (TK Cross):** La línea rápida cruzó abajo. Señal de venta.\n`;
-        } else {
-            advice += `⚪ **Neutro:** Las líneas están paralelas sin cruce reciente.\n`;
-        }
-
-        advice += `\n**👻 Chikou Span (El Fantasma del Pasado):**\n`;
-        if (ichimokuSignal.metrics.chikouStatus === 'VALID') {
-            advice += `✅ **Confirmado:** El Chikou está libre de obstáculos. El camino está despejado.\n`;
-        } else {
-            advice += `❌ **Bloqueado:** El Chikou choca con el precio o la nube de hace 26 periodos. La tendencia no tiene fuerza real aún.\n`;
-        }
-
-        advice += `\n**📋 Veredicto Ichimoku:**\n`;
-        advice += `> **${ichimokuSignal.reason}**\n\n`;
-
-        if (ichimokuSignal.side !== 'NEUTRAL') {
-            advice += `**🛡️ Niveles Operativos:**\n`;
-            advice += `- **Stop Loss (Kijun):** $${kijun.toFixed(4)}\n`;
-            advice += `- **Soporte Nube:** $${cloudTop.toFixed(4)}\n`;
-        }
-    }
-    // ESTRATEGIA: SMC LIQUIDITY
-    else if (strategyId === 'smc_liquidity') {
-        const goldenPocket = fibonacci.level0_618;
-
-        advice += `**🧠 Lógica SMC (Smart Money Concepts):**\n`;
-        advice += `Las instituciones no compran "al mercado". Dejan órdenes limitadas en zonas de descuento profundo para obtener el mejor precio posible.\n\n`;
-
-        if (isBullish) {
-            advice += `**📈 PLAN DE BATALLA LONG:**\n`;
-            advice += `1. **Zona de Espera:** Paciencia. Deja que el precio caiga al **Golden Pocket** ($${goldenPocket.toFixed(4)}).\n`;
-            advice += `2. **El Gatillo:** No entres ciegamente. Espera una vela de rechazo (mecha larga abajo) en esa zona.\n`;
-            advice += `3. **Gestión de Riesgo:**\n`;
-            advice += `   - **Stop Loss:** $${(goldenPocket - atr).toFixed(4)} (Bajo el nivel 0.786).\n`;
-            advice += `   - **Take Profit:** $${(price + atr * 3).toFixed(4)} (Máximos anteriores).\n`;
-            advice += `   - **Tamaño:** Si tu cuenta es de $1000, arriesga máx $10 (1%).\n`;
-        } else {
-            advice += `**📉 PLAN DE BATALLA SHORT:**\n`;
-            advice += `1. **Zona de Caza:** Busca que el precio suba a tomar liquidez (barrer stops) por encima de un máximo anterior.\n`;
-            advice += `2. **Confirmación:** Espera que el precio pierda el VWAP ($${vwap.toFixed(4)}) con fuerza.\n`;
-            advice += `3. **Ejecución:** Entra en el re-testeo del VWAP por debajo.`;
-        }
-    }
-    // ESTRATEGIA: MEME HUNTER
-    else if (strategyId === 'meme_hunter') {
-        advice += `**🧠 Lógica Degen (Alto Riesgo):**\n`;
-        advice += `Aquí ignoramos los fundamentales. Buscamos Volumen (Gasolina) y Momentum (Velocidad). Si no hay volumen, no hay fiesta.\n\n`;
-
-        if (data.rvol > 2.0 && isBullish && price > vwap) {
-            advice += `**🚀 MOMENTUM LONG DETECTADO:**\n`;
-            advice += `El volumen es explosivo (x${data.rvol.toFixed(1)}). Las ballenas están entrando agresivamente.\n\n`;
-            advice += `**📋 Checklist de Entrada:**\n`;
-            advice += `1. [x] Precio sobre VWAP ($${vwap.toFixed(4)}).\n`;
-            advice += `2. [x] Volumen relativo > 2.0.\n`;
-            advice += `3. [ ] **Acción:** Entra a mercado YA.\n\n`;
-            advice += `**🛡️ Gestión de Salida:**\n`;
-            advice += `- Sube el Stop Loss a "Breakeven" (precio de entrada) en cuanto suba un 3%.\n`;
-            advice += `- Toma ganancias parciales (50%) rápido. Estas monedas caen tan rápido como suben.`;
-        } else if (rsi < 30 || stochRsi.k < 10) {
-            advice += `**🧲 REBOTE TÉCNICO (Scalping):**\n`;
-            advice += `El activo está sobrevendido (StochRSI ${stochRsi.k.toFixed(0)}). Es como una liga estirada al máximo.\n\n`;
-            advice += `**Estrategia:** Compra el miedo.\n`;
-            advice += `- **Meta:** Rebote rápido hacia la EMA 20 ($${data.ema20.toFixed(4)}).\n`;
-            advice += `- **Stop Loss:** Muy ajustado. Si sigue cayendo, sal inmediatamente.`;
-        } else {
-            advice += `⚠️ **NO TOCAR:**\n`;
-            advice += `No hay volumen suficiente (RVOL bajo) ni extremos de RSI. Es zona de "tierra de nadie". Espera a que entre volumen.`;
-        }
-    }
-    // DEFAULT: QUANT/GENERAL
-    else {
-        if (parseFloat(bollinger.bandwidth.toFixed(2)) < 5) {
-            advice += `🔥 **SQUEEZE PLAY (Compresión):**\n`;
-            advice += `Las Bandas de Bollinger están extremadamente cerradas. El mercado está acumulando energía para un movimiento explosivo.\n\n`;
-            advice += `**Estrategia de Ruptura:**\n`;
-            advice += `1. No adivines la dirección.\n`;
-            advice += `2. Pon una orden **Buy Stop** encima de la banda superior.\n`;
-            advice += `3. Pon una orden **Sell Stop** bajo la banda inferior.\n`;
-            advice += `4. La que se active primero te meterá en la tendencia. Cancela la otra.`;
-        } else if (isBullish) {
-            advice += `**🌊 Trend Following (Seguimiento de Tendencia):**\n`;
-            advice += `La tendencia es tu amiga hasta que se doble. No luches contra la corriente.\n\n`;
-            advice += `**📋 Checklist de Compra:**\n`;
-            advice += `1. **Tendencia:** El precio está sobre la EMA 200 (Alcista).\n`;
-            advice += `2. **Zona de Valor:** Espera un retroceso al VWAP ($${vwap.toFixed(4)}).\n`;
-            advice += `3. **Gatillo:** Busca un patrón de vela alcista (Martillo o Envolvente) sobre el VWAP.\n\n`;
-            advice += `**🛡️ Gestión de Riesgo:**\n`;
-            advice += `- **Stop Loss:** Bajo la EMA 50 ($${ema50.toFixed(4)}). Si la pierde, la tendencia a corto plazo se debilita.`;
-        } else {
-            advice += `**📉 Trend Following (Bajista):**\n`;
-            advice += `La estructura de mercado es de máximos y mínimos decrecientes.\n\n`;
-            advice += `**Estrategia:**\n`;
-            advice += `- Vende (Short) cada vez que el precio suba a tocar el VWAP ($${vwap.toFixed(4)}) y sea rechazado.\n`;
-            advice += `- No compres los rebotes, son "trampas de toros".`;
-        }
-    }
-
-    return advice;
 }
