@@ -665,6 +665,201 @@ function getStrategyId(style: TradingStyle): string {
 /**
  * Aplica filtros macroeconómicos al score de una señal
  * @param baseScore - Score original de la estrategia (0-100)
+            if (candles.length < 200) return; // Need deeper history for EMA 200
+
+            const prices = candles.map(c => c.close);
+            const volumes = candles.map(c => c.volume);
+            const highs = candles.map(c => c.high);
+            const lows = candles.map(c => c.low);
+
+            let score = 0;
+            let detectionNote = "";
+            let signalSide: 'LONG' | 'SHORT' = 'LONG'; // Default
+
+            // Educational Metrics to pass to UI
+            let specificTrigger = "";
+            let structureNote = "";
+
+            // Use Closed Candle for Confirmation (No Repainting)
+            const checkIndex = prices.length - 2;
+
+            // CALCULATE NEW PRECISION METRICS FOR SCANNER
+            const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes);
+            const stochRsi = calculateStochRSI(prices, 14);
+            const rsi = calculateRSI(prices.slice(0, checkIndex + 1), 14);
+            const fibs = calculateAutoFibs(highs, lows, calculateEMA(prices, 200));
+            const ema200 = calculateEMA(prices.slice(0, checkIndex + 1), 200);
+            const currentPrice = prices[checkIndex];
+            const avgVol = calculateSMA(volumes, 20);
+            const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
+
+            // Common structure check
+            const trendDist = ((currentPrice - ema200) / ema200) * 100;
+            structureNote = trendDist > 0 ? `Tendencia Alcista (+${trendDist.toFixed(1)}% sobre EMA200)` : `Tendencia Bajista (${trendDist.toFixed(1)}% bajo EMA200)`;
+
+            // --- DETERMINISTIC MATH DETECTORS ---
+
+            if (style === 'MEME_SCALP') {
+                // MEME HUNTER LOGIC
+                const memeResult = analyzeMemeSignal(prices.slice(0, checkIndex + 1), vwap, rvol, rsi, stochRsi);
+
+                if (memeResult) {
+                    score = memeResult.score;
+                    signalSide = memeResult.signalSide;
+                    detectionNote = memeResult.detectionNote;
+                    specificTrigger = memeResult.specificTrigger;
+                }
+
+            } else if (style === 'ICHIMOKU_CLOUD') {
+                // USANDO EL CEREBRO REAL DE ICHIMOKU (Refactorizado)
+                const ichimokuResult = analyzeIchimoku(highs, lows, prices);
+
+                if (ichimokuResult) {
+                    score = ichimokuResult.score;
+                    signalSide = ichimokuResult.signalSide;
+                    detectionNote = ichimokuResult.detectionNote;
+                    specificTrigger = ichimokuResult.specificTrigger;
+                }
+
+            } else if (style === 'SWING_INSTITUTIONAL') {
+                const swingResult = analyzeSwingSignal(
+                    prices.slice(0, checkIndex + 1),
+                    highs.slice(0, checkIndex + 1),
+                    lows.slice(0, checkIndex + 1),
+                    fibs
+                );
+
+                if (swingResult) {
+                    score = swingResult.score;
+                    signalSide = swingResult.signalSide;
+                    detectionNote = swingResult.detectionNote;
+                    specificTrigger = swingResult.specificTrigger;
+                }
+
+            } else if (style === 'BREAKOUT_MOMENTUM') {
+                // DONCHIAN CHANNEL LOGIC (20 Periods)
+                const breakoutResult = analyzeBreakoutSignal(
+                    prices.slice(0, checkIndex + 1),
+                    highs.slice(0, checkIndex + 1),
+                    lows.slice(0, checkIndex + 1),
+                    rvol
+                );
+
+                if (breakoutResult) {
+                    score = breakoutResult.score;
+                    signalSide = breakoutResult.signalSide;
+                    detectionNote = breakoutResult.detectionNote;
+                    specificTrigger = breakoutResult.specificTrigger;
+                }
+
+            } else {
+                // SCALP (Default)
+                const scalpResult = analyzeScalpSignal(prices.slice(0, checkIndex + 1), vwap, rsi);
+
+                if (scalpResult) {
+                    score = scalpResult.score;
+                    signalSide = scalpResult.signalSide;
+                    detectionNote = scalpResult.detectionNote;
+                    specificTrigger = scalpResult.specificTrigger;
+                }
+            }
+
+            // --- FILTERING BY RISK ---
+            // If Risk is High (News OR Manipulation), we only accept VERY high scores
+            const threshold = isHighRisk ? 85 : 70;
+
+            // --- APPLY MACRO FILTERS (NEW) ---
+            let finalScore = score;
+            if (macroContext) {
+                finalScore = applyMacroFilters(score, coin.symbol, signalSide, macroContext);
+            }
+
+            // Re-check threshold after macro adjustment
+            const adjustedThreshold = isHighRisk ? 85 : 70;
+
+            // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
+            if (finalScore >= adjustedThreshold) {
+                const livePrice = prices[prices.length - 1]; // Use live price for entry
+                const atr = calculateATR(highs, lows, prices, 14);
+
+                // Algorithmic SL/TP Calculation (Exact Maths)
+                let sl = 0;
+                let tp1 = 0, tp2 = 0, tp3 = 0;
+
+                const slMult = style === 'MEME_SCALP' ? 2.5 : (interval === '15m' ? 1.5 : 2.0);
+
+                if (signalSide === 'LONG') {
+                    sl = livePrice - (atr * slMult);
+                    const risk = livePrice - sl;
+                    tp1 = livePrice + risk;
+                    tp2 = livePrice + (risk * 2);
+                    tp3 = livePrice + (risk * 3);
+                } else {
+                    sl = livePrice + (atr * slMult);
+                    const risk = sl - livePrice;
+                    tp1 = livePrice - risk;
+                    tp2 = livePrice - (risk * 2);
+                    tp3 = livePrice - (risk * 3);
+                }
+
+                const decimals = livePrice > 1000 ? 2 : livePrice > 1 ? 4 : 6;
+                const format = (n: number) => parseFloat(n.toFixed(decimals));
+
+                const finalNote = isHighRisk ? `[⚠️ RIESGO ALTO] ${detectionNote}` : detectionNote;
+
+                // VWAP Dist % calculation
+                const vwapDist = ((livePrice - vwap) / vwap) * 100;
+
+                const mathOpp: AIOpportunity = {
+                    id: Date.now().toString() + Math.random(),
+                    symbol: coin.symbol,
+                    timestamp: Date.now(),
+                    strategy: getStrategyId(style), // FIXED: Map to correct ID for UI
+                    side: signalSide,
+                    confidenceScore: Math.floor(finalScore),
+                    entryZone: { min: format(livePrice * 0.999), max: format(livePrice * 1.001) },
+                    dcaLevel: signalSide === 'LONG' ? format(livePrice - (atr * 0.5)) : format(livePrice + (atr * 0.5)),
+                    stopLoss: format(sl),
+                    takeProfits: { tp1: format(tp1), tp2: format(tp2), tp3: format(tp3) },
+                    technicalReasoning: finalNote,
+                    invalidated: false,
+                    // NEW: METRICS POPULATION
+                    metrics: {
+                        rvol: format(rvol),
+                        rsi: format(rsi),
+                        vwapDist: format(vwapDist),
+                        structure: structureNote,
+                        specificTrigger: specificTrigger
+                    }
+                };
+
+                validMathCandidates.push(mathOpp);
+            }
+
+        } catch (e) { return null; }
+    }));
+
+    // Return pure math results instantly
+    return validMathCandidates.sort((a, b) => b.confidenceScore - a.confidenceScore);
+};
+
+// --- MATH HELPERS (ROBUST) ---
+
+// Helper to map TradingStyle (Enum) to Strategy ID (Context)
+function getStrategyId(style: TradingStyle): string {
+    switch (style) {
+        case 'SCALP_AGRESSIVE': return 'quant_volatility';
+        case 'SWING_INSTITUTIONAL': return 'smc_liquidity';
+        case 'ICHIMOKU_CLOUD': return 'ichimoku_dragon';
+        case 'MEME_SCALP': return 'meme_hunter';
+        case 'BREAKOUT_MOMENTUM': return 'breakout_momentum';
+        default: return (style as string).toLowerCase();
+    }
+}
+
+/**
+ * Aplica filtros macroeconómicos al score de una señal
+ * @param baseScore - Score original de la estrategia (0-100)
  * @param symbol - Símbolo del activo (ej: "BTC/USDT")
  * @param signalSide - Dirección de la señal ('LONG' | 'SHORT')
  * @param macro - Contexto macroeconómico
@@ -679,44 +874,58 @@ function applyMacroFilters(
     let adjustedScore = baseScore;
     const isBTC = symbol === 'BTC/USDT' || symbol === 'BTCUSDT';
 
-    // REGLA 1: Régimen de BTC afecta a TODAS las altcoins
+    // --- REGLA 0: KILL SWITCH (Volatilidad Extrema en Rango) ---
+    // Si hay mucha volatilidad pero sin dirección clara (Chop), no operar.
+    if (macro.btcRegime.volatilityStatus === 'HIGH' && macro.btcRegime.regime === 'RANGE') {
+        console.log(`[MacroFilter] Kill Switch activado para ${symbol}: Alta volatilidad en rango.`);
+        return 0;
+    }
+
+    // --- REGLA 1: Régimen de BTC afecta a TODAS las altcoins ---
     if (!isBTC && signalSide === 'LONG') {
         if (macro.btcRegime.regime === 'BEAR') {
-            // En bear market de BTC, penalizar LONGs en altcoins fuertemente
-            adjustedScore *= 0.5;
+            adjustedScore *= 0.5; // Penalizar fuertemente
         } else if (macro.btcRegime.regime === 'RANGE') {
-            // En rango, penalizar levemente
             adjustedScore *= 0.85;
         }
-        // En BULL, no penalizar (incluso podríamos premiar)
     }
 
-    // REGLA 2: BTC Dominance afecta a altcoins
+    // --- REGLA 2: BTC Dominance (Rotación de Capital) ---
     if (!isBTC) {
         const { trend, current } = macro.btcDominance;
-
         if (trend === 'RISING' || current > 55) {
-            // Capital fluyendo hacia BTC, altcoins débiles
-            adjustedScore *= 0.75;
+            adjustedScore *= 0.75; // Capital fluyendo a BTC
         } else if (trend === 'FALLING' && current < 50) {
-            // Alt season: premiar altcoins
-            adjustedScore *= 1.15;
+            adjustedScore *= 1.15; // Alt season
         }
     }
 
-    // REGLA 3: En BTC mismo, régimen afecta señales
+    // --- REGLA 3: USDT Dominance (Correlación Inversa / Miedo) ---
+    // Si USDT.D sube, el mercado cripto baja (Flight to stablecoins)
+    if (macro.usdtDominance.trend === 'RISING') {
+        if (signalSide === 'LONG') {
+            adjustedScore *= 0.6; // Muy peligroso ir LONG si USDT sube
+        } else {
+            adjustedScore *= 1.2; // Buen momento para SHORT
+        }
+    }
+
+    // --- REGLA 4: SNIPER SHORTS (La recomendación del experto) ---
+    // En Bear Market + BTC.D subiendo (o USDT.D subiendo), los shorts en Alts son oro.
+    if (!isBTC && signalSide === 'SHORT') {
+        const isBearishContext = macro.btcRegime.regime === 'BEAR';
+        const liquidityDraining = macro.btcDominance.trend === 'RISING' || macro.usdtDominance.trend === 'RISING';
+
+        if (isBearishContext && liquidityDraining) {
+            adjustedScore *= 1.5; // Boost agresivo
+        }
+    }
+
+    // --- REGLA 5: BTC Específico ---
     if (isBTC && signalSide === 'LONG') {
-        if (macro.btcRegime.regime === 'BEAR') {
-            adjustedScore *= 0.7; // Penalizar LONGs en bear
-        } else if (macro.btcRegime.regime === 'BULL') {
-            adjustedScore *= 1.1; // Premiar LONGs en bull
-        }
+        if (macro.btcRegime.regime === 'BEAR') adjustedScore *= 0.7;
+        else if (macro.btcRegime.regime === 'BULL') adjustedScore *= 1.1;
     }
 
-    // REGLA 4: SHORTs en bear market son más confiables
-    if (signalSide === 'SHORT' && macro.btcRegime.regime === 'BEAR') {
-        adjustedScore *= 1.15;
-    }
-
-    return Math.min(adjustedScore, 100); // Cap a 100
+    return Math.min(adjustedScore, 100);
 }

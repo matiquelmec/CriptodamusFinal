@@ -1,5 +1,5 @@
 
-import { calculateEMA } from './mathUtils';
+import { calculateEMA, calculateATR } from './mathUtils';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -12,6 +12,13 @@ export interface BTCRegimeAnalysis {
     ema200: number;
     currentPrice: number;
     reasoning: string;
+    volatilityStatus: 'LOW' | 'NORMAL' | 'HIGH';
+    atr: number;
+}
+
+export interface USDTDominanceData {
+    current: number;
+    trend: 'RISING' | 'FALLING' | 'STABLE';
 }
 
 export interface BTCDominanceData {
@@ -23,6 +30,7 @@ export interface BTCDominanceData {
 export interface MacroContext {
     btcRegime: BTCRegimeAnalysis;
     btcDominance: BTCDominanceData;
+    usdtDominance: USDTDominanceData;
     timestamp: number;
     isStale: boolean; // true si data > 5 minutos
 }
@@ -84,6 +92,16 @@ async function analyzeBTCRegime(): Promise<BTCRegimeAnalysis> {
         const ema200 = calculateEMA(closes, 200);
         const currentPrice = closes[closes.length - 1];
 
+        // Calcular Volatilidad (ATR 14)
+        const highs = candles.map((c: any[]) => parseFloat(c[2]));
+        const lows = candles.map((c: any[]) => parseFloat(c[3]));
+        const atr = calculateATR(highs, lows, closes, 14);
+        const atrPercent = (atr / currentPrice) * 100;
+
+        let volatilityStatus: 'LOW' | 'NORMAL' | 'HIGH' = 'NORMAL';
+        if (atrPercent > 4.5) volatilityStatus = 'HIGH'; // >4.5% movimiento diario promedio es alto
+        else if (atrPercent < 1.5) volatilityStatus = 'LOW';
+
         // Lógica de régimen
         let regime: 'BULL' | 'BEAR' | 'RANGE' = 'RANGE';
         let strength = 50;
@@ -123,7 +141,9 @@ async function analyzeBTCRegime(): Promise<BTCRegimeAnalysis> {
             ema50,
             ema200,
             currentPrice,
-            reasoning
+            reasoning,
+            volatilityStatus,
+            atr
         };
 
     } catch (error) {
@@ -135,7 +155,9 @@ async function analyzeBTCRegime(): Promise<BTCRegimeAnalysis> {
             ema50: 0,
             ema200: 0,
             currentPrice: 0,
-            reasoning: 'Datos no disponibles (Fallback a neutral)'
+            reasoning: 'Datos no disponibles (Fallback a neutral)',
+            volatilityStatus: 'NORMAL',
+            atr: 0
         };
     }
 }
@@ -187,6 +209,49 @@ async function getBTCDominance(): Promise<BTCDominanceData> {
     }
 }
 
+/**
+ * Obtiene USDT Dominance (Correlación Inversa)
+ * @returns Datos de dominancia USDT
+ */
+async function getUSDTDominance(): Promise<USDTDominanceData> {
+    try {
+        // Necesitamos Market Cap Global y Market Cap de USDT
+        const [globalRes, usdtRes] = await Promise.all([
+            fetchWithTimeout('https://api.coincap.io/v2/global', 3000),
+            fetchWithTimeout('https://api.coincap.io/v2/assets/tether', 3000)
+        ]);
+
+        if (!globalRes.ok || !usdtRes.ok) throw new Error('API Error fetching USDT data');
+
+        const globalJson = await globalRes.json();
+        const usdtJson = await usdtRes.json();
+
+        // CoinCap devuelve market caps en USD (pero a veces como string grande)
+        // globalJson.data.totalMarketCapUsd es un número grande
+        const totalMarketCap = parseFloat(globalJson.data.totalMarketCapUsd);
+        const usdtMarketCap = parseFloat(usdtJson.data.marketCapUsd);
+
+        if (!totalMarketCap || !usdtMarketCap) throw new Error('Invalid market cap data');
+
+        const current = (usdtMarketCap / totalMarketCap) * 100;
+
+        // Tendencia simple: > 5% es alto (miedo), < 3% es bajo (codicia)
+        // Para tendencia real necesitaríamos histórico, por ahora usamos umbrales
+        // USDT.D suele estar entre 3% (Bull run) y 8% (Bear market profundo)
+        let trend: 'RISING' | 'FALLING' | 'STABLE' = 'STABLE';
+
+        // Simplificación: Si es alto, asumimos presión alcista (miedo)
+        if (current > 6.5) trend = 'RISING';
+        else if (current < 4.0) trend = 'FALLING';
+
+        return { current, trend };
+
+    } catch (error) {
+        console.warn('[MacroService] USDT Dominance fetch failed:', error);
+        return { current: 5.0, trend: 'STABLE' }; // Valor medio seguro
+    }
+}
+
 // ============================================================================
 // PUBLIC API
 // ============================================================================
@@ -207,14 +272,16 @@ export async function getMacroContext(): Promise<MacroContext> {
     }
 
     // Fetch paralelo de ambos datos para optimizar latencia
-    const [btcRegime, btcDominance] = await Promise.all([
+    const [btcRegime, btcDominance, usdtDominance] = await Promise.all([
         analyzeBTCRegime(),
-        getBTCDominance()
+        getBTCDominance(),
+        getUSDTDominance()
     ]);
 
     const context: MacroContext = {
         btcRegime,
         btcDominance,
+        usdtDominance,
         timestamp: now,
         isStale: false
     };
@@ -244,7 +311,9 @@ export async function getBTCRegimeQuick(): Promise<BTCRegimeAnalysis> {
             ema50: 0,
             ema200: 0,
             currentPrice: 0,
-            reasoning: 'Error obteniendo datos'
+            reasoning: 'Error obteniendo datos',
+            volatilityStatus: 'NORMAL',
+            atr: 0
         };
     }
 }
