@@ -112,27 +112,27 @@ async function analyzeBTCRegime(): Promise<BTCRegimeAnalysis> {
         const goldenCross = ema50 > ema200;
         const deathCross = ema50 < ema200;
 
-        // Determinar régimen con lógica robusta
+        // Determinar régimen con lógica robusta y educativa
         if (goldenCross && priceAboveEMA50 && priceAboveEMA200) {
             regime = 'BULL';
             strength = 85;
-            reasoning = 'Golden Cross + Precio sobre EMAs (Tendencia alcista confirmada)';
+            reasoning = '🟢 Alcista (Diario): Precio sobre EMAs 50 y 200. "Golden Cross" activo (La media de 50 días cruzó arriba de la de 200), indicando que el momentum de corto plazo supera al histórico.';
         } else if (deathCross && !priceAboveEMA50 && !priceAboveEMA200) {
             regime = 'BEAR';
             strength = 85;
-            reasoning = 'Death Cross + Precio bajo EMAs (Tendencia bajista confirmada)';
+            reasoning = '🔴 Bajista (Diario): Precio bajo EMAs 50 y 200. "Death Cross" activo (La media de 50 días cruzó abajo de la de 200), señalando debilidad estructural a largo plazo.';
         } else if (priceAboveEMA200 && !goldenCross) {
             regime = 'BULL';
             strength = 65;
-            reasoning = 'Precio sobre EMA200 pero sin Golden Cross (Alcista débil)';
+            reasoning = '🟡 Alcista Débil (Diario): Precio sobre la EMA de 200 días (Soporte Mayor), pero sin Golden Cross. El mercado es resiliente pero le falta momentum explosivo.';
         } else if (!priceAboveEMA200 && !deathCross) {
             regime = 'BEAR';
             strength = 65;
-            reasoning = 'Precio bajo EMA200 pero sin Death Cross (Bajista débil)';
+            reasoning = '🟠 Bajista Débil (Diario): Precio bajo la EMA de 200 días (Resistencia Mayor), pero sin Death Cross. Peligro de caída mayor si no recupera pronto.';
         } else {
             regime = 'RANGE';
             strength = 50;
-            reasoning = 'Precio entre EMAs (Sin tendencia clara)';
+            reasoning = '⚪ Rango / Indecisión (Diario): El precio está atrapado entre las EMAs 50 y 200. El mercado busca dirección; operar con cautela (esperar ruptura).';
         }
 
         return {
