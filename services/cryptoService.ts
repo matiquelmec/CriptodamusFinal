@@ -1,6 +1,7 @@
 import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from '../types';
 import { hasActiveSession } from './geminiService';
 import { analyzeIchimoku } from './strategies/IchimokuAdapter';
+import { calculateIchimokuData } from './ichimokuStrategy'; // NEW: Direct calculation for Advisor
 import { analyzeMemeSignal } from './strategies/MemeStrategy';
 import { analyzeSwingSignal } from './strategies/SwingStrategy';
 import { analyzeBreakoutSignal } from './strategies/BreakoutStrategy';
@@ -354,6 +355,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         const pivots = calculatePivotPoints(highs, lows, prices);
         const bb = calculateBollingerStats(prices);
         const fibs = calculateAutoFibs(highs, lows, ema200); // NEW
+        const ichimokuData = calculateIchimokuData(highs, lows, prices); // NEW: Full Ichimoku Cloud
 
         // Determine Alignment
         let emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC' = 'CHAOTIC';
@@ -392,6 +394,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
                 s2: pivots.p - (pivots.r1 - pivots.s1)  // Simple S2 approx
             },
             fibonacci: fibs,
+            ichimokuData: ichimokuData || undefined, // NEW
             trendStatus: {
                 emaAlignment,
                 goldenCross: ema50 > ema200,

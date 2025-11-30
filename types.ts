@@ -1,5 +1,4 @@
 
-
 export interface MarketData {
   id: string; // ID for WebSocket subscription (e.g., 'bitcoin')
   symbol: string;
@@ -57,21 +56,55 @@ export interface MacroData {
 export interface MarketRisk {
   level: 'LOW' | 'MEDIUM' | 'HIGH';
   note: string;
-  riskType?: 'VOLATILITY' | 'MANIPULATION' | 'NORMAL'; // New logic
+  riskType?: 'VOLATILITY' | 'MANIPULATION' | 'NORMAL';
+}
+
+// --- ICHIMOKU INTERFACES (Moved from Strategy) ---
+export interface IchimokuCloud {
+  tenkan: number;      // Conversion Line (9)
+  kijun: number;       // Base Line (26)
+  senkouA: number;     // Leading Span A (Future)
+  senkouB: number;     // Leading Span B (Future)
+  chikou: number;      // Lagging Span (Past)
+  currentPrice: number;
+  // New fields for advanced validation
+  chikouSpanFree: boolean; // Is Chikou free of obstacles (price/cloud)?
+  chikouDirection: 'BULLISH' | 'BEARISH' | 'NEUTRAL'; // Direction relative to past price
+  futureCloud: 'BULLISH' | 'BEARISH'; // The cloud 26 periods ahead
+  cloudThickness: number; // Volatility/Strength of the cloud
+  priceVsKijun: number; // % Distance
+  tkSeparation: number; // % Distance between Tenkan and Kijun (for C-Clamp)
+}
+
+export interface IchimokuSignal {
+  score: number;
+  side: 'LONG' | 'SHORT' | 'NEUTRAL';
+  strength: 'STRONG' | 'NEUTRAL' | 'WEAK'; // Signal quality
+  reason: string;
+  trigger: string;
+  stopLoss: number; // Suggested Stop Loss
+  takeProfit?: number; // Suggested Take Profit
+  metrics: {
+    tkCross: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    cloudStatus: 'ABOVE' | 'BELOW' | 'INSIDE';
+    chikouStatus: 'VALID' | 'INVALID';
+    futureCloud: 'BULLISH' | 'BEARISH';
+    cloudThickness: string;
+  };
 }
 
 export interface TechnicalIndicators {
   symbol: string;
   price: number;
   rsi: number;
-  stochRsi: { // NEW: Faster momentum
+  stochRsi: {
     k: number;
     d: number;
   };
   adx: number;
   atr: number;
   rvol: number;
-  vwap: number; // NEW: Volume Weighted Average Price
+  vwap: number;
   ema20: number;
   ema50: number;
   ema100: number;
@@ -94,7 +127,7 @@ export interface TechnicalIndicators {
     r2: number;
     s2: number;
   };
-  fibonacci: { // NEW: Auto-Fibs
+  fibonacci: {
     level0: number;
     level0_236: number;
     level0_382: number;
@@ -104,6 +137,7 @@ export interface TechnicalIndicators {
     level1: number;
     trend: 'UP' | 'DOWN';
   };
+  ichimokuData?: IchimokuCloud; // NEW: Advanced Ichimoku Data
   trendStatus: {
     emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC';
     goldenCross: boolean;

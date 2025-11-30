@@ -1,6 +1,7 @@
 
 import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from "../types";
 import { MacroContext } from './macroService';
+import { analyzeIchimokuSignal } from './ichimokuStrategy'; // NEW: Expert Logic
 
 // --- MOTOR AUTÓNOMO (OFFLINE) ---
 // Este servicio reemplaza a la IA de Google.
@@ -316,7 +317,7 @@ const generateStrategicAdvice = (
     macroContext: MacroContext | null, // NEW: Macro context for validation
     highRisk: boolean
 ): string => {
-    const { price, atr, bollinger, rsi, stochRsi, vwap, ema50, ema200, fibonacci } = data;
+    const { price, atr, bollinger, rsi, stochRsi, vwap, ema50, ema200, fibonacci, ichimokuData } = data;
     const isBullish = sentiment.includes("ALCISTA");
 
     let advice = "";
@@ -352,8 +353,52 @@ const generateStrategicAdvice = (
         advice += `**Recomendación Educativa:** Los traders profesionales NO operan durante el caos. Espera a que el precio forme un rango estable (acumulación) antes de entrar.\n\n`;
     }
 
+    // --- ESTRATEGIA: ICHIMOKU CLOUD (REAL EXPERT MODE) ---
+    if (strategyId === 'ichimoku_dragon' && ichimokuData) {
+        const ichimokuSignal = analyzeIchimokuSignal(ichimokuData);
+        const { tenkan, kijun, senkouA, senkouB, chikou } = ichimokuData;
+        const cloudTop = Math.max(senkouA, senkouB);
+        const cloudBottom = Math.min(senkouA, senkouB);
+
+        advice += `**🐉 Estrategia Ichimoku Kinko Hyo (Equilibrio):**\n`;
+        advice += `El sistema Ichimoku busca ver el equilibrio del mercado "de un vistazo".\n\n`;
+
+        advice += `**📊 Estado de la Nube (Kumo):**\n`;
+        if (ichimokuSignal.metrics.cloudStatus === 'ABOVE') {
+            advice += `✅ **Tendencia Alcista Fuerte:** El precio está sobre la nube. La nube actúa como soporte dinámico en $${cloudTop.toFixed(4)}.\n`;
+        } else if (ichimokuSignal.metrics.cloudStatus === 'BELOW') {
+            advice += `🔻 **Tendencia Bajista Fuerte:** El precio está bajo la nube. La nube actúa como resistencia en $${cloudBottom.toFixed(4)}.\n`;
+        } else {
+            advice += `⚠️ **Zona de Turbulencia:** El precio está DENTRO de la nube. El mercado no tiene tendencia clara. **NO OPERAR TENDENCIA.**\n`;
+        }
+
+        advice += `\n**⚔️ Cruce Tenkan-Kijun (El Gatillo):**\n`;
+        if (ichimokuSignal.metrics.tkCross === 'BULLISH') {
+            advice += `🟢 **Cruce Dorado (TK Cross):** La línea rápida (Tenkan) cruzó arriba de la lenta (Kijun). Señal de compra.\n`;
+        } else if (ichimokuSignal.metrics.tkCross === 'BEARISH') {
+            advice += `🔴 **Cruce de la Muerte (TK Cross):** La línea rápida cruzó abajo. Señal de venta.\n`;
+        } else {
+            advice += `⚪ **Neutro:** Las líneas están paralelas sin cruce reciente.\n`;
+        }
+
+        advice += `\n**👻 Chikou Span (El Fantasma del Pasado):**\n`;
+        if (ichimokuSignal.metrics.chikouStatus === 'VALID') {
+            advice += `✅ **Confirmado:** El Chikou está libre de obstáculos. El camino está despejado.\n`;
+        } else {
+            advice += `❌ **Bloqueado:** El Chikou choca con el precio o la nube de hace 26 periodos. La tendencia no tiene fuerza real aún.\n`;
+        }
+
+        advice += `\n**📋 Veredicto Ichimoku:**\n`;
+        advice += `> **${ichimokuSignal.reason}**\n\n`;
+
+        if (ichimokuSignal.side !== 'NEUTRAL') {
+            advice += `**🛡️ Niveles Operativos:**\n`;
+            advice += `- **Stop Loss (Kijun):** $${kijun.toFixed(4)}\n`;
+            advice += `- **Soporte Nube:** $${cloudTop.toFixed(4)}\n`;
+        }
+    }
     // ESTRATEGIA: SMC LIQUIDITY
-    if (strategyId === 'smc_liquidity') {
+    else if (strategyId === 'smc_liquidity') {
         const goldenPocket = fibonacci.level0_618;
 
         advice += `**🧠 Lógica SMC (Smart Money Concepts):**\n`;

@@ -1,38 +1,4 @@
-import { MarketData } from '../types';
-
-// Interfaces for Ichimoku Components
-export interface IchimokuCloud {
-    tenkan: number;      // Conversion Line (9)
-    kijun: number;       // Base Line (26)
-    senkouA: number;     // Leading Span A (Future)
-    senkouB: number;     // Leading Span B (Future)
-    chikou: number;      // Lagging Span (Past)
-    currentPrice: number;
-    // New fields for advanced validation
-    chikouSpanFree: boolean; // Is Chikou free of obstacles (price/cloud)?
-    chikouDirection: 'BULLISH' | 'BEARISH' | 'NEUTRAL'; // Direction relative to past price
-    futureCloud: 'BULLISH' | 'BEARISH'; // The cloud 26 periods ahead
-    cloudThickness: number; // Volatility/Strength of the cloud
-    priceVsKijun: number; // % Distance
-    tkSeparation: number; // % Distance between Tenkan and Kijun (for C-Clamp)
-}
-
-export interface IchimokuSignal {
-    score: number;
-    side: 'LONG' | 'SHORT' | 'NEUTRAL';
-    strength: 'STRONG' | 'NEUTRAL' | 'WEAK'; // Signal quality
-    reason: string;
-    trigger: string;
-    stopLoss: number; // Suggested Stop Loss
-    takeProfit?: number; // Suggested Take Profit
-    metrics: {
-        tkCross: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-        cloudStatus: 'ABOVE' | 'BELOW' | 'INSIDE';
-        chikouStatus: 'VALID' | 'INVALID';
-        futureCloud: 'BULLISH' | 'BEARISH';
-        cloudThickness: string;
-    };
-}
+import { MarketData, IchimokuCloud, IchimokuSignal } from '../types';
 
 /**
  * Calculates full Ichimoku components with advanced historical context.
