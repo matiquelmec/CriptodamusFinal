@@ -180,58 +180,6 @@ export const streamMarketAnalysis = async function* (
         response += `#### 1. Estructura & Tendencia (El Contexto)\n`;
 
         // ADX Interpretation
-        let trendDesc = "Mercado Lateral (Rango)";
-        let trendEdu = "El precio no tiene dirección clara. Peligroso para estrategias de tendencia.";
-        if (adx > 20) { trendDesc = "Tendencia en Desarrollo"; trendEdu = "La tendencia empieza a ganar tracción."; }
-        if (adx > 30) { trendDesc = "Tendencia Fuerte"; trendEdu = "El movimiento es sólido y direccional."; }
-        if (adx > 50) { trendDesc = "Tendencia Extrema (Clímax)"; trendEdu = "Posible agotamiento por exceso de euforia/pánico."; }
-
-        response += `- **Tendencia Macro (EMA 200):** ${price > ema200 ? '✅ Alcista' : '🔻 Bajista'} ($${ema200.toFixed(2)})\n`;
-        response += `  > *Nota: Estar por encima de la EMA 200 indica que, a largo plazo, los compradores dominan.*\n`;
-
-        response += `- **VWAP (Institucional):** $${vwap.toFixed(4)} ${price > vwap ? '✅ Precio sobre valor justo' : '❌ Precio bajo descuento'}\n`;
-        response += `  > *Nota: Las instituciones suelen comprar cerca del VWAP. Estar lejos indica sobre-extensión.*\n`;
-
-        response += `- **Fuerza ADX (14):** ${adx.toFixed(1)} (${trendDesc})\n`;
-
-        if (trendStatus.goldenCross) response += `- **⚠️ Golden Cross Detectado:** La media rápida cruzó la lenta hacia arriba (Señal muy alcista).\n`;
-
-        response += `\n`;
-
-        // SECCIÓN 2: MOMENTO & VOLATILIDAD (El "Timing")
-        response += `#### 2. Momento & Volatilidad (El Gatillo)\n`;
-
-        // RSI Analysis with Context
-        let rsiText = "Neutral (50)";
-        let rsiEdu = "Equilibrio entre compradores y vendedores.";
-        if (rsi > 60 && rsi < 70) { rsiText = "Bullish Control"; rsiEdu = "Fuerza compradora saludable."; }
-        if (rsi > 70) { rsiText = "⚠️ Sobrecompra"; rsiEdu = "El precio ha subido muy rápido. Riesgo de corrección a corto plazo."; }
-        if (rsi < 30) { rsiText = "⚠️ Sobreventa"; rsiEdu = "El precio ha caído demasiado rápido. Posible rebote técnico."; }
-
-        // Bollinger Analysis
-        const bbWidth = bollinger.bandwidth.toFixed(2);
-        let volText = "Normal";
-        if (parseFloat(bbWidth) < 5) volText = "🔥 SQUEEZE (Compresión Extrema)";
-
-        response += `- **RSI (14):** ${rsi.toFixed(1)} - ${rsiText}\n`;
-        response += `- **StochRSI:** ${stochRsi.k.toFixed(0)}/100 ${stochRsi.k > 80 ? '(Techo)' : stochRsi.k < 20 ? '(Suelo)' : ''}\n`;
-        response += `  > *Tip: El StochRSI es más rápido que el RSI. Úsalo para afinar tu entrada exacta.*\n`;
-
-        response += `- **Bandas Bollinger:** ${volText} (Ancho: ${bbWidth}%)\n`;
-        if (parseFloat(bbWidth) < 5) {
-            response += `  > *Ojo: Una compresión (Squeeze) siempre precede a un movimiento explosivo. Prepara órdenes a ambos lados.*\n`;
-        }
-
-        response += `- **RVOL (Volumen):** ${rvol.toFixed(2)}x ${rvol > 1.5 ? '✅ Volumen Institucional' : '❌ Volumen Retail'}\n`;
-        response += `  > *Dato: Un RVOL de ${rvol.toFixed(2)}x significa que hay ${(rvol * 100 - 100).toFixed(0)}% más volumen de lo normal para esta hora.*\n\n`;
-
-        // SECCIÓN 3: NIVELES CLAVE (Table)
-        response += `#### 🎯 Niveles Clave (Mapa de Liquidez)\n`;
-        response += generateLevelsTable(price, pivots, ema200, fibonacci);
-        response += `\n> *Estrategia: Busca reacciones (rebotes o rechazos) en estos niveles exactos, no operes en medio de la nada.*\n\n`;
-
-        // SECCIÓN 4: RECOMENDACIÓN ESTRATÉGICA (El "Alpha")
-        response += `#### 🛡️ Plan de Trading Educativo\n`;
 
         // Generate strategy based on logic + selected strategy context + macro
         response += generateStrategicAdvice(techData, sentiment, strategyId, macroContext, isHighRisk);
