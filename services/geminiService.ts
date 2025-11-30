@@ -41,7 +41,7 @@ export const streamMarketAnalysis = async function* (
     }
 
     // 2. EXTRAER DATOS (YA NO SE PARSEA TEXTO, SE USAN OBJETOS)
-    const { price, rsi, stochRsi, vwap, adx, atr, rvol, ema20, ema50, ema100, ema200, macd, bollinger, pivots, fibonacci, trendStatus } = techData;
+    const { price, rsi, stochRsi, vwap, adx, atr, rvol, ema20, ema50, ema100, ema200, macd, bollinger, pivots, fibonacci, trendStatus, volumeProfile, orderBlocks, fairValueGaps, confluenceAnalysis } = techData;
 
     // --- LÓGICA DE COMANDO: DETECCIÓN AMPLIA ---
     const isAnalysisRequest =
@@ -182,32 +182,55 @@ export const streamMarketAnalysis = async function* (
         response += `- **Volatilidad:** Bandas Bollinger en **${squeezeStatus}**. Esta fase precede invariablemente a un movimiento violento.\n\n`;
 
         // SMC Logic Table
-        const goldenPocket = fibonacci.level0_618;
+        // SMC Logic Table
         response += `### 3.2. Lógica SMC: Confluencia del POI de Alta Probabilidad\n`;
         response += `La filosofía SMC dicta que la entrada óptima se encuentra en una zona de descuento profundo.\n\n`;
-        response += `| Nivel Clave (POI) | Precio Objetivo | Confluencia Institucional |\n`;
-        response += `|---|---|---|\n`;
-        response += `| **Golden Pocket (Fib 0.618)** | $${goldenPocket.toFixed(4)} | Zona de descuento ideal para la reentrada. |\n`;
-        response += `| **EMA 200 Local** | $${ema200.toFixed(4)} | Soporte dinámico clave que refuerza la rigidez del POI. |\n`;
-        response += `| **Point of Control (PoC)** | $\\approx$ $${pivots.p.toFixed(4)} | Nivel de equilibrio de volumen (Pivote Central). |\n\n`;
+
+        if (confluenceAnalysis && confluenceAnalysis.topSupports.length > 0) {
+            response += `| Nivel Clave (POI) | Precio Objetivo | Confluencia Institucional |\n`;
+            response += `|---|---|---|\n`;
+            confluenceAnalysis.topSupports.forEach(poi => {
+                response += `| **${poi.factors[0]}** | $${poi.price.toFixed(4)} | ${poi.factors.join(' + ')} |\n`;
+            });
+            response += `\n`;
+        } else {
+            const goldenPocket = fibonacci.level0_618;
+            response += `| Nivel Clave (POI) | Precio Objetivo | Confluencia Institucional |\n`;
+            response += `|---|---|---|\n`;
+            response += `| **Golden Pocket (Fib 0.618)** | $${goldenPocket.toFixed(4)} | Zona de descuento ideal para la reentrada. |\n`;
+            response += `| **EMA 200 Local** | $${ema200.toFixed(4)} | Soporte dinámico clave que refuerza la rigidez del POI. |\n`;
+            response += `| **Point of Control (PoC)** | $\\approx$ $${pivots.p.toFixed(4)} | Nivel de equilibrio de volumen (Pivote Central). |\n\n`;
+        }
 
         // IV. PLAN DE EJECUCIÓN
         response += `## IV. Plan de Ejecución de Clase Mundial: Protocolo de Riesgo Cero\n`;
         response += `La ejecución debe evolucionar de una simple orden límite a un **Protocolo de Confirmación Activa**.\n\n`;
 
-        const tp1 = price + (atr * 2);
-        const tp2 = price + (atr * 4);
-        const tp3 = price + (atr * 8);
-        const sl = goldenPocket - atr;
+        let entryPrice = fibonacci.level0_618;
+        let slPrice = fibonacci.level0_786;
+        let tp1Price = price + (atr * 2);
+        let tp2Price = price + (atr * 4);
+        let tp3Price = price + (atr * 8);
+
+        if (confluenceAnalysis && confluenceAnalysis.topSupports.length > 0) {
+            entryPrice = confluenceAnalysis.topSupports[0].price;
+            slPrice = entryPrice - (atr * 1.5); // Dynamic SL based on ATR below entry
+
+            if (confluenceAnalysis.topResistances.length > 0) {
+                tp1Price = confluenceAnalysis.topResistances[0].price;
+                if (confluenceAnalysis.topResistances.length > 1) tp2Price = confluenceAnalysis.topResistances[1].price;
+                if (confluenceAnalysis.topResistances.length > 2) tp3Price = confluenceAnalysis.topResistances[2].price;
+            }
+        }
 
         response += `| Componente | Valor Propuesto | Justificación Experta |\n`;
         response += `|---|---|---|\n`;
-        response += `| **1. Zona de Espera** | **$${goldenPocket.toFixed(4)}** | Máxima confluencia (0.618 Fib, EMA 200). |\n`;
+        response += `| **1. Zona de Espera** | **$${entryPrice.toFixed(4)}** | Máxima confluencia detectada por el motor SMC. |\n`;
         response += `| **2. El Gatillo (Entry)** | **CONDICIONAL (No Ciego)** | Esperar un **Bullish CHoCH** en 1m/3m. Confirma que la demanda institucional ha entrado. |\n`;
-        response += `| **3. Stop Loss (SL)** | **$${sl.toFixed(4)}** | Colocado debajo del nivel 0.786 Fib, protegiendo contra barridas. |\n`;
-        response += `| **4. TP1 (40%)** | **$${tp1.toFixed(4)}** | Asegurar ganancia (R:R 1.5) y **Mover SL a Breakeven**. Protocolo de Riesgo Cero. |\n`;
-        response += `| **5. TP2 (30%)** | **$${tp2.toFixed(4)}** | Objetivo de liquidez estructural (Máximos). |\n`;
-        response += `| **6. TP3 (30%)** | **$${tp3.toFixed(4)}** | Extensión para capturar el "Surge" máximo. |\n`;
+        response += `| **3. Stop Loss (SL)** | **$${slPrice.toFixed(4)}** | Colocado estratégicamente (1.5 ATR) debajo del POI. |\n`;
+        response += `| **4. TP1 (40%)** | **$${tp1Price.toFixed(4)}** | Asegurar ganancia en la primera resistencia mayor. |\n`;
+        response += `| **5. TP2 (30%)** | **$${tp2Price.toFixed(4)}** | Objetivo de liquidez estructural secundaria. |\n`;
+        response += `| **6. TP3 (30%)** | **$${tp3Price.toFixed(4)}** | Extensión para capturar el "Surge" máximo. |\n`;
 
         response += `\n> *Máxima Operativa: Respetar las señales que el mercado da, no las que se desean. Prioridad: Preservación de Capital.*`;
 

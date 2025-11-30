@@ -14,6 +14,11 @@ import {
     calculateRSIArray, calculateCumulativeVWAP, calculateAutoFibs,
     calculateATR, calculateADX, calculatePivotPoints, formatVolume
 } from './mathUtils';
+import { calculateVolumeProfile } from './volumeProfile';
+import { detectOrderBlocks } from './orderBlocks';
+import { detectFVG } from './fairValueGaps';
+import { calculatePOIs } from './confluenceEngine';
+
 
 // PRIMARY: Binance Vision (CORS friendly for public data)
 const BINANCE_API_BASE = 'https://data-api.binance.vision/api/v3';
@@ -264,7 +269,7 @@ export { getMacroContext }; // Re-export for AI Advisor structured access
 
 // --- TECHNICAL ANALYSIS ENGINE ---
 
-const fetchCandles = async (symbolId: string, interval: string): Promise<{ close: number, volume: number, high: number, low: number, open: number }[]> => {
+const fetchCandles = async (symbolId: string, interval: string): Promise<{ timestamp: number, close: number, volume: number, high: number, low: number, open: number }[]> => {
     const isBinance = symbolId === symbolId.toUpperCase() && symbolId.endsWith('USDT');
 
     try {
@@ -274,6 +279,7 @@ const fetchCandles = async (symbolId: string, interval: string): Promise<{ close
             if (!res.ok) throw new Error("Binance Candle Error");
             const data = await res.json();
             return data.map((d: any[]) => ({
+                timestamp: d[0],
                 open: parseFloat(d[1]),
                 high: parseFloat(d[2]),
                 low: parseFloat(d[3]),
@@ -286,6 +292,7 @@ const fetchCandles = async (symbolId: string, interval: string): Promise<{ close
             if (!res.ok) return [];
             const json = await res.json();
             return json.data.map((d: any) => ({
+                timestamp: d.period,
                 open: parseFloat(d.open),
                 high: parseFloat(d.high),
                 low: parseFloat(d.low),
@@ -304,6 +311,7 @@ const fetchCandles = async (symbolId: string, interval: string): Promise<{ close
                     if (!res.ok) return [];
                     const json = await res.json();
                     return json.data.map((d: any) => ({
+                        timestamp: d.period,
                         open: parseFloat(d.open),
                         high: parseFloat(d.high),
                         low: parseFloat(d.low),
@@ -362,6 +370,32 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         if (ema20 > ema50 && ema50 > ema100 && ema100 > ema200) emaAlignment = 'BULLISH';
         if (ema20 < ema50 && ema50 < ema100 && ema100 < ema200) emaAlignment = 'BEARISH';
 
+        // NEW: Advanced Market Structure Calculations (Máximo Potencial)
+        const volumeProfile = calculateVolumeProfile(candles, atr);
+        const { bullishOB, bearishOB } = detectOrderBlocks(candles, atr, currentPrice);
+        const { bullishFVG, bearishFVG } = detectFVG(candles, atr, currentPrice);
+
+        // Calculate Confluence Analysis
+        const confluenceAnalysis = calculatePOIs(
+            currentPrice,
+            fibs,
+            {
+                p: pivots.p,
+                r1: pivots.r1,
+                s1: pivots.s1,
+                r2: (pivots.p - pivots.s1) + pivots.r1,
+                s2: pivots.p - (pivots.r1 - pivots.s1)
+            },
+            ema200,
+            ema50,
+            atr,
+            volumeProfile,
+            bullishOB,
+            bearishOB,
+            bullishFVG,
+            bearishFVG
+        );
+
         return {
             symbol: symbolDisplay,
             price: currentPrice,
@@ -393,12 +427,64 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
                 r2: (pivots.p - pivots.s1) + pivots.r1, // Simple R2 approx
                 s2: pivots.p - (pivots.r1 - pivots.s1)  // Simple S2 approx
             },
-            fibonacci: fibs,
+            fibonacci: {
+                ...fibs,
+                timestamp: Date.now(),
+                strategy: 'Auto Fibs',
+                side: fibs.trend === 'UP' ? 'LONG' : 'SHORT',
+                confidenceScore: 50,
+                entryZone: {
+                    min: fibs.level0_618,
+                    max: fibs.level0_5
+                },
+                stopLoss: fibs.level0_786,
+                takeProfits: {
+                    tp1: fibs.level0_236,
+                    tp2: fibs.level0,
+                    tp3: fibs.level0 // Placeholder
+                },
+                technicalReasoning: "Auto-generated from swing points",
+                invalidated: false
+            },
             ichimokuData: ichimokuData || undefined, // NEW
             trendStatus: {
                 emaAlignment,
                 goldenCross: ema50 > ema200,
                 deathCross: ema50 < ema200
+            },
+            // NEW: Advanced Market Structure (Máximo Potencial)
+            volumeProfile: {
+                poc: volumeProfile.poc,
+                valueAreaHigh: volumeProfile.valueAreaHigh,
+                valueAreaLow: volumeProfile.valueAreaLow
+            },
+            orderBlocks: {
+                bullish: bullishOB.map(ob => ({
+                    price: ob.price,
+                    strength: ob.strength,
+                    mitigated: ob.mitigated
+                })),
+                bearish: bearishOB.map(ob => ({
+                    price: ob.price,
+                    strength: ob.strength,
+                    mitigated: ob.mitigated
+                }))
+            },
+            fairValueGaps: {
+                bullish: bullishFVG.map(fvg => ({
+                    midpoint: fvg.midpoint,
+                    size: fvg.size,
+                    filled: fvg.filled
+                })),
+                bearish: bearishFVG.map(fvg => ({
+                    midpoint: fvg.midpoint,
+                    size: fvg.size,
+                    filled: fvg.filled
+                }))
+            },
+            confluenceAnalysis: {
+                topSupports: confluenceAnalysis.topSupports,
+                topResistances: confluenceAnalysis.topResistances
             }
         };
 

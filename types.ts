@@ -132,54 +132,58 @@ export interface TechnicalIndicators {
     level0_236: number;
     level0_382: number;
     level0_5: number;
-    level0_618: number; // Golden Pocket
+    level0_618: number;
     level0_786: number;
-    level1: number;
-    trend: 'UP' | 'DOWN';
+    timestamp: number;
+    strategy: string; // "Scalp", "Swing", etc.
+    side: 'LONG' | 'SHORT';
+    confidenceScore: number; // 0-100
+
+    // Gestión de Entrada
+    entryZone: {
+      min: number;
+      max: number;
+    };
+    dcaLevel?: number; // Nivel sugerido para promediar (Entry 2)
+
+    // Gestión de Salida
+    stopLoss: number;
+    takeProfits: {
+      tp1: number;
+      tp2: number;
+      tp3: number; // Moonbag
+    };
+
+    technicalReasoning: string;
+    invalidated: boolean; // Si el precio ya tocó SL o TP
+
+    // NEW: Detailed metrics for educational modal
+    metrics?: {
+      rvol: number;
+      rsi: number;
+      vwapDist: number; // Distance to VWAP %
+      structure: string; // e.g. "Above EMA200"
+      specificTrigger: string; // e.g. "Bollinger Bandwidth < 3%"
+    };
   };
-  ichimokuData?: IchimokuCloud; // NEW: Advanced Ichimoku Data
   trendStatus: {
     emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC';
     goldenCross: boolean;
     deathCross: boolean;
   };
-}
+  ichimokuData?: IchimokuCloud;
 
-// Nueva interfaz robusta para señales de IA
-export interface AIOpportunity {
-  id: string;
-  symbol: string;
-  timestamp: number;
-  strategy: string; // "Scalp", "Swing", etc.
-  side: 'LONG' | 'SHORT';
-  confidenceScore: number; // 0-100
-
-  // Gestión de Entrada
-  entryZone: {
-    min: number;
-    max: number;
+  // Advanced Market Structure (Optional)
+  volumeProfile?: import('./types-advanced').VolumeProfileData;
+  orderBlocks?: {
+    bullish: import('./types-advanced').OrderBlockData[];
+    bearish: import('./types-advanced').OrderBlockData[];
   };
-  dcaLevel?: number; // Nivel sugerido para promediar (Entry 2)
-
-  // Gestión de Salida
-  stopLoss: number;
-  takeProfits: {
-    tp1: number;
-    tp2: number;
-    tp3: number; // Moonbag
+  fairValueGaps?: {
+    bullish: import('./types-advanced').FairValueGapData[];
+    bearish: import('./types-advanced').FairValueGapData[];
   };
-
-  technicalReasoning: string;
-  invalidated: boolean; // Si el precio ya tocó SL o TP
-
-  // NEW: Detailed metrics for educational modal
-  metrics?: {
-    rvol: number;
-    rsi: number;
-    vwapDist: number; // Distance to VWAP %
-    structure: string; // e.g. "Above EMA200"
-    specificTrigger: string; // e.g. "Bollinger Bandwidth < 3%"
-  };
+  confluenceAnalysis?: import('./types-advanced').ConfluenceData;
 }
 
 export enum TabView {
@@ -196,4 +200,33 @@ export interface AppNotification {
   type: 'success' | 'error' | 'warning' | 'info';
   title: string;
   message: string;
+}
+
+export interface AIOpportunity {
+  id: string;
+  symbol: string;
+  timestamp: number;
+  strategy: string;
+  side: 'LONG' | 'SHORT';
+  confidenceScore: number;
+  entryZone: {
+    min: number;
+    max: number;
+  };
+  dcaLevel?: number;
+  stopLoss: number;
+  takeProfits: {
+    tp1: number;
+    tp2: number;
+    tp3: number;
+  };
+  technicalReasoning: string;
+  invalidated: boolean;
+  metrics?: {
+    rvol: number;
+    rsi: number;
+    vwapDist: number;
+    structure: string;
+    specificTrigger: string;
+  };
 }
