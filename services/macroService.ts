@@ -296,6 +296,32 @@ export async function getMacroContext(): Promise<MacroContext> {
 }
 
 /**
+ * Formatea el contexto macro en string educativo para el AI Advisor
+ * @param macro - Contexto macro completo
+ * @returns String formateado con información educativa y análisis de condiciones especiales
+ */
+export function formatMacroForAI(macro: MacroContext): string {
+    const regimeInfo = `RÉGIMEN BTC (Diario): ${macro.btcRegime.regime} (${macro.btcRegime.strength}% Fuerza). ${macro.btcRegime.reasoning}`;
+
+    let volatilityNote = `VOLATILIDAD: ${macro.btcRegime.volatilityStatus} (ATR: ${macro.btcRegime.atr.toFixed(0)})`;
+    if (macro.btcRegime.volatilityStatus === 'HIGH' && macro.btcRegime.regime === 'RANGE') {
+        volatilityNote += " [⚠️ KILL SWITCH ACTIVO: Mercado en rango peligroso, no operar]";
+    }
+
+    const capitalFlow = `FLUJO DE CAPITAL: BTC.D ${macro.btcDominance.trend} (${macro.btcDominance.current.toFixed(1)}%) | USDT.D ${macro.usdtDominance.trend} (${macro.usdtDominance.current.toFixed(1)}%)`;
+
+    let specialConditions = "";
+    if (macro.btcRegime.regime === 'BEAR' && (macro.btcDominance.trend === 'RISING' || macro.usdtDominance.trend === 'RISING')) {
+        specialConditions = "\n🔥 CONDICIÓN SNIPER SHORT ACTIVA: Mercado bajista + Drenaje de liquidez. Los shorts en Altcoins tienen alta probabilidad.";
+    } else if (macro.btcRegime.regime === 'BULL' && macro.btcDominance.trend === 'FALLING') {
+        specialConditions = "\n🚀 ALT SEASON DETECTADA: Mercado alcista + BTC perdiendo dominancia. Buscar entradas agresivas en Alts.";
+    }
+
+    return `CONTEXTO MACROECONÓMICO INTEGRAL:\n${regimeInfo}\n${volatilityNote}\n${capitalFlow}${specialConditions}`;
+}
+
+
+/**
  * Función helper: Obtiene solo régimen de BTC (más ligero si solo necesitas esto)
  * @returns Análisis de régimen de BTC
  */

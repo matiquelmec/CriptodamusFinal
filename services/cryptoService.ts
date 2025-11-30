@@ -5,7 +5,7 @@ import { analyzeMemeSignal } from './strategies/MemeStrategy';
 import { analyzeSwingSignal } from './strategies/SwingStrategy';
 import { analyzeBreakoutSignal } from './strategies/BreakoutStrategy';
 import { analyzeScalpSignal } from './strategies/ScalpStrategy';
-import { getMacroContext, type MacroContext } from './macroService';
+import { getMacroContext, formatMacroForAI, type MacroContext } from './macroService';
 import {
     detectBullishDivergence, calculateIchimokuLines, calculateIchimokuCloud,
     calculateBollingerStats, calculateSMA, calculateEMA, calculateMACD,
@@ -247,15 +247,11 @@ export const getMarketRisk = async (): Promise<MarketRisk> => {
 
 export const getMacroData = async (): Promise<string> => {
     try {
-        const globalRes = await fetchWithTimeout('https://api.coincap.io/v2/global', {}, 3000);
-        let btcDominance = "Unknown";
-        if (globalRes.ok) {
-            const data = await globalRes.json();
-            btcDominance = parseFloat(data.data.bitcoinDominancePercentage).toFixed(2);
-        }
-        return `CONTEXTO MACROECONÓMICO: Dominancia Bitcoin: ${btcDominance}%`;
+        const macro = await getMacroContext();
+        return formatMacroForAI(macro);
     } catch (e) {
-        return "Macro Data Unavailable";
+        console.warn("Error fetching macro context for AI:", e);
+        return "Macro Data Unavailable (Using Technicals Only)";
     }
 };
 
