@@ -27,7 +27,7 @@ export interface DCAPlan {
  * Position Sizing: 40% / 30% / 30% (piramidal decreciente)
  */
 export function calculateDCAPlan(
-    currentPrice: number,
+    signalPrice: number, // Renamed for clarity (it's the reference price for entries)
     confluenceAnalysis: ConfluenceAnalysis,
     atr: number,
     side: 'LONG' | 'SHORT',
@@ -38,12 +38,26 @@ export function calculateDCAPlan(
     }
 ): DCAPlan {
     // 1. Seleccionar POIs según el lado del trade
-    const relevantPOIs = side === 'LONG'
+    let relevantPOIs = side === 'LONG'
         ? confluenceAnalysis.topSupports
         : confluenceAnalysis.topResistances;
 
+    // FILTER: Solo aceptar POIs que estén "a favor" del trade (o muy cerca)
+    // LONG: POI <= signalPrice (con 0.1% tolerancia)
+    // SHORT: POI >= signalPrice (con 0.1% tolerancia)
+    relevantPOIs = relevantPOIs.filter(poi => {
+        if (side === 'LONG') return poi.price <= signalPrice * 1.001;
+        return poi.price >= signalPrice * 0.999;
+    });
+
     // 2. Fallback a Fibonacci si no hay suficientes POIs
     let selectedPOIs: POI[] = [];
+
+    // Helper para validar niveles Fibonacci
+    const isValidLevel = (price: number) => {
+        if (side === 'LONG') return price <= signalPrice * 1.001;
+        return price >= signalPrice * 0.999;
+    };
 
     if (relevantPOIs.length >= 3) {
         selectedPOIs = relevantPOIs.slice(0, 3);
@@ -51,58 +65,66 @@ export function calculateDCAPlan(
         // Usar POIs disponibles + Fibonacci como backup
         selectedPOIs = [...relevantPOIs];
 
-        // Agregar niveles Fibonacci faltantes
-        if (selectedPOIs.length < 3 && side === 'LONG') {
-            if (selectedPOIs.length === 1) {
-                selectedPOIs.push({
-                    price: fibonacciLevels.level0_786,
-                    score: 3,
-                    factors: ['Fib 0.786'],
-                    type: 'SUPPORT'
-                });
-            }
-            if (selectedPOIs.length === 2) {
-                selectedPOIs.push({
-                    price: fibonacciLevels.level0_5,
-                    score: 2,
-                    factors: ['Fib 0.5'],
-                    type: 'SUPPORT'
-                });
+        // Agregar niveles Fibonacci faltantes (SOLO SI SON VÁLIDOS)
+        if (selectedPOIs.length < 3) {
+            const fibLevels = [
+                { p: fibonacciLevels.level0_618, label: 'Golden Pocket (0.618)', score: 5 },
+                { p: fibonacciLevels.level0_5, label: 'Fib 0.5', score: 2 },
+                { p: fibonacciLevels.level0_786, label: 'Fib 0.786', score: 3 }
+            ];
+
+            for (const fib of fibLevels) {
+                if (selectedPOIs.length >= 3) break;
+                // Evitar duplicados cercanos
+                const isDuplicate = selectedPOIs.some(p => Math.abs(p.price - fib.p) / fib.p < 0.005);
+
+                if (!isDuplicate && isValidLevel(fib.p)) {
+                    selectedPOIs.push({
+                        price: fib.p,
+                        score: fib.score,
+                        factors: [fib.label],
+                        type: side === 'LONG' ? 'SUPPORT' : 'RESISTANCE'
+                    });
+                }
             }
         }
     } else if (fibonacciLevels) {
-        // Fallback completo a Fibonacci
-        selectedPOIs = [
-            {
-                price: fibonacciLevels.level0_618,
-                score: 5,
-                factors: ['Golden Pocket (0.618)'],
-                type: side === 'LONG' ? 'SUPPORT' : 'RESISTANCE'
-            },
-            {
-                price: fibonacciLevels.level0_786,
-                score: 3,
-                factors: ['Fib 0.786'],
-                type: side === 'LONG' ? 'SUPPORT' : 'RESISTANCE'
-            },
-            {
-                price: fibonacciLevels.level0_5,
-                score: 2,
-                factors: ['Fib 0.5'],
-                type: side === 'LONG' ? 'SUPPORT' : 'RESISTANCE'
-            }
+        // Fallback completo a Fibonacci (Validado)
+        const potentialFibs = [
+            { p: fibonacciLevels.level0_618, label: 'Golden Pocket (0.618)', score: 5 },
+            { p: fibonacciLevels.level0_5, label: 'Fib 0.5', score: 2 },
+            { p: fibonacciLevels.level0_786, label: 'Fib 0.786', score: 3 }
         ];
-    } else {
-        // Último recurso: usar ATR para crear niveles
-        const atrMultipliers = [1.5, 2.5, 3.5];
-        selectedPOIs = atrMultipliers.map((mult, idx) => ({
-            price: side === 'LONG'
-                ? currentPrice - (atr * mult)
-                : currentPrice + (atr * mult),
-            score: 5 - idx,
-            factors: [`ATR ${mult}x`],
-            type: side === 'LONG' ? 'SUPPORT' : 'RESISTANCE'
-        }));
+
+        selectedPOIs = potentialFibs
+            .filter(f => isValidLevel(f.p))
+            .map(f => ({
+                price: f.p,
+                score: f.score,
+                factors: [f.label],
+                type: (side === 'LONG' ? 'SUPPORT' : 'RESISTANCE') as 'SUPPORT' | 'RESISTANCE'
+            }))
+            .slice(0, 3);
+    }
+
+    // Si aún faltan niveles (porque Fibs estaban mal), usar ATR
+    if (selectedPOIs.length < 3) {
+        const needed = 3 - selectedPOIs.length;
+        const atrMultipliers = [1.5, 2.5, 3.5]; // Default distances
+
+        for (let i = 0; i < needed; i++) {
+            const mult = atrMultipliers[i];
+            const price = side === 'LONG'
+                ? signalPrice - (atr * mult)
+                : signalPrice + (atr * mult);
+
+            selectedPOIs.push({
+                price: price,
+                score: 2,
+                factors: [`ATR ${mult}x (Fallback)`],
+                type: (side === 'LONG' ? 'SUPPORT' : 'RESISTANCE') as 'SUPPORT' | 'RESISTANCE'
+            });
+        }
     }
 
     // 3. Ordenar POIs (de menor a mayor para LONG, de mayor a menor para SHORT)
@@ -119,8 +141,8 @@ export function calculateDCAPlan(
         confluenceScore: poi.score,
         factors: poi.factors,
         distanceFromCurrent: side === 'LONG'
-            ? ((currentPrice - poi.price) / currentPrice) * 100
-            : ((poi.price - currentPrice) / currentPrice) * 100
+            ? ((signalPrice - poi.price) / signalPrice) * 100
+            : ((poi.price - signalPrice) / signalPrice) * 100
     }));
 
     // 6. Calcular precio promedio ponderado (WAP - Weighted Average Price)
