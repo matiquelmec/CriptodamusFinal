@@ -134,38 +134,23 @@ export interface TechnicalIndicators {
     level0_5: number;
     level0_618: number;
     level0_786: number;
-    timestamp: number;
-    strategy: string; // "Scalp", "Swing", etc.
-    side: 'LONG' | 'SHORT';
-    confidenceScore: number; // 0-100
-
-    // Gestión de Entrada
-    entryZone: {
-      min: number;
-      max: number;
-    };
-    dcaLevel?: number; // Nivel sugerido para promediar (Entry 2)
-
-    // Gestión de Salida
-    stopLoss: number;
-    takeProfits: {
-      tp1: number;
-      tp2: number;
-      tp3: number; // Moonbag
-    };
-
-    technicalReasoning: string;
-    invalidated: boolean; // Si el precio ya tocó SL o TP
-
-    // NEW: Detailed metrics for educational modal
-    metrics?: {
-      rvol: number;
-      rsi: number;
-      vwapDist: number; // Distance to VWAP %
-      structure: string; // e.g. "Above EMA200"
-      specificTrigger: string; // e.g. "Bollinger Bandwidth < 3%"
-    };
+    tp1: number;
+    tp2: number;
+    tp3: number; // Moonbag
   };
+
+  technicalReasoning: string;
+  invalidated: boolean; // Si el precio ya tocó SL o TP
+
+  // NEW: Detailed metrics for educational modal
+  metrics?: {
+    rvol: number;
+    rsi: number;
+    vwapDist: number; // Distance to VWAP %
+    structure: string; // e.g. "Above EMA200"
+    specificTrigger: string; // e.g. "Bollinger Bandwidth < 3%"
+  };
+
   trendStatus: {
     emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC';
     goldenCross: boolean;
@@ -228,12 +213,17 @@ export interface AIOpportunity {
   id: string;
   symbol: string;
   timestamp: number;
+  signalTimestamp?: number; // NEW: Timestamp de la vela de confirmación
   strategy: string;
   side: 'LONG' | 'SHORT';
   confidenceScore: number;
   entryZone: {
     min: number;
     max: number;
+    aggressive?: number; // NEW: Entrada agresiva (precio actual)
+    signalPrice?: number; // NEW: Precio de la señal (vela cerrada)
+    currentPrice?: number; // NEW: Precio actual (última vela)
+    priceMove?: number; // NEW: % de movimiento desde señal
   };
   dcaLevel?: number;
   stopLoss: number;

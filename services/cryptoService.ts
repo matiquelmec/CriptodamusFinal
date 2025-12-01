@@ -671,46 +671,71 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
             if (finalScore >= adjustedThreshold) {
-                const livePrice = prices[prices.length - 1]; // Use live price for entry
+                // NEW: Usar precio de confirmación de señal (vela cerrada)
+                const signalPrice = prices[checkIndex]; // Precio donde se confirmó la señal
+                const livePrice = prices[prices.length - 1]; // Precio actual (para referencia)
+
+                // NEW: Validar vigencia de la señal
+                const priceMove = ((livePrice - signalPrice) / signalPrice) * 100;
+                const maxPriceMove = 3.0; // 3% de tolerancia
+
+                // Si el precio se movió mucho, la señal está obsoleta
+                if (Math.abs(priceMove) > maxPriceMove) {
+                    console.log(`[Scanner] Señal obsoleta para ${coin.symbol}: Precio movió ${priceMove.toFixed(2)}%`);
+                    return; // Skip this opportunity
+                }
+
                 const atr = calculateATR(highs, lows, prices, 14);
 
-                // Algorithmic SL/TP Calculation (Exact Maths)
+                // Algorithmic SL/TP Calculation (Exact Maths) - Usando signalPrice
                 let sl = 0;
                 let tp1 = 0, tp2 = 0, tp3 = 0;
 
                 const slMult = style === 'MEME_SCALP' ? 2.5 : (interval === '15m' ? 1.5 : 2.0);
 
                 if (signalSide === 'LONG') {
-                    sl = livePrice - (atr * slMult);
-                    const risk = livePrice - sl;
-                    tp1 = livePrice + risk;
-                    tp2 = livePrice + (risk * 2);
-                    tp3 = livePrice + (risk * 3);
+                    sl = signalPrice - (atr * slMult);
+                    const risk = signalPrice - sl;
+                    tp1 = signalPrice + risk;
+                    tp2 = signalPrice + (risk * 2);
+                    tp3 = signalPrice + (risk * 3);
                 } else {
-                    sl = livePrice + (atr * slMult);
-                    const risk = sl - livePrice;
-                    tp1 = livePrice - risk;
-                    tp2 = livePrice - (risk * 2);
-                    tp3 = livePrice - (risk * 3);
+                    sl = signalPrice + (atr * slMult);
+                    const risk = sl - signalPrice;
+                    tp1 = signalPrice - risk;
+                    tp2 = signalPrice - (risk * 2);
+                    tp3 = signalPrice - (risk * 3);
                 }
 
-                const decimals = livePrice > 1000 ? 2 : livePrice > 1 ? 4 : 6;
+                const decimals = signalPrice > 1000 ? 2 : signalPrice > 1 ? 4 : 6;
                 const format = (n: number) => parseFloat(n.toFixed(decimals));
 
                 const finalNote = isHighRisk ? `[⚠️ RIESGO ALTO] ${detectionNote}` : detectionNote;
 
-                // VWAP Dist % calculation
-                const vwapDist = ((livePrice - vwap) / vwap) * 100;
+                // VWAP Dist % calculation (usando signalPrice)
+                const vwapDist = ((signalPrice - vwap) / vwap) * 100;
 
                 const mathOpp: AIOpportunity = {
                     id: Date.now().toString() + Math.random(),
                     symbol: coin.symbol,
                     timestamp: Date.now(),
+                    signalTimestamp: candles[checkIndex].timestamp, // NEW: Timestamp de la vela de confirmación
                     strategy: getStrategyId(style), // FIXED: Map to correct ID for UI
                     side: signalSide,
                     confidenceScore: Math.floor(finalScore),
-                    entryZone: { min: format(livePrice * 0.999), max: format(livePrice * 1.001) },
-                    dcaLevel: signalSide === 'LONG' ? format(livePrice - (atr * 0.5)) : format(livePrice + (atr * 0.5)),
+                    // NEW: Sistema dual de entradas
+                    entryZone: {
+                        // Entrada conservadora (limit order en precio de señal)
+                        min: format(signalPrice * 0.998),
+                        max: format(signalPrice * 1.002),
+                        // Entrada agresiva (market order en precio actual)
+                        aggressive: format(livePrice),
+                        // Metadata
+                        signalPrice: format(signalPrice),
+                        currentPrice: format(livePrice),
+                        priceMove: format(priceMove)
+                    },
+                    dcaLevel: signalSide === 'LONG' ? format(signalPrice - (atr * 0.5)) : format(signalPrice + (atr * 0.5)),
                     stopLoss: format(sl),
                     takeProfits: { tp1: format(tp1), tp2: format(tp2), tp3: format(tp3) },
                     technicalReasoning: finalNote,
