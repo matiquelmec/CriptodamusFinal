@@ -69,6 +69,10 @@ export const streamMarketAnalysis = async function* (
         let bullishScore = 0;
         let bearishScore = 0;
 
+        // CRITICAL: Detect Range Market (ADX < 25)
+        const isRangeMarket = adx < 25;
+        const isHighVolatilityRange = isRangeMarket && bollinger.bandwidth > 8;
+
         // Trend Alignment (Structure)
         if (price > ema200) bullishScore += 2; else bearishScore += 2;
         if (ema20 > ema50) bullishScore += 1; else bearishScore += 1;
@@ -88,8 +92,33 @@ export const streamMarketAnalysis = async function* (
         const inUpperZone = price > bollinger.middle;
         if (inUpperZone) bullishScore += 1; else bearishScore += 1;
 
+        // NEW: Detect Market Extremes
+        const isCapitulation = rsi < 20 && rvol > 2; // Panic selling
+        const isEuphoria = rsi > 80 && rvol > 2; // FOMO buying
+
+        if (isCapitulation) bullishScore += 3; // Contrarian signal
+        if (isEuphoria) bearishScore += 3; // Contrarian signal
+
         // --- PHASE 1.5: MACRO ADJUSTMENTS (NEW) ---
         // Aquí es donde el "Trader Experto" ajusta las probabilidades
+
+        // CRITICAL: Range Market Kill Switch
+        if (isHighVolatilityRange) {
+            // Mercado en rango con alta volatilidad = trampa mortal
+            bullishScore *= 0.1;
+            bearishScore *= 0.1;
+        } else if (isRangeMarket) {
+            // Mercado lateral normal = reducir confianza
+            bullishScore *= 0.5;
+            bearishScore *= 0.5;
+        }
+
+        // Enhanced Risk Profile Integration
+        if (riskProfile.level === 'HIGH') {
+            bullishScore *= 0.5; // Más agresivo que antes (era 0.7 implícito)
+            bearishScore *= 0.5;
+        }
+
         if (macroContext) {
             const { btcRegime, btcDominance, usdtDominance } = macroContext;
             const isAlt = !techData.symbol.includes('BTC');
@@ -138,7 +167,10 @@ export const streamMarketAnalysis = async function* (
         response += `## I. Diagnóstico Operacional: Conflicto Estructural (Macro vs. Micro)\n\n`;
         response += `| Métrica Clave | Lectura | Interpretación (Institutional Bias) |\n`;
         response += `|---|---|---|\n`;
-        response += `| **Diagnóstico Táctico (15m)** | ${mainIcon} ${sentiment} | Impulso local, ideal para la captura de un rally de alivio. |\n`;
+        const trendNote = isRangeMarket
+            ? "⚠️ Mercado en RANGO (ADX < 25). Evitar operar hasta breakout confirmado."
+            : "Impulso local, ideal para la captura de un rally de alivio.";
+        response += `| **Diagnóstico Táctico (15m)** | ${mainIcon} ${sentiment} | ${trendNote} |\n`;
         response += `| **Score de Fuerza** | Bulls ${bullishScore.toFixed(1)} vs Bears ${bearishScore.toFixed(1)} | Confirma el control momentáneo de la demanda. |\n`;
 
         if (macroContext) {
@@ -176,7 +208,16 @@ export const streamMarketAnalysis = async function* (
         response += `El análisis del marco temporal de 15 minutos revela: **${divergenceText}**.\n\n`;
 
         response += `### 3.1. Validación del Riesgo\n`;
+        response += `- **ADX (Fuerza de Tendencia):** ${adx.toFixed(1)} ${adx < 25 ? '(⚠️ RANGO - No operar)' : adx > 40 ? '(🔥 Tendencia Fuerte)' : '(✅ Tendencia Moderada)'}\n`;
         response += `- **Volumen Relativo (RVOL):** ${rvol.toFixed(2)}x ${rvol < 1 ? '(❌ Poco Interés)' : '(✅ Interés Real)'}. Un rally con bajo volumen es sospechoso.\n`;
+
+        // Market Extremes Warning
+        if (isCapitulation) {
+            response += `- **🚨 CAPITULACIÓN DETECTADA:** RSI < 20 + Volumen extremo. Posible rebote técnico inminente.\n`;
+        }
+        if (isEuphoria) {
+            response += `- **🚨 EUFORIA DETECTADA:** RSI > 80 + Volumen extremo. Alto riesgo de corrección.\n`;
+        }
 
         const bbWidth = bollinger.bandwidth.toFixed(2);
         const squeezeStatus = parseFloat(bbWidth) < 5 ? "🔥 SQUEEZE (Compresión)" : "⚡ Expansión";
