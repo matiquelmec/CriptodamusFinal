@@ -163,23 +163,30 @@ async function analyzeBTCRegime(): Promise<BTCRegimeAnalysis> {
 }
 
 /**
+ * Obtiene datos globales de CoinGecko (Dominancia BTC, USDT, etc.)
+ * Fuente más confiable que CoinCap
+ */
+async function fetchCoinGeckoGlobal(): Promise<any> {
+    const res = await fetchWithTimeout(
+        'https://api.coingecko.com/api/v3/global',
+        4000
+    );
+    if (!res.ok) throw new Error(`CoinGecko API returned ${res.status}`);
+    return res.json();
+}
+
+/**
  * Obtiene BTC Dominance y calcula tendencia
  * @returns Datos de dominancia con tendencia calculada
  */
 async function getBTCDominance(): Promise<BTCDominanceData> {
     try {
-        const res = await fetchWithTimeout(
-            'https://api.coincap.io/v2/global',
-            3000
-        );
+        // INTENTO 1: CoinGecko (Más robusto)
+        const json = await fetchCoinGeckoGlobal();
+        const current = json.data.market_cap_percentage.btc;
 
-        if (!res.ok) throw new Error(`CoinCap API returned ${res.status}`);
-
-        const json = await res.json();
-        const current = parseFloat(json.data.bitcoinDominancePercentage);
-
-        // Validar rango (debe estar entre 0-100)
-        if (isNaN(current) || current < 0 || current > 100) {
+        // Validar rango
+        if (!current || current < 0 || current > 100) {
             throw new Error(`Invalid BTC dominance value: ${current}`);
         }
 
@@ -195,14 +202,15 @@ async function getBTCDominance(): Promise<BTCDominanceData> {
         return {
             current,
             trend,
-            changePercent: 0 // TODO: Calcular con histórico si es necesario
+            changePercent: 0
         };
 
     } catch (error) {
-        console.warn('[MacroService] BTC Dominance fetch failed:', error);
-        // Fallback: Dominancia neutral
+        console.warn('[MacroService] BTC Dominance fetch failed (CoinGecko):', error);
+
+        // Fallback explícito para no engañar al usuario
         return {
-            current: 50,
+            current: 50.0,
             trend: 'STABLE',
             changePercent: 0
         };
@@ -215,32 +223,15 @@ async function getBTCDominance(): Promise<BTCDominanceData> {
  */
 async function getUSDTDominance(): Promise<USDTDominanceData> {
     try {
-        // Necesitamos Market Cap Global y Market Cap de USDT
-        const [globalRes, usdtRes] = await Promise.all([
-            fetchWithTimeout('https://api.coincap.io/v2/global', 3000),
-            fetchWithTimeout('https://api.coincap.io/v2/assets/tether', 3000)
-        ]);
+        // INTENTO 1: CoinGecko (Ya tiene este dato calculado)
+        const json = await fetchCoinGeckoGlobal();
+        const current = json.data.market_cap_percentage.usdt;
 
-        if (!globalRes.ok || !usdtRes.ok) throw new Error('API Error fetching USDT data');
-
-        const globalJson = await globalRes.json();
-        const usdtJson = await usdtRes.json();
-
-        // CoinCap devuelve market caps en USD (pero a veces como string grande)
-        // globalJson.data.totalMarketCapUsd es un número grande
-        const totalMarketCap = parseFloat(globalJson.data.totalMarketCapUsd);
-        const usdtMarketCap = parseFloat(usdtJson.data.marketCapUsd);
-
-        if (!totalMarketCap || !usdtMarketCap) throw new Error('Invalid market cap data');
-
-        const current = (usdtMarketCap / totalMarketCap) * 100;
+        if (!current) throw new Error('USDT dominance not found in CoinGecko response');
 
         // Tendencia simple: > 5% es alto (miedo), < 3% es bajo (codicia)
-        // Para tendencia real necesitaríamos histórico, por ahora usamos umbrales
-        // USDT.D suele estar entre 3% (Bull run) y 8% (Bear market profundo)
         let trend: 'RISING' | 'FALLING' | 'STABLE' = 'STABLE';
 
-        // Simplificación: Si es alto, asumimos presión alcista (miedo)
         if (current > 6.5) trend = 'RISING';
         else if (current < 4.0) trend = 'FALLING';
 
@@ -248,7 +239,7 @@ async function getUSDTDominance(): Promise<USDTDominanceData> {
 
     } catch (error) {
         console.warn('[MacroService] USDT Dominance fetch failed:', error);
-        return { current: 5.0, trend: 'STABLE' }; // Valor medio seguro
+        return { current: 5.0, trend: 'STABLE' };
     }
 }
 
