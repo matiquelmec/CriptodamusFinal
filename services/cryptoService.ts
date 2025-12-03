@@ -689,7 +689,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             // --- FILTERING BY RISK ---
             // If Risk is High (News OR Manipulation), we only accept VERY high scores
-            const threshold = isHighRisk ? 85 : 70;
+            const threshold = isHighRisk ? 75 : 60; // ADJUSTED: More realistic for real markets
 
             // --- APPLY MACRO FILTERS (NEW) ---
             let finalScore = score;
@@ -698,7 +698,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             }
 
             // Re-check threshold after macro adjustment
-            const adjustedThreshold = isHighRisk ? 85 : 70;
+            const adjustedThreshold = isHighRisk ? 75 : 60; // ADJUSTED: More realistic for real markets
 
             // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
             if (finalScore >= adjustedThreshold) {
@@ -895,7 +895,7 @@ function getStrategyId(style: TradingStyle): string {
 
             // --- FILTERING BY RISK ---
             // If Risk is High (News OR Manipulation), we only accept VERY high scores
-            const threshold = isHighRisk ? 85 : 70;
+            const threshold = isHighRisk ? 75 : 60; // ADJUSTED: More realistic for real markets
 
             // --- APPLY MACRO FILTERS (NEW) ---
             let finalScore = score;
@@ -904,7 +904,7 @@ function getStrategyId(style: TradingStyle): string {
             }
 
             // Re-check threshold after macro adjustment
-            const adjustedThreshold = isHighRisk ? 85 : 70;
+            const adjustedThreshold = isHighRisk ? 75 : 60; // ADJUSTED: More realistic for real markets
 
             // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
             if (finalScore >= adjustedThreshold) {
