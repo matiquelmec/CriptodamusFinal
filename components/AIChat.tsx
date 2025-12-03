@@ -1,21 +1,18 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, Loader2, BookOpen, ChevronDown, Check, RefreshCw } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Loader2, RefreshCw, Shield } from 'lucide-react';
 import { streamMarketAnalysis } from '../services/geminiService';
-import { ChatMessage, Strategy } from '../types';
+import { ChatMessage } from '../types';
 import { getMarketContextForAI, getRawTechnicalIndicators, getFearAndGreedIndex, getMarketRisk, getMacroContext } from '../services/cryptoService';
-import { STRATEGIES } from '../services/strategyContext';
 
 interface AIChatProps {
   selectedSymbol: string;
 }
 
 const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
-  const [currentStrategy, setCurrentStrategy] = useState<Strategy>(STRATEGIES[0]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showStrategySelector, setShowStrategySelector] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -29,25 +26,19 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
 
   // PREPARE INPUT ON SYMBOL CHANGE (NO AUTO-FIRE)
   useEffect(() => {
-    // 1. Reset Chat with a System Ready Message containing INSTRUCTIONS
+    // Reset Chat with Autonomous System Message
     setMessages([{
       id: Date.now().toString(),
       role: 'model',
-      content: `### 🔮 Panel de Control Autónomo\n\nSigue estos pasos para generar una señal válida:\n\n1. **Activo:** Estás analizando **${selectedSymbol}**.\n2. **Estrategia:** El sistema usará la lógica **"${currentStrategy.name}"**.\n   *(Si deseas otra lógica como Scalp o Swing, cámbiala en el menú superior ↗)*\n3. **Ejecutar:** Haz clic en **Enviar** para procesar el análisis matemático.`,
+      content: `### 🤖 Asesor Autónomo Institucional\n\n**Activo Seleccionado:** ${selectedSymbol}\n\nAnalizo el mercado con estrategia **SMC (Smart Money Concepts)** - enfoque institucional que detecta barridos de liquidez, Order Blocks y Fair Value Gaps.\n\nEl sistema detecta automáticamente el régimen de mercado (TRENDING, RANGING, VOLATILE, EXTREME) y ajusta el análisis según las condiciones macro.\n\n**Para comenzar:** Haz clic en **Enviar** para generar un análisis integral con plan DCA institucional.`,
       timestamp: Date.now(),
       isThinking: false
     }]);
 
-    // 2. Pre-fill the input so the user just has to hit Enter
+    // Pre-fill the input
     setInput("Generar Análisis Integral");
 
-  }, [selectedSymbol, currentStrategy]);
-
-  const handleStrategyChange = (strategy: Strategy) => {
-    if (strategy.id === currentStrategy.id) return;
-    setCurrentStrategy(strategy);
-    setShowStrategySelector(false);
-  };
+  }, [selectedSymbol]);
 
   const handleReset = () => {
     setIsLoading(false);
@@ -98,13 +89,13 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
       const sentimentString = sentimentData ? `Fear & Greed: ${sentimentData.value}` : "Sentiment N/A";
       const combinedContextString = `${marketContext}\n${sentimentString}`;
 
-      // Pass structured data + Strategy ID to the improved engine
+      // Pass structured data + SMC Strategy ID (fixed)
       const stream = streamMarketAnalysis(
         userMsg.content,
         combinedContextString,
         macroContext, // NEW: Structured macro data
         techData, // Passing the object directly
-        currentStrategy.id,
+        'smc_liquidity', // FIXED: Always use SMC Institutional
         riskProfile || { level: 'LOW', note: '' }
       );
 
@@ -129,7 +120,7 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
 
   return (
     <div className="h-full flex flex-col bg-surface border border-border rounded-xl shadow-sm overflow-hidden relative">
-      {/* Header with Strategy Selector & Status */}
+      {/* Header - Simplified */}
       <div className="p-3 border-b border-border bg-background/50 backdrop-blur-sm z-20 flex justify-between items-center">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
@@ -144,16 +135,11 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
               <span className="text-[9px] font-mono text-success font-bold uppercase">Ready</span>
             </div>
           </div>
-          <button
-            onClick={() => setShowStrategySelector(!showStrategySelector)}
-            className="flex items-center gap-1.5 px-2 py-0.5 bg-surface border border-border rounded hover:bg-white/5 transition-colors w-fit relative"
-          >
-            <BookOpen size={10} className="text-secondary" />
-            <span className="text-[10px] font-mono font-medium truncate max-w-[100px] md:max-w-none">{currentStrategy.name}</span>
-            <ChevronDown size={10} className={`text-secondary transition-transform ${showStrategySelector ? 'rotate-180' : ''}`} />
-            {/* Visual Hint for Strategy Selection */}
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-accent rounded-full animate-pulse opacity-50"></span>
-          </button>
+          {/* Fixed Strategy Display */}
+          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded w-fit">
+            <Shield size={10} className="text-blue-400" />
+            <span className="text-[10px] font-mono font-medium text-blue-400">SMC Institucional</span>
+          </div>
         </div>
 
         <button
@@ -163,35 +149,6 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
         >
           <RefreshCw size={14} />
         </button>
-
-        {/* Dropdown for Strategy Selection */}
-        {showStrategySelector && (
-          <div className="absolute top-14 left-2 right-2 p-3 bg-surface border border-border rounded-lg shadow-xl z-30 animate-in fade-in slide-in-from-top-2">
-            <h3 className="text-xs font-mono font-bold text-secondary mb-3 uppercase">Seleccionar Estrategia</h3>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
-              {STRATEGIES.map(strategy => (
-                <div
-                  key={strategy.id}
-                  onClick={() => handleStrategyChange(strategy)}
-                  className={`p-3 rounded border cursor-pointer transition-all ${currentStrategy.id === strategy.id
-                    ? 'bg-accent/10 border-accent'
-                    : 'bg-background border-border hover:border-secondary'
-                    }`}
-                >
-                  <div className="flex justify-between items-start mb-1">
-                    <span className={`text-xs font-bold font-mono ${currentStrategy.id === strategy.id ? 'text-accent' : 'text-primary'}`}>
-                      {strategy.name}
-                    </span>
-                    {currentStrategy.id === strategy.id && <Check size={12} className="text-accent" />}
-                  </div>
-                  <p className="text-[10px] text-secondary mb-2 leading-relaxed">
-                    {strategy.description}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Chat Area */}
@@ -213,7 +170,7 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
               {msg.isThinking ? (
                 <div className="flex items-center gap-2 text-secondary py-1">
                   <Loader2 size={12} className="animate-spin" />
-                  <span className="font-mono text-[10px]">Computando EMAs, RSI, MACD y Estructura...</span>
+                  <span className="font-mono text-[10px]">Detectando régimen de mercado y analizando confluencias...</span>
                 </div>
               ) : (
                 <div className="markdown-body font-mono whitespace-pre-wrap">
@@ -232,7 +189,7 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={`Analizar ${selectedSymbol} con sistema autónomo...`}
+            placeholder={`Analizar ${selectedSymbol} con SMC institucional...`}
             className="flex-1 bg-surface border border-border rounded pl-3 pr-2 py-2 text-xs text-primary placeholder-secondary/50 focus:border-accent focus:outline-none font-mono transition-all disabled:opacity-50"
             disabled={isLoading}
           />
