@@ -174,8 +174,8 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
                   key={strategy.id}
                   onClick={() => handleStrategyChange(strategy)}
                   className={`p-3 rounded border cursor-pointer transition-all ${currentStrategy.id === strategy.id
-                      ? 'bg-accent/10 border-accent'
-                      : 'bg-background border-border hover:border-secondary'
+                    ? 'bg-accent/10 border-accent'
+                    : 'bg-background border-border hover:border-secondary'
                     }`}
                 >
                   <div className="flex justify-between items-start mb-1">
@@ -207,8 +207,8 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
             </div>
 
             <div className={`max-w-[95%] rounded p-3 text-xs leading-relaxed shadow-sm ${msg.role === 'user'
-                ? 'bg-primary text-background'
-                : 'bg-surface border border-border text-primary'
+              ? 'bg-primary text-background'
+              : 'bg-surface border border-border text-primary'
               }`}>
               {msg.isThinking ? (
                 <div className="flex items-center gap-2 text-secondary py-1">
@@ -232,7 +232,7 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={`Ejecutar ${currentStrategy.name} en ${selectedSymbol}...`}
+            placeholder={`Analizar ${selectedSymbol} con sistema autónomo...`}
             className="flex-1 bg-surface border border-border rounded pl-3 pr-2 py-2 text-xs text-primary placeholder-secondary/50 focus:border-accent focus:outline-none font-mono transition-all disabled:opacity-50"
             disabled={isLoading}
           />

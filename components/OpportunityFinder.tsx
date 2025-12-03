@@ -14,7 +14,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     const [opportunities, setOpportunities] = useState<AIOpportunity[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [style, setStyle] = useState<TradingStyle>('SCALP_AGRESSIVE');
+    const [detectedRegime, setDetectedRegime] = useState<string | null>(null);
     const [cooldown, setCooldown] = useState(0);
     const [currentRisk, setCurrentRisk] = useState<MarketRisk | null>(null);
     const [selectedSignal, setSelectedSignal] = useState<AIOpportunity | null>(null);
@@ -25,15 +25,20 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
         setLoading(true);
         setError(null);
         setOpportunities([]); // Clear previous
-        
+
         try {
-            // Parallel fetch for speed
+            // Parallel fetch for speed - Backend now uses autonomous regime detection
             const [opps, riskData] = await Promise.all([
-                scanMarketOpportunities(style),
+                scanMarketOpportunities('SCALP_AGRESSIVE'), // Placeholder - backend ignores this
                 getMarketRisk()
             ]);
             setOpportunities(opps);
             setCurrentRisk(riskData);
+
+            // Extract detected regime from first opportunity
+            if (opps.length > 0 && opps[0].strategy) {
+                setDetectedRegime(opps[0].strategy);
+            }
         } catch (e: any) {
             console.error(e);
             setError("Error de conexión al obtener datos de mercado.");
@@ -42,10 +47,10 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
         }
     };
 
-    // Auto-scan on style change
+    // Auto-scan on mount
     useEffect(() => {
         scan();
-    }, [style]);
+    }, []);
 
     return (
         <div className="h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col overflow-hidden relative">
@@ -62,8 +67,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         </div>
                     </div>
 
-                    <button 
-                        onClick={scan} 
+                    <button
+                        onClick={scan}
                         disabled={loading}
                         className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-white text-background rounded font-mono text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md min-w-[120px] justify-center ml-auto md:ml-0"
                     >
@@ -71,20 +76,19 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         {loading ? 'Calculando...' : 'Escanear'}
                     </button>
                 </div>
-                
+
                 {/* Risk Shield Banner */}
                 {currentRisk && (
-                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
-                        currentRisk.level === 'HIGH' ? 'bg-danger/10 border-danger/20 text-danger' :
-                        currentRisk.level === 'MEDIUM' ? 'bg-warning/10 border-warning/20 text-warning' :
-                        'bg-success/5 border-success/10 text-success'
-                    }`}>
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${currentRisk.level === 'HIGH' ? 'bg-danger/10 border-danger/20 text-danger' :
+                            currentRisk.level === 'MEDIUM' ? 'bg-warning/10 border-warning/20 text-warning' :
+                                'bg-success/5 border-success/10 text-success'
+                        }`}>
                         {currentRisk.riskType === 'MANIPULATION' ? (
                             <Eye size={14} className={currentRisk.level === 'HIGH' ? 'animate-pulse' : ''} />
                         ) : (
                             <Shield size={14} className={currentRisk.level === 'HIGH' ? 'animate-pulse' : ''} />
                         )}
-                        
+
                         <span className="text-[10px] font-mono font-bold uppercase">
                             {currentRisk.riskType === 'MANIPULATION' ? 'Whale Alert' : `Escudo Macro: ${currentRisk.level}`}
                         </span>
@@ -94,37 +98,27 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                     </div>
                 )}
 
-                <div className="flex flex-wrap items-center gap-2 bg-background p-1 rounded-lg border border-border">
-                    <button 
-                        onClick={() => setStyle('SCALP_AGRESSIVE')}
-                        className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold transition-all uppercase flex items-center gap-2 ${style === 'SCALP_AGRESSIVE' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'text-secondary hover:text-primary'}`}
-                    >
-                        <Zap size={12} /> Scalp
-                    </button>
-                    <button 
-                        onClick={() => setStyle('SWING_INSTITUTIONAL')}
-                        className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold transition-all uppercase flex items-center gap-2 ${style === 'SWING_INSTITUTIONAL' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-secondary hover:text-primary'}`}
-                    >
-                        <Layers size={12} /> Swing
-                    </button>
-                    <button 
-                        onClick={() => setStyle('BREAKOUT_MOMENTUM')}
-                        className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold transition-all uppercase flex items-center gap-2 ${style === 'BREAKOUT_MOMENTUM' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'text-secondary hover:text-primary'}`}
-                    >
-                        <TrendingUp size={12} /> Breakout
-                    </button>
-                     <button 
-                        onClick={() => setStyle('ICHIMOKU_CLOUD')}
-                        className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold transition-all uppercase flex items-center gap-2 ${style === 'ICHIMOKU_CLOUD' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-secondary hover:text-primary'}`}
-                    >
-                        <Cloud size={12} /> Ichimoku
-                    </button>
-                    <button 
-                        onClick={() => setStyle('MEME_SCALP')}
-                        className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold transition-all uppercase flex items-center gap-2 ${style === 'MEME_SCALP' ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30' : 'text-secondary hover:text-primary'}`}
-                    >
-                        <Rocket size={12} /> Meme Hunter
-                    </button>
+                {/* Autonomous Mode Indicator */}
+                <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Cpu className="text-blue-400 animate-pulse" size={16} />
+                            <span className="text-xs font-mono font-bold text-blue-400 uppercase tracking-wider">
+                                Modo Autónomo Activo
+                            </span>
+                        </div>
+                        {detectedRegime && (
+                            <div className="flex items-center gap-2 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20">
+                                <Activity size={12} className="text-cyan-400" />
+                                <span className="text-[10px] font-mono text-cyan-400">
+                                    {detectedRegime}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                    <p className="text-[10px] text-secondary mt-2 leading-relaxed">
+                        El sistema detecta automáticamente el régimen de mercado y selecciona las estrategias óptimas con ponderación inteligente.
+                    </p>
                 </div>
             </div>
 
@@ -141,19 +135,15 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         <div className="text-center">
                             <h3 className="text-sm font-mono font-bold text-primary mb-1">Ejecutando Algoritmos...</h3>
                             <p className="text-xs font-mono opacity-70">
-                                {style === 'SCALP_AGRESSIVE' && "Calculando RSI Vectorial y Bandas de Bollinger..."}
-                                {style === 'SWING_INSTITUTIONAL' && "Detectando Barridos de Liquidez y Estructura..."}
-                                {style === 'BREAKOUT_MOMENTUM' && "Analizando Volumetría y Flujo de Órdenes..."}
-                                {style === 'ICHIMOKU_CLOUD' && "Proyectando Nube Kumo y Equilibrios TK..."}
-                                {style === 'MEME_SCALP' && "Rastreando Pumps y Rebotes en Memecoins..."}
+                                Detectando régimen de mercado y seleccionando estrategias óptimas...
                             </p>
                         </div>
                     </div>
                 ) : error ? (
                     <div className="h-full flex flex-col items-center justify-center text-secondary gap-3 opacity-80">
-                         <div className="p-3 bg-danger/10 rounded-full text-danger mb-2">
-                             <AlertTriangle size={32} />
-                         </div>
+                        <div className="p-3 bg-danger/10 rounded-full text-danger mb-2">
+                            <AlertTriangle size={32} />
+                        </div>
                         <span className="font-mono text-sm text-danger font-bold">Error de Datos</span>
                         <span className="text-xs max-w-xs text-center">{error}</span>
                         <button onClick={scan} className="mt-2 px-4 py-2 bg-surface border border-border hover:bg-background rounded text-xs">
@@ -165,10 +155,10 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         <BarChart2 size={48} strokeWidth={1} />
                         <h3 className="font-mono text-sm font-bold">Sin Señales Claras</h3>
                         <p className="text-xs text-center max-w-sm">
-                            El algoritmo matemático ha filtrado las {style === 'MEME_SCALP' ? 'Memecoins' : 'criptomonedas'} principales y ninguna cumple los criterios estrictos de la estrategia <span className="text-primary font-bold">{style.split('_')[0]}</span>.
+                            El algoritmo autónomo ha analizado las criptomonedas principales y ninguna cumple los criterios estrictos del sistema en este momento.
                         </p>
                         {currentRisk && currentRisk.level === 'HIGH' && (
-                             <p className="text-[10px] mt-2 bg-danger/10 p-2 rounded border border-danger/20 font-mono text-danger">
+                            <p className="text-[10px] mt-2 bg-danger/10 p-2 rounded border border-danger/20 font-mono text-danger">
                                 ⚠️ Filtro Activado: Señales débiles descartadas por {currentRisk.riskType === 'MANIPULATION' ? 'Manipulación' : 'Riesgo Macro'}.
                             </p>
                         )}
@@ -179,9 +169,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                         {opportunities.map((opp) => (
-                            <SignalCard 
-                                key={opp.id} 
-                                data={opp} 
+                            <SignalCard
+                                key={opp.id}
+                                data={opp}
                                 onSelect={() => onSelectOpportunity(opp.symbol.split('/')[0])}
                                 onShowDetails={() => setSelectedSignal(opp)}
                             />
@@ -201,7 +191,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                             </div>
                             <p className="text-xs text-secondary">Desglose educativo de la señal detectada</p>
                         </div>
-                        <button 
+                        <button
                             onClick={() => setSelectedSignal(null)}
                             className="p-2 bg-surface hover:bg-white/10 rounded-full transition-colors"
                         >
@@ -225,7 +215,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                             </div>
                         </div>
 
-                         {/* 2. THE TRIGGER (WHY?) */}
+                        {/* 2. THE TRIGGER (WHY?) */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-surface rounded-xl p-5 border border-border col-span-2 md:col-span-1">
                                 <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
@@ -249,7 +239,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                                 {selectedSignal.metrics.rvol}x
                                             </span>
                                         </div>
-                                         <div className="flex justify-between border-b border-border/50 pb-1">
+                                        <div className="flex justify-between border-b border-border/50 pb-1">
                                             <span className="text-secondary">Estructura:</span>
                                             <span className="text-primary">{selectedSignal.metrics.structure}</span>
                                         </div>
@@ -260,7 +250,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                             </div>
 
                             {/* 3. INTERPRETATION */}
-                             <div className="bg-blue-500/5 rounded-xl p-5 border border-blue-500/20 col-span-2 md:col-span-1 flex flex-col justify-center">
+                            <div className="bg-blue-500/5 rounded-xl p-5 border border-blue-500/20 col-span-2 md:col-span-1 flex flex-col justify-center">
                                 <h4 className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center gap-2">
                                     <Cpu size={14} /> Interpretación Institucional
                                 </h4>
@@ -273,8 +263,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                             </div>
                         </div>
 
-                         {/* 4. RISK MANAGEMENT */}
-                         <div className="bg-surface rounded-xl p-5 border border-border">
+                        {/* 4. RISK MANAGEMENT */}
+                        <div className="bg-surface rounded-xl p-5 border border-border">
                             <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
                                 <Shield size={14} /> Gestión de Riesgo Sugerida
                             </h4>
@@ -289,11 +279,11 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                     <span className="font-mono font-bold text-danger">${selectedSignal.stopLoss}</span>
                                 </div>
                             </div>
-                         </div>
+                        </div>
                     </div>
 
                     <div className="mt-6 pt-4 border-t border-border flex justify-end">
-                        <button 
+                        <button
                             onClick={() => {
                                 onSelectOpportunity(selectedSignal.symbol.split('/')[0]);
                                 setSelectedSignal(null);
@@ -344,7 +334,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                         </span>
                     </div>
                     {/* INFO BUTTON */}
-                    <button 
+                    <button
                         onClick={(e) => { e.stopPropagation(); onShowDetails(); }}
                         className="mt-1 p-1 text-secondary hover:text-accent transition-colors"
                         title="Ver Explicación Educativa"
@@ -356,7 +346,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
 
             {/* Signal Body */}
             <div className="p-5 flex-1 space-y-5">
-                
+
                 {/* Entry & DCA */}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
@@ -379,8 +369,8 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
 
                 {/* TP Stack */}
                 <div className="space-y-2">
-                     <label className="text-[10px] text-secondary uppercase font-bold">Objetivos (Take Profit)</label>
-                     <div className="grid grid-cols-3 gap-2">
+                    <label className="text-[10px] text-secondary uppercase font-bold">Objetivos (Take Profit)</label>
+                    <div className="grid grid-cols-3 gap-2">
                         <div className="text-center p-2 rounded bg-success/5 border border-success/10">
                             <span className="block text-[9px] text-success/70 font-bold">TP 1</span>
                             <span className="block text-xs font-mono text-success font-bold">${data.takeProfits.tp1}</span>
@@ -393,24 +383,24 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                             <span className="block text-[9px] text-success/70 font-bold">TP 3</span>
                             <span className="block text-xs font-mono text-success font-bold">${data.takeProfits.tp3}</span>
                         </div>
-                     </div>
+                    </div>
                 </div>
 
                 {/* Stop Loss & Reason */}
                 <div className="flex gap-4">
-                     <div className="flex-1 space-y-1">
+                    <div className="flex-1 space-y-1">
                         <label className="text-[10px] text-secondary uppercase font-bold flex items-center gap-1">
                             <Shield size={10} /> Stop Loss
                         </label>
                         <div className="p-2 bg-danger/10 border border-danger/20 rounded font-mono text-xs text-danger font-bold">
                             ${data.stopLoss}
                         </div>
-                     </div>
+                    </div>
                 </div>
-                
+
                 <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg">
                     <p className="text-[10px] text-secondary italic leading-relaxed line-clamp-2">
-                        <span className="text-blue-400 not-italic font-bold mr-1">[ALGORITMO]:</span> 
+                        <span className="text-blue-400 not-italic font-bold mr-1">[ALGORITMO]:</span>
                         {data.technicalReasoning}
                     </p>
                 </div>
@@ -418,7 +408,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
 
             {/* Action */}
             <div className="p-4 pt-0">
-                <button 
+                <button
                     onClick={onSelect}
                     className="w-full py-3 rounded-lg bg-primary hover:bg-white text-background font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 group-hover:scale-[1.02]"
                 >
