@@ -553,8 +553,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
     if (!market || market.length === 0) throw new Error("No market data available");
 
-    // Scan all candidates if Memes (usually < 40), or top 40 for general
-    const topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 40);
+    // Scan all candidates if Memes (usually < 40), or top 60 for general (Increased from 40 for better coverage)
+    const topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 60);
 
     const validMathCandidates: AIOpportunity[] = [];
 

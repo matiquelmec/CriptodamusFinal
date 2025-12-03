@@ -73,15 +73,15 @@ export function calculateIchimokuCloud(highs: number[], lows: number[]) {
     return { senkouA, senkouB };
 };
 
-export function calculateBollingerStats(prices: number[]) {
-    const sma20 = calculateSMA(prices, 20);
-    const stdDev = calculateStdDev(prices, 20, sma20);
-    const upper = sma20 + (stdDev * 2);
-    const lower = sma20 - (stdDev * 2);
+export function calculateBollingerStats(prices: number[], period: number = 20, stdDevMultiplier: number = 2) {
+    const sma = calculateSMA(prices, period);
+    const stdDev = calculateStdDev(prices, period, sma);
+    const upper = sma + (stdDev * stdDevMultiplier);
+    const lower = sma - (stdDev * stdDevMultiplier);
     // Bandwidth %: (Upper - Lower) / Middle * 100
-    const bandwidth = sma20 > 0 ? ((upper - lower) / sma20) * 100 : 0;
+    const bandwidth = sma > 0 ? ((upper - lower) / sma) * 100 : 0;
 
-    return { upper, lower, bandwidth, sma: sma20 };
+    return { upper, lower, bandwidth, sma };
 };
 
 export function calculateSMA(data: number[], period: number) {
