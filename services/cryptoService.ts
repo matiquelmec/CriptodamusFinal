@@ -716,6 +716,47 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     return; // Skip this opportunity
                 }
 
+                // --- FRACTAL DRAGON STRATEGY: LAZY 1H VALIDATION (NEW) ---
+                // Solo si el candidato es prometedor, validamos la estructura mayor (1H)
+                try {
+                    const candles1h = await fetchCandles(coin.id, '1h');
+                    if (candles1h.length >= 200) {
+                        const prices1h = candles1h.map(c => c.close);
+                        const ema200_1h = calculateEMA(prices1h, 200);
+                        const currentPrice1h = prices1h[prices1h.length - 1];
+
+                        // REGLA DE ORO: No operar contra la estructura de 1H
+                        let fractalPenalty = 0;
+                        let fractalNote = "";
+
+                        if (signalSide === 'LONG') {
+                            if (currentPrice1h < ema200_1h) {
+                                fractalPenalty = 100; // KILL SWITCH: Long bajo EMA200 1H es suicida
+                                fractalNote = "⛔ Estructura 1H Bajista (Precio < EMA200)";
+                            } else {
+                                fractalNote = "✅ Confirmado por Estructura 1H";
+                            }
+                        } else { // SHORT
+                            if (currentPrice1h > ema200_1h) {
+                                fractalPenalty = 100; // KILL SWITCH: Short sobre EMA200 1H es suicida
+                                fractalNote = "⛔ Estructura 1H Alcista (Precio > EMA200)";
+                            } else {
+                                fractalNote = "✅ Confirmado por Estructura 1H";
+                            }
+                        }
+
+                        if (fractalPenalty > 0) {
+                            console.log(`[Scanner] ${coin.symbol} descartado por Fractal Dragon: ${fractalNote}`);
+                            return; // Descartar candidato
+                        }
+
+                        // Añadir nota de confirmación
+                        detectionNote += ` | ${fractalNote}`;
+                    }
+                } catch (err) {
+                    console.warn(`[Scanner] Falló validación 1H para ${coin.symbol}, procediendo con precaución.`);
+                }
+
                 const atr = calculateATR(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), 14);
 
                 // NEW: Regime-Aware DCA Calculation (Autonomous)
