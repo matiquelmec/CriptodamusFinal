@@ -134,6 +134,7 @@ export interface TechnicalIndicators {
     level0_5: number;
     level0_618: number;
     level0_786: number;
+    level1: number;
     tp1: number;
     tp2: number;
     tp3: number; // Moonbag
@@ -169,7 +170,7 @@ export interface TechnicalIndicators {
     bearish: import('./types-advanced').FairValueGapData[];
   };
   confluenceAnalysis?: import('./types-advanced').ConfluenceData;
-  
+
   // Market Regime Detection (Autonomous Strategy Selection)
   marketRegime?: import('./types-advanced').MarketRegime;
 }

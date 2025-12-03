@@ -255,7 +255,10 @@ export function calculateAutoFibs(highs: number[], lows: number[], ema200: numbe
             level0_5: maxHigh - (diff * 0.5),
             level0_618: maxHigh - (diff * 0.618), // GOLDEN POCKET
             level0_786: maxHigh - (diff * 0.786),
-            level1: minLow
+            level1: minLow,
+            tp1: maxHigh + (diff * 0.272),
+            tp2: maxHigh + (diff * 0.618),
+            tp3: maxHigh + (diff * 1.0)
         };
     } else {
         // High to Low (Resistances)
@@ -267,7 +270,10 @@ export function calculateAutoFibs(highs: number[], lows: number[], ema200: numbe
             level0_5: minLow + (diff * 0.5),
             level0_618: minLow + (diff * 0.618), // GOLDEN POCKET
             level0_786: minLow + (diff * 0.786),
-            level1: maxHigh
+            level1: maxHigh,
+            tp1: minLow - (diff * 0.272),
+            tp2: minLow - (diff * 0.618),
+            tp3: minLow - (diff * 1.0)
         };
     }
 }
@@ -362,7 +368,9 @@ export function calculatePivotPoints(highs: number[], lows: number[], closes: nu
     const p = (h + l + c) / 3;
     const r1 = (2 * p) - l;
     const s1 = (2 * p) - h;
-    return { p, r1, s1 };
+    const r2 = p + (h - l);
+    const s2 = p - (h - l);
+    return { p, r1, s1, r2, s2 };
 }
 
 export function formatVolume(vol: number) { return vol >= 1e9 ? (vol / 1e9).toFixed(1) + 'B' : (vol / 1e6).toFixed(1) + 'M'; }

@@ -245,7 +245,7 @@ export const streamMarketAnalysis = async function* (
         }
 
         // IV. PLAN DE EJECUCIÓN DCA (Generado por módulo)
-        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any);
+        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime);
 
         yield response;
     }

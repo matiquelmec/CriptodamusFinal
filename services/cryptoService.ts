@@ -20,6 +20,7 @@ import { detectFVG } from './fairValueGaps';
 import { calculatePOIs } from './confluenceEngine';
 import { detectMarketRegime } from './marketRegimeDetector';
 import { selectStrategies } from './strategySelector';
+import { calculateDCAPlan } from './dcaCalculator';
 
 
 // PRIMARY: Binance Vision (CORS friendly for public data)
@@ -430,24 +431,18 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
                 s2: pivots.p - (pivots.r1 - pivots.s1)  // Simple S2 approx
             },
             fibonacci: {
-                ...fibs,
-                timestamp: Date.now(),
-                strategy: 'Auto Fibs',
-                side: fibs.trend === 'UP' ? 'LONG' : 'SHORT',
-                confidenceScore: 50,
-                entryZone: {
-                    min: fibs.level0_618,
-                    max: fibs.level0_5
-                },
-                stopLoss: fibs.level0_786,
-                takeProfits: {
-                    tp1: fibs.level0_236,
-                    tp2: fibs.level0,
-                    tp3: fibs.level0 // Placeholder
-                },
-                technicalReasoning: "Auto-generated from swing points",
-                invalidated: false
+                level0: fibs.level0,
+                level0_236: fibs.level0_236,
+                level0_382: fibs.level0_382,
+                level0_5: fibs.level0_5,
+                level0_618: fibs.level0_618,
+                level0_786: fibs.level0_786,
+                level1: fibs.level1,
+                tp1: fibs.tp1,
+                tp2: fibs.tp2,
+                tp3: fibs.tp3
             },
+
             ichimokuData: ichimokuData || undefined, // NEW
             trendStatus: {
                 emaAlignment,
@@ -601,71 +596,95 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const trendDist = ((currentPrice - ema200) / ema200) * 100;
             structureNote = trendDist > 0 ? `Tendencia Alcista (+${trendDist.toFixed(1)}% sobre EMA200)` : `Tendencia Bajista (${trendDist.toFixed(1)}% bajo EMA200)`;
 
-            // --- DETERMINISTIC MATH DETECTORS ---
+            // --- AUTONOMOUS STRATEGY SELECTION ---
 
-            if (style === 'MEME_SCALP') {
-                // MEME HUNTER LOGIC
-                const memeResult = analyzeMemeSignal(prices.slice(0, checkIndex + 1), vwap, rvol, rsi, stochRsi);
+            // 1. Calculate Missing Indicators for Regime Detection
+            const ema20 = calculateEMA(prices.slice(0, checkIndex + 1), 20);
+            const ema50 = calculateEMA(prices.slice(0, checkIndex + 1), 50);
+            const ema100 = calculateEMA(prices.slice(0, checkIndex + 1), 100);
+            const macd = calculateMACD(prices.slice(0, checkIndex + 1));
+            const bb = calculateBollingerStats(prices.slice(0, checkIndex + 1), 20, 2);
+            const pivots = calculatePivotPoints(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1));
+            const adx = calculateADX(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), 14);
+            const atr = calculateATR(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), 14);
 
-                if (memeResult) {
-                    score = memeResult.score;
-                    signalSide = memeResult.signalSide;
-                    detectionNote = memeResult.detectionNote;
-                    specificTrigger = memeResult.specificTrigger;
+            // 2. Construct TechnicalIndicators for Regime Detection
+            const techIndicators: TechnicalIndicators = {
+                symbol: coin.symbol,
+                price: currentPrice,
+                rsi, stochRsi, adx, atr, rvol, vwap,
+                ema20, ema50, ema100, ema200,
+                macd: { line: macd.macdLine, signal: macd.signalLine, histogram: macd.histogram },
+                bollinger: { upper: bb.upper, lower: bb.lower, middle: bb.sma, bandwidth: bb.bandwidth },
+                pivots,
+                fibonacci: fibs,
+                technicalReasoning: "",
+                invalidated: false,
+                trendStatus: {
+                    emaAlignment: (ema20 > ema50 && ema50 > ema100) ? 'BULLISH' : (ema20 < ema50 && ema50 < ema100) ? 'BEARISH' : 'CHAOTIC',
+                    goldenCross: ema50 > ema200,
+                    deathCross: ema50 < ema200
+                }
+            };
+
+            // 3. Detect Regime & Select Strategies
+            const marketRegime = detectMarketRegime(techIndicators);
+            const selection = selectStrategies(marketRegime);
+
+            let totalScore = 0;
+            let totalWeight = 0;
+            let primaryStrategy = selection.activeStrategies[0]?.id; // Default to first
+            let strategyDetails: string[] = [];
+
+            // 4. Execute Selected Strategies
+            for (const strategy of selection.activeStrategies) {
+                const strategyId = strategy.id;
+                const weight = strategy.weight;
+                if (weight === 0) continue;
+
+                let result = null;
+                let strategyName = "";
+
+                if (strategyId === 'ichimoku_dragon') {
+                    result = analyzeIchimoku(highs, lows, prices);
+                    strategyName = "Ichimoku Cloud";
+                } else if (strategyId === 'breakout_momentum') {
+                    result = analyzeBreakoutSignal(prices.slice(0, checkIndex + 1), highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), rvol);
+                    strategyName = "Breakout Momentum";
+                } else if (strategyId === 'smc_liquidity') {
+                    result = analyzeSwingSignal(prices.slice(0, checkIndex + 1), highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), fibs);
+                    strategyName = "SMC Liquidity";
+                } else if (strategyId === 'quant_volatility') {
+                    result = analyzeScalpSignal(prices.slice(0, checkIndex + 1), vwap, rsi);
+                    strategyName = "Quant Volatility";
+                } else if (strategyId === 'meme_hunter') {
+                    result = analyzeMemeSignal(prices.slice(0, checkIndex + 1), vwap, rvol, rsi, stochRsi);
+                    strategyName = "Meme Hunter";
                 }
 
-            } else if (style === 'ICHIMOKU_CLOUD') {
-                // USANDO EL CEREBRO REAL DE ICHIMOKU (Refactorizado)
-                const ichimokuResult = analyzeIchimoku(highs, lows, prices);
+                if (result) {
+                    // Weighted Score Accumulation
+                    totalScore += result.score * weight;
+                    totalWeight += weight;
 
-                if (ichimokuResult) {
-                    score = ichimokuResult.score;
-                    signalSide = ichimokuResult.signalSide;
-                    detectionNote = ichimokuResult.detectionNote;
-                    specificTrigger = ichimokuResult.specificTrigger;
+                    if (result.score > 60) {
+                        strategyDetails.push(`${strategyName}: ${result.detectionNote}`);
+                        // Update signal details if this is the highest weighted strategy or the first one
+                        if (strategyId === primaryStrategy || !specificTrigger) {
+                            signalSide = result.signalSide;
+                            specificTrigger = result.specificTrigger;
+                            detectionNote = result.detectionNote;
+                        }
+                    }
                 }
+            }
 
-            } else if (style === 'SWING_INSTITUTIONAL') {
-                const swingResult = analyzeSwingSignal(
-                    prices.slice(0, checkIndex + 1),
-                    highs.slice(0, checkIndex + 1),
-                    lows.slice(0, checkIndex + 1),
-                    fibs
-                );
+            // Normalize Score
+            score = totalWeight > 0 ? totalScore : 0;
 
-                if (swingResult) {
-                    score = swingResult.score;
-                    signalSide = swingResult.signalSide;
-                    detectionNote = swingResult.detectionNote;
-                    specificTrigger = swingResult.specificTrigger;
-                }
-
-            } else if (style === 'BREAKOUT_MOMENTUM') {
-                // DONCHIAN CHANNEL LOGIC (20 Periods)
-                const breakoutResult = analyzeBreakoutSignal(
-                    prices.slice(0, checkIndex + 1),
-                    highs.slice(0, checkIndex + 1),
-                    lows.slice(0, checkIndex + 1),
-                    rvol
-                );
-
-                if (breakoutResult) {
-                    score = breakoutResult.score;
-                    signalSide = breakoutResult.signalSide;
-                    detectionNote = breakoutResult.detectionNote;
-                    specificTrigger = breakoutResult.specificTrigger;
-                }
-
-            } else {
-                // SCALP (Default)
-                const scalpResult = analyzeScalpSignal(prices.slice(0, checkIndex + 1), vwap, rsi);
-
-                if (scalpResult) {
-                    score = scalpResult.score;
-                    signalSide = scalpResult.signalSide;
-                    detectionNote = scalpResult.detectionNote;
-                    specificTrigger = scalpResult.specificTrigger;
-                }
+            // Combine notes
+            if (strategyDetails.length > 0) {
+                detectionNote = strategyDetails.join(" | ");
             }
 
             // --- FILTERING BY RISK ---
@@ -697,27 +716,17 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     return; // Skip this opportunity
                 }
 
-                const atr = calculateATR(highs, lows, prices, 14);
+                const atr = calculateATR(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), 14);
 
-                // Algorithmic SL/TP Calculation (Exact Maths) - Usando signalPrice
-                let sl = 0;
-                let tp1 = 0, tp2 = 0, tp3 = 0;
-
-                const slMult = style === 'MEME_SCALP' ? 2.5 : (interval === '15m' ? 1.5 : 2.0);
-
-                if (signalSide === 'LONG') {
-                    sl = signalPrice - (atr * slMult);
-                    const risk = signalPrice - sl;
-                    tp1 = signalPrice + risk;
-                    tp2 = signalPrice + (risk * 2);
-                    tp3 = signalPrice + (risk * 3);
-                } else {
-                    sl = signalPrice + (atr * slMult);
-                    const risk = sl - signalPrice;
-                    tp1 = signalPrice - risk;
-                    tp2 = signalPrice - (risk * 2);
-                    tp3 = signalPrice - (risk * 3);
-                }
+                // NEW: Regime-Aware DCA Calculation (Autonomous)
+                const dcaPlan = calculateDCAPlan(
+                    signalPrice,
+                    { supportPOIs: [], resistancePOIs: [], topSupports: [], topResistances: [] }, // Fallback to Fibs/ATR for scanner
+                    atr,
+                    signalSide,
+                    marketRegime,
+                    fibs
+                );
 
                 const decimals = signalPrice > 1000 ? 2 : signalPrice > 1 ? 4 : 6;
                 const format = (n: number) => parseFloat(n.toFixed(decimals));
@@ -731,35 +740,31 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     id: Date.now().toString() + Math.random(),
                     symbol: coin.symbol,
                     timestamp: Date.now(),
-                    signalTimestamp: candles[checkIndex].timestamp, // NEW: Timestamp de la vela de confirmación
-                    strategy: getStrategyId(style), // FIXED: Map to correct ID for UI
+                    signalTimestamp: candles[checkIndex].timestamp,
+                    strategy: `Auto (${marketRegime.regime})`, // Show Regime
                     side: signalSide,
-                    confidenceScore: Math.floor(finalScore),
-                    // NEW: Sistema dual de entradas
+                    confidenceScore: Math.round(finalScore),
                     entryZone: {
-                        // Entrada conservadora (limit order en precio de señal)
-                        min: format(signalPrice * 0.998),
-                        max: format(signalPrice * 1.002),
-                        // Entrada agresiva (market order en precio actual)
-                        aggressive: format(livePrice),
-                        // Metadata
-                        signalPrice: format(signalPrice),
-                        currentPrice: format(livePrice),
-                        priceMove: format(priceMove)
+                        min: format(dcaPlan.entries[2].price), // Entry 3 (Deepest)
+                        max: format(dcaPlan.entries[0].price), // Entry 1 (Closest)
+                        aggressive: format(dcaPlan.entries[0].price),
+                        signalPrice: format(signalPrice)
                     },
-                    dcaLevel: signalSide === 'LONG' ? format(signalPrice - (atr * 0.5)) : format(signalPrice + (atr * 0.5)),
-                    stopLoss: format(sl),
-                    takeProfits: { tp1: format(tp1), tp2: format(tp2), tp3: format(tp3) },
+                    stopLoss: format(dcaPlan.stopLoss),
+                    takeProfits: {
+                        tp1: format(dcaPlan.takeProfits.tp1.price),
+                        tp2: format(dcaPlan.takeProfits.tp2.price),
+                        tp3: format(dcaPlan.takeProfits.tp3.price)
+                    },
                     technicalReasoning: finalNote,
-                    invalidated: false,
-                    // NEW: METRICS POPULATION
                     metrics: {
                         rvol: format(rvol),
                         rsi: format(rsi),
                         vwapDist: format(vwapDist),
                         structure: structureNote,
                         specificTrigger: specificTrigger
-                    }
+                    },
+                    invalidated: false
                 };
 
                 validMathCandidates.push(mathOpp);

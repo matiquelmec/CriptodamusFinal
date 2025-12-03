@@ -10,18 +10,25 @@ export function generateDCAExecutionPlan(
     price: number,
     atr: number,
     fibonacci: TechnicalIndicators['fibonacci'],
-    confluenceAnalysis: ConfluenceAnalysis | undefined
+    confluenceAnalysis: ConfluenceAnalysis | undefined,
+    marketRegime?: import('../types-advanced').MarketRegime
 ): string {
     let response = '';
 
     // IV. PLAN DE EJECUCIÓN INSTITUCIONAL (DCA)
     response += `## IV. Plan de Ejecución Institucional: Ladder DCA de 3 Niveles\\n\\n`;
+
+    if (marketRegime) {
+        response += `> **Régimen de Mercado:** ${marketRegime.regime} (Confianza: ${marketRegime.confidence}%)\\n`;
+        response += `> **Ajuste:** Position Sizing y Take Profits adaptados a condiciones de mercado.\\n\\n`;
+    }
+
     response += `### 4.1. Filosofía: Promediación Inteligente\\n\\n`;
     response += `El mercado rara vez ofrece el fondo exacto en la primera oportunidad. Este plan utiliza **3 zonas de confluencia decreciente** para construir una posición robusta.\\n\\n`;
 
     // Calculate DCA Plan
     const dcaPlan = confluenceAnalysis
-        ? calculateDCAPlan(price, confluenceAnalysis, atr, 'LONG', {
+        ? calculateDCAPlan(price, confluenceAnalysis, atr, 'LONG', marketRegime, {
             level0_618: fibonacci.level0_618,
             level0_786: fibonacci.level0_786,
             level0_5: fibonacci.level0_5

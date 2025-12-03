@@ -1,4 +1,5 @@
 import { ConfluenceAnalysis, POI } from './confluenceEngine';
+import { MarketRegime } from '../types-advanced';
 
 export interface DCAEntry {
     level: number; // 1, 2, 3
@@ -22,15 +23,64 @@ export interface DCAPlan {
 }
 
 /**
+ * Determina el tamaño de posición óptimo para cada entrada DCA según el régimen
+ */
+function getRegimeAwarePositionSizing(regime?: MarketRegime): [number, number, number] {
+    if (!regime) return [40, 30, 30]; // Default (Balanceado)
+
+    switch (regime.regime) {
+        case 'TRENDING':
+            // Agresivo: Entrar más fuerte al inicio para no perder el movimiento
+            return [50, 30, 20];
+        case 'RANGING':
+            // Balanceado: Distribución estándar
+            return [40, 30, 30];
+        case 'VOLATILE':
+            // Conservador: Reservar capital para entradas más profundas
+            return [30, 30, 40];
+        case 'EXTREME':
+            // Muy Conservador: Esperar confirmación, entrada inicial pequeña
+            return [25, 35, 40];
+        default:
+            return [40, 30, 30];
+    }
+}
+
+/**
+ * Determina el tamaño de salida óptimo para cada TP según el régimen
+ */
+function getRegimeAwareTPs(regime?: MarketRegime): [number, number, number] {
+    if (!regime) return [40, 30, 30]; // Default
+
+    switch (regime.regime) {
+        case 'TRENDING':
+            // Dejar correr: Salida inicial pequeña, Moonbag grande
+            return [30, 30, 40];
+        case 'RANGING':
+            // Estándar: Asegurar ganancias en bordes del rango
+            return [40, 30, 30];
+        case 'VOLATILE':
+            // Asegurar: Salida inicial grande para reducir riesgo rápido
+            return [50, 30, 20];
+        case 'EXTREME':
+            // Scalp rápido: Asegurar la mayoría en el rebote inicial
+            return [60, 25, 15];
+        default:
+            return [40, 30, 30];
+    }
+}
+
+/**
  * Calcula un plan DCA institucional basado en POIs de confluencia
  * Filosofía: Entradas escalonadas en zonas de alta probabilidad
- * Position Sizing: 40% / 30% / 30% (piramidal decreciente)
+ * Position Sizing: Adaptativo según régimen de mercado
  */
 export function calculateDCAPlan(
     signalPrice: number, // Renamed for clarity (it's the reference price for entries)
     confluenceAnalysis: ConfluenceAnalysis,
     atr: number,
     side: 'LONG' | 'SHORT',
+    marketRegime?: MarketRegime, // NEW: Contexto de mercado
     fibonacciLevels?: {
         level0_618: number;
         level0_786: number;
@@ -130,8 +180,8 @@ export function calculateDCAPlan(
     // 3. Ordenar POIs (de menor a mayor para LONG, de mayor a menor para SHORT)
     selectedPOIs.sort((a, b) => side === 'LONG' ? b.price - a.price : a.price - b.price);
 
-    // 4. Position sizing institucional (40%, 30%, 30%)
-    const positionSizes = [40, 30, 30];
+    // 4. Position sizing institucional (Adaptativo por régimen)
+    const positionSizes = getRegimeAwarePositionSizing(marketRegime);
 
     // 5. Crear entradas DCA
     const entries: DCAEntry[] = selectedPOIs.map((poi, index) => ({
@@ -193,15 +243,17 @@ export function calculateDCAPlan(
             : averageEntry - (atr * 8);
     }
 
+    const tpSizes = getRegimeAwareTPs(marketRegime);
+
     return {
         entries,
         averageEntry,
         totalRisk,
         stopLoss,
         takeProfits: {
-            tp1: { price: tp1Price, exitSize: 40 },
-            tp2: { price: tp2Price, exitSize: 30 },
-            tp3: { price: tp3Price, exitSize: 30 }
+            tp1: { price: tp1Price, exitSize: tpSizes[0] },
+            tp2: { price: tp2Price, exitSize: tpSizes[1] },
+            tp3: { price: tp3Price, exitSize: tpSizes[2] }
         }
     };
 }
