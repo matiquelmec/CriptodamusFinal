@@ -18,6 +18,8 @@ import { calculateVolumeProfile } from './volumeProfile';
 import { detectOrderBlocks } from './orderBlocks';
 import { detectFVG } from './fairValueGaps';
 import { calculatePOIs } from './confluenceEngine';
+import { detectMarketRegime } from './marketRegimeDetector';
+import { selectStrategies } from './strategySelector';
 
 
 // PRIMARY: Binance Vision (CORS friendly for public data)
@@ -396,7 +398,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
             bearishFVG
         );
 
-        return {
+        const result: TechnicalIndicators = {
             symbol: symbolDisplay,
             price: currentPrice,
             rsi,
@@ -485,7 +487,17 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
             confluenceAnalysis: {
                 topSupports: confluenceAnalysis.topSupports,
                 topResistances: confluenceAnalysis.topResistances
-            }
+            },
+            technicalReasoning: '',
+            invalidated: false
+        };
+
+        // NEW: Market Regime Detection (Autonomous Strategy Selection)
+        const marketRegime = detectMarketRegime(result);
+
+        return {
+            ...result,
+            marketRegime
         };
 
     } catch (e) {

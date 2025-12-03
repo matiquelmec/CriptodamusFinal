@@ -169,6 +169,9 @@ export interface TechnicalIndicators {
     bearish: import('./types-advanced').FairValueGapData[];
   };
   confluenceAnalysis?: import('./types-advanced').ConfluenceData;
+  
+  // Market Regime Detection (Autonomous Strategy Selection)
+  marketRegime?: import('./types-advanced').MarketRegime;
 }
 
 export enum TabView {

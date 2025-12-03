@@ -62,3 +62,62 @@ export interface AutoFibsResult {
     level0_786: number;
     level1: number;
 }
+
+// --- MARKET REGIME DETECTION ---
+
+export type MarketRegimeType = 'TRENDING' | 'RANGING' | 'VOLATILE' | 'EXTREME';
+export type TrendDirection = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+export type ExtremeCondition = 'OVERSOLD' | 'OVERBOUGHT' | 'BULLISH_DIVERGENCE' | 'BEARISH_DIVERGENCE';
+
+export interface RegimeMetrics {
+    adx: number;                    // Trend strength (0-100)
+    atr: number;                    // Volatility
+    atrPercent: number;             // ATR as % of price
+    bbBandwidth: number;            // Bollinger Bandwidth (%)
+    emaAlignment: TrendDirection;   // EMA ribbon alignment
+    rsi: number;                    // RSI value
+    rvol: number;                   // Relative Volume
+    extremeCondition?: ExtremeCondition;
+}
+
+export interface MarketRegime {
+    regime: MarketRegimeType;
+    confidence: number;              // 0-100
+    metrics: RegimeMetrics;
+    recommendedStrategies: string[]; // Strategy IDs
+    reasoning: string;               // Human-readable explanation
+}
+
+// --- STRATEGY SELECTION ---
+
+export interface StrategyWeight {
+    id: string;                      // Strategy ID
+    name: string;                    // Strategy name
+    weight: number;                  // 0-1 (percentage as decimal)
+    reason: string;                  // Why this strategy was selected
+}
+
+export interface StrategySelection {
+    activeStrategies: StrategyWeight[];
+    disabledStrategies: string[];
+    regimeJustification: string;
+    totalWeight: number;             // Should always be 1.0
+}
+
+// --- DIVERGENCE DETECTION ---
+
+export type DivergenceType =
+    | 'BULLISH'           // Price lower low, RSI higher low (reversal up)
+    | 'BEARISH'           // Price higher high, RSI lower high (reversal down)
+    | 'HIDDEN_BULLISH'    // Price higher low, RSI lower low (continuation up)
+    | 'HIDDEN_BEARISH';   // Price lower high, RSI higher high (continuation down)
+
+export interface DivergenceSignal {
+    type: DivergenceType | null;
+    strength: number;                // 0-10
+    pricePoints: [number, number];   // [first price, second price]
+    rsiPoints: [number, number];     // [first RSI, second RSI]
+    timestamps: [number, number];    // [first timestamp, second timestamp]
+    expectedMove: number;            // Expected % move
+    confidence: number;              // 0-100
+}
