@@ -319,6 +319,20 @@ export const getMarketRisk = async (): Promise<MarketRisk> => {
 
 export { getMacroContext }; // Re-export for AI Advisor structured access
 
+export const getMacroData = async (): Promise<string> => {
+    try {
+        const macro = await getMacroContext();
+        return formatMacroForAI(macro);
+    } catch (e) {
+        console.warn("Error fetching macro context for AI:", e);
+        return "Macro Data Unavailable (Using Technicals Only)";
+    }
+};
+
+export const getMarketContextForAI = async (): Promise<string> => {
+    return getMacroData();
+};
+
 // --- TECHNICAL ANALYSIS ENGINE ---
 
 // NEW: Returns STRUCTURED DATA for the AI (No String parsing needed)
