@@ -196,6 +196,69 @@ export const getFearAndGreedIndex = async (): Promise<FearAndGreedData | null> =
     }
 };
 
+// --- HELPER FUNCTIONS ---
+
+const mapBinanceToCoinCap = (symbol: string) => {
+    const map: Record<string, string> = { 'BTCUSDT': 'bitcoin', 'ETHUSDT': 'ethereum', 'SOLUSDT': 'solana', 'DOGEUSDT': 'dogecoin', 'BNBUSDT': 'binance-coin', 'XRPUSDT': 'xrp', 'ADAUSDT': 'cardano' };
+    return map[symbol];
+}
+
+const fetchCandles = async (symbolId: string, interval: string): Promise<{ timestamp: number, close: number, volume: number, high: number, low: number, open: number }[]> => {
+    const isBinance = symbolId === symbolId.toUpperCase() && symbolId.endsWith('USDT');
+
+    try {
+        if (isBinance) {
+            // Fetching 205 candles to ensure deep data for EMA200 calculation
+            const res = await fetchWithTimeout(`${BINANCE_API_BASE}/klines?symbol=${symbolId}&interval=${interval}&limit=205`, {}, 4000);
+            if (!res.ok) throw new Error("Binance Candle Error");
+            const data = await res.json();
+            return data.map((d: any[]) => ({
+                timestamp: d[0],
+                open: parseFloat(d[1]),
+                high: parseFloat(d[2]),
+                low: parseFloat(d[3]),
+                close: parseFloat(d[4]),
+                volume: parseFloat(d[5])
+            }));
+        } else {
+            const ccInterval = interval === '15m' ? 'm15' : 'h1';
+            const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${symbolId}&quoteId=tether`, {}, 4000);
+            if (!res.ok) return [];
+            const json = await res.json();
+            return json.data.map((d: any) => ({
+                timestamp: d.period,
+                open: parseFloat(d.open),
+                high: parseFloat(d.high),
+                low: parseFloat(d.low),
+                close: parseFloat(d.close),
+                volume: parseFloat(d.volume)
+            }));
+        }
+    } catch (e) {
+        // Retry with CoinCap logic if Binance fails (or vice versa handled by mapBinanceToCoinCap caller)
+        if (isBinance) {
+            const fallbackId = mapBinanceToCoinCap(symbolId);
+            if (fallbackId) {
+                try {
+                    const ccInterval = interval === '15m' ? 'm15' : 'h1';
+                    const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${fallbackId}&quoteId=tether`, {}, 4000);
+                    if (!res.ok) return [];
+                    const json = await res.json();
+                    return json.data.map((d: any) => ({
+                        timestamp: d.period,
+                        open: parseFloat(d.open),
+                        high: parseFloat(d.high),
+                        low: parseFloat(d.low),
+                        close: parseFloat(d.close),
+                        volume: parseFloat(d.volume)
+                    }));
+                } catch (err) { return []; }
+            }
+        }
+        return [];
+    }
+};
+
 // NEW: Market Risk Detector (Volatility & Manipulation Proxy)
 export const getMarketRisk = async (): Promise<MarketRisk> => {
     try {
@@ -254,84 +317,9 @@ export const getMarketRisk = async (): Promise<MarketRisk> => {
     }
 };
 
-export const getMacroData = async (): Promise<string> => {
-    try {
-        const macro = await getMacroContext();
-        return formatMacroForAI(macro);
-    } catch (e) {
-        console.warn("Error fetching macro context for AI:", e);
-        return "Macro Data Unavailable (Using Technicals Only)";
-    }
-};
-
-export const getMarketContextForAI = async (): Promise<string> => {
-    return getMacroData();
-};
-
 export { getMacroContext }; // Re-export for AI Advisor structured access
 
 // --- TECHNICAL ANALYSIS ENGINE ---
-
-const fetchCandles = async (symbolId: string, interval: string): Promise<{ timestamp: number, close: number, volume: number, high: number, low: number, open: number }[]> => {
-    const isBinance = symbolId === symbolId.toUpperCase() && symbolId.endsWith('USDT');
-
-    try {
-        if (isBinance) {
-            // Fetching 205 candles to ensure deep data for EMA200 calculation
-            const res = await fetchWithTimeout(`${BINANCE_API_BASE}/klines?symbol=${symbolId}&interval=${interval}&limit=205`, {}, 4000);
-            if (!res.ok) throw new Error("Binance Candle Error");
-            const data = await res.json();
-            return data.map((d: any[]) => ({
-                timestamp: d[0],
-                open: parseFloat(d[1]),
-                high: parseFloat(d[2]),
-                low: parseFloat(d[3]),
-                close: parseFloat(d[4]),
-                volume: parseFloat(d[5])
-            }));
-        } else {
-            const ccInterval = interval === '15m' ? 'm15' : 'h1';
-            const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${symbolId}&quoteId=tether`, {}, 4000);
-            if (!res.ok) return [];
-            const json = await res.json();
-            return json.data.map((d: any) => ({
-                timestamp: d.period,
-                open: parseFloat(d.open),
-                high: parseFloat(d.high),
-                low: parseFloat(d.low),
-                close: parseFloat(d.close),
-                volume: parseFloat(d.volume)
-            }));
-        }
-    } catch (e) {
-        // Retry with CoinCap logic if Binance fails (or vice versa handled by mapBinanceToCoinCap caller)
-        if (isBinance) {
-            const fallbackId = mapBinanceToCoinCap(symbolId);
-            if (fallbackId) {
-                try {
-                    const ccInterval = interval === '15m' ? 'm15' : 'h1';
-                    const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${fallbackId}&quoteId=tether`, {}, 4000);
-                    if (!res.ok) return [];
-                    const json = await res.json();
-                    return json.data.map((d: any) => ({
-                        timestamp: d.period,
-                        open: parseFloat(d.open),
-                        high: parseFloat(d.high),
-                        low: parseFloat(d.low),
-                        close: parseFloat(d.close),
-                        volume: parseFloat(d.volume)
-                    }));
-                } catch (err) { return []; }
-            }
-        }
-        return [];
-    }
-};
-
-const mapBinanceToCoinCap = (symbol: string) => {
-    const map: Record<string, string> = { 'BTCUSDT': 'bitcoin', 'ETHUSDT': 'ethereum', 'SOLUSDT': 'solana', 'DOGEUSDT': 'dogecoin', 'BNBUSDT': 'binance-coin', 'XRPUSDT': 'xrp', 'ADAUSDT': 'cardano' };
-    return map[symbol];
-}
 
 // NEW: Returns STRUCTURED DATA for the AI (No String parsing needed)
 export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<TechnicalIndicators | null> => {
@@ -339,13 +327,66 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
     const binanceSymbol = `${rawSymbol}USDT`;
 
     try {
-        const candles = await fetchCandles(binanceSymbol, '15m');
+        // PARALLEL FETCH: 15m (Main) + 1H (Fractal) + 4H (Supreme) + 1D (Bias)
+        const [candles, candles1h, candles4h, candles1d] = await Promise.all([
+            fetchCandles(binanceSymbol, '15m'),
+            fetchCandles(binanceSymbol, '1h').catch(() => []),
+            fetchCandles(binanceSymbol, '4h').catch(() => []),
+            fetchCandles(binanceSymbol, '1d').catch(() => []) // NEW: 1D Fetch
+        ]);
+
         if (candles.length < 50) return null;
 
         const prices = candles.map(c => c.close);
         const volumes = candles.map(c => c.volume);
         const highs = candles.map(c => c.high);
         const lows = candles.map(c => c.low);
+
+        // --- FRACTAL ANALYSIS (1H & 4H) ---
+        let fractalAnalysis: any = undefined; // Using any temporarily to bypass strict type check if interface isn't fully updated
+
+        // 1H Analysis
+        if (candles1h.length >= 200) {
+            const prices1h = candles1h.map(c => c.close);
+            const ema200_1h = calculateEMA(prices1h, 200);
+            const price1h = prices1h[prices1h.length - 1];
+
+            fractalAnalysis = {
+                ema200_1h,
+                price_1h: price1h,
+                trend_1h: price1h > ema200_1h ? 'BULLISH' : 'BEARISH',
+                structure: (price1h > ema200_1h) ? 'ALIGNED' : 'DIVERGENT'
+            };
+        }
+
+        // 4H Analysis (Supreme Validation)
+        if (candles4h.length >= 200 && fractalAnalysis) {
+            const prices4h = candles4h.map(c => c.close);
+            const ema200_4h = calculateEMA(prices4h, 200);
+            const price4h = prices4h[prices4h.length - 1];
+
+            fractalAnalysis = {
+                ...fractalAnalysis,
+                ema200_4h,
+                price_4h: price4h,
+                trend_4h: price4h > ema200_4h ? 'BULLISH' : 'BEARISH'
+            };
+        }
+
+        // 1D Analysis (Bias)
+        if (candles1d.length >= 200 && fractalAnalysis) {
+            const prices1d = candles1d.map(c => c.close);
+            const ema200_1d = calculateEMA(prices1d, 200);
+            const price1d = prices1d[prices1d.length - 1];
+
+            fractalAnalysis = {
+                ...fractalAnalysis,
+                ema200_1d,
+                price_1d: price1d,
+                trend_1d: price1d > ema200_1d ? 'BULLISH' : 'BEARISH'
+            };
+        }
+
 
         // Calcs
         const currentPrice = prices[prices.length - 1];
@@ -836,23 +877,23 @@ function getStrategyId(style: TradingStyle): string {
  * Aplica filtros macroeconómicos al score de una señal
  * @param baseScore - Score original de la estrategia (0-100)
             if (candles.length < 200) return; // Need deeper history for EMA 200
-
+ 
             const prices = candles.map(c => c.close);
             const volumes = candles.map(c => c.volume);
             const highs = candles.map(c => c.high);
             const lows = candles.map(c => c.low);
-
+ 
             let score = 0;
             let detectionNote = "";
             let signalSide: 'LONG' | 'SHORT' = 'LONG'; // Default
-
+ 
             // Educational Metrics to pass to UI
             let specificTrigger = "";
             let structureNote = "";
-
+ 
             // Use Closed Candle for Confirmation (No Repainting)
             const checkIndex = prices.length - 2;
-
+ 
             // CALCULATE NEW PRECISION METRICS FOR SCANNER
             const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes);
             const stochRsi = calculateStochRSI(prices, 14);
@@ -862,35 +903,35 @@ function getStrategyId(style: TradingStyle): string {
             const currentPrice = prices[checkIndex];
             const avgVol = calculateSMA(volumes, 20);
             const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
-
+ 
             // Common structure check
             const trendDist = ((currentPrice - ema200) / ema200) * 100;
             structureNote = trendDist > 0 ? `Tendencia Alcista (+${trendDist.toFixed(1)}% sobre EMA200)` : `Tendencia Bajista (${trendDist.toFixed(1)}% bajo EMA200)`;
-
+ 
             // --- DETERMINISTIC MATH DETECTORS ---
-
+ 
             if (style === 'MEME_SCALP') {
                 // MEME HUNTER LOGIC
                 const memeResult = analyzeMemeSignal(prices.slice(0, checkIndex + 1), vwap, rvol, rsi, stochRsi);
-
+ 
                 if (memeResult) {
                     score = memeResult.score;
                     signalSide = memeResult.signalSide;
                     detectionNote = memeResult.detectionNote;
                     specificTrigger = memeResult.specificTrigger;
                 }
-
+ 
             } else if (style === 'ICHIMOKU_CLOUD') {
                 // USANDO EL CEREBRO REAL DE ICHIMOKU (Refactorizado)
                 const ichimokuResult = analyzeIchimoku(highs, lows, prices);
-
+ 
                 if (ichimokuResult) {
                     score = ichimokuResult.score;
                     signalSide = ichimokuResult.signalSide;
                     detectionNote = ichimokuResult.detectionNote;
                     specificTrigger = ichimokuResult.specificTrigger;
                 }
-
+ 
             } else if (style === 'SWING_INSTITUTIONAL') {
                 const swingResult = analyzeSwingSignal(
                     prices.slice(0, checkIndex + 1),
@@ -898,14 +939,14 @@ function getStrategyId(style: TradingStyle): string {
                     lows.slice(0, checkIndex + 1),
                     fibs
                 );
-
+ 
                 if (swingResult) {
                     score = swingResult.score;
                     signalSide = swingResult.signalSide;
                     detectionNote = swingResult.detectionNote;
                     specificTrigger = swingResult.specificTrigger;
                 }
-
+ 
             } else if (style === 'BREAKOUT_MOMENTUM') {
                 // DONCHIAN CHANNEL LOGIC (20 Periods)
                 const breakoutResult = analyzeBreakoutSignal(
@@ -914,18 +955,18 @@ function getStrategyId(style: TradingStyle): string {
                     lows.slice(0, checkIndex + 1),
                     rvol
                 );
-
+ 
                 if (breakoutResult) {
                     score = breakoutResult.score;
                     signalSide = breakoutResult.signalSide;
                     detectionNote = breakoutResult.detectionNote;
                     specificTrigger = breakoutResult.specificTrigger;
                 }
-
+ 
             } else {
                 // SCALP (Default)
                 const scalpResult = analyzeScalpSignal(prices.slice(0, checkIndex + 1), vwap, rsi);
-
+ 
                 if (scalpResult) {
                     score = scalpResult.score;
                     signalSide = scalpResult.signalSide;
@@ -933,31 +974,31 @@ function getStrategyId(style: TradingStyle): string {
                     specificTrigger = scalpResult.specificTrigger;
                 }
             }
-
+ 
             // --- FILTERING BY RISK ---
             // If Risk is High (News OR Manipulation), we only accept VERY high scores
             const threshold = isHighRisk ? 75 : 60; // ADJUSTED: More realistic for real markets
-
+ 
             // --- APPLY MACRO FILTERS (NEW) ---
             let finalScore = score;
             if (macroContext) {
                 finalScore = applyMacroFilters(score, coin.symbol, signalSide, macroContext);
             }
-
+ 
             // Re-check threshold after macro adjustment
             const adjustedThreshold = isHighRisk ? 75 : 60; // ADJUSTED: More realistic for real markets
-
+ 
             // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
             if (finalScore >= adjustedThreshold) {
                 const livePrice = prices[prices.length - 1]; // Use live price for entry
                 const atr = calculateATR(highs, lows, prices, 14);
-
+ 
                 // Algorithmic SL/TP Calculation (Exact Maths)
                 let sl = 0;
                 let tp1 = 0, tp2 = 0, tp3 = 0;
-
+ 
                 const slMult = style === 'MEME_SCALP' ? 2.5 : (interval === '15m' ? 1.5 : 2.0);
-
+ 
                 if (signalSide === 'LONG') {
                     sl = livePrice - (atr * slMult);
                     const risk = livePrice - sl;
@@ -971,15 +1012,15 @@ function getStrategyId(style: TradingStyle): string {
                     tp2 = livePrice - (risk * 2);
                     tp3 = livePrice - (risk * 3);
                 }
-
+ 
                 const decimals = livePrice > 1000 ? 2 : livePrice > 1 ? 4 : 6;
                 const format = (n: number) => parseFloat(n.toFixed(decimals));
-
+ 
                 const finalNote = isHighRisk ? `[⚠️ RIESGO ALTO] ${detectionNote}` : detectionNote;
-
+ 
                 // VWAP Dist % calculation
                 const vwapDist = ((livePrice - vwap) / vwap) * 100;
-
+ 
                 const mathOpp: AIOpportunity = {
                     id: Date.now().toString() + Math.random(),
                     symbol: coin.symbol,
@@ -1002,19 +1043,19 @@ function getStrategyId(style: TradingStyle): string {
                         specificTrigger: specificTrigger
                     }
                 };
-
+ 
                 validMathCandidates.push(mathOpp);
             }
-
+ 
         } catch (e) { return null; }
     }));
-
+ 
     // Return pure math results instantly
     return validMathCandidates.sort((a, b) => b.confidenceScore - a.confidenceScore);
 };
-
+ 
 // --- MATH HELPERS (ROBUST) ---
-
+ 
 // Helper to map TradingStyle (Enum) to Strategy ID (Context)
 function getStrategyId(style: TradingStyle): string {
     switch (style) {
@@ -1026,7 +1067,7 @@ function getStrategyId(style: TradingStyle): string {
         default: return (style as string).toLowerCase();
     }
 }
-
+ 
 /**
  * Aplica filtros macroeconómicos al score de una señal
  * @param baseScore - Score original de la estrategia (0-100)

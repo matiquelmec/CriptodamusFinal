@@ -244,6 +244,54 @@ export const streamMarketAnalysis = async function* (
             response += `| **Point of Control (PoC)** | $\\approx$ $${pivots.p.toFixed(4)} | Nivel de equilibrio de volumen (Pivote Central). |\n\n`;
         }
 
+        // NEW: FRACTAL ANALYSIS SECTION (1H & 4H Validation)
+        // NEW: FRACTAL ANALYSIS SECTION (1H, 4H & 1D Validation)
+        if (techData.fractalAnalysis) {
+            const { trend_1h, ema200_1h, price_1h, trend_4h, ema200_4h, price_4h, trend_1d, ema200_1d, price_1d } = techData.fractalAnalysis;
+
+            const isAligned1h = (sentiment.includes('ALCISTA') && trend_1h === 'BULLISH') ||
+                (sentiment.includes('BAJISTA') && trend_1h === 'BEARISH');
+
+            let isAligned4h = true;
+            let trend4hText = "N/A";
+            if (trend_4h) {
+                isAligned4h = (sentiment.includes('ALCISTA') && trend_4h === 'BULLISH') ||
+                    (sentiment.includes('BAJISTA') && trend_4h === 'BEARISH');
+                trend4hText = trend_4h === 'BULLISH' ? '🟢 Alcista' : '🔴 Bajista';
+            }
+
+            let isAligned1d = true;
+            let trend1dText = "N/A";
+            if (trend_1d) {
+                isAligned1d = (sentiment.includes('ALCISTA') && trend_1d === 'BULLISH') ||
+                    (sentiment.includes('BAJISTA') && trend_1d === 'BEARISH');
+                trend1dText = trend_1d === 'BULLISH' ? '🟢 Alcista' : '🔴 Bajista';
+            }
+
+            const isFullyAligned = isAligned1h && isAligned4h && isAligned1d;
+            const fractalIcon = isFullyAligned ? "💎💎" : (isAligned1h && isAligned4h) ? "✅✅" : isAligned1h ? "✅⚠️" : "⛔";
+
+            let fractalStatus = "Alineación Total (GOD MODE)";
+            if (!isAligned1h) fractalStatus = "Conflicto Táctico (1H) - Alto Riesgo";
+            else if (!isAligned4h) fractalStatus = "Conflicto Estructural (4H) - Scalp Corto Plazo";
+            else if (!isAligned1d) fractalStatus = "Conflicto Macro (1D) - Swing Peligroso";
+
+            response += `### 3.3. Validación Fractal (1H + 4H + 1D) - La Visión del Dragón\n`;
+            response += `Validación multi-timeframe completa: Táctico (1H), Estructural (4H) y Macro (1D).\n\n`;
+            response += `| Estructura | Estado | Análisis |\n`;
+            response += `|---|---|---|\n`;
+            response += `| **Tendencia Táctica (1H)** | ${trend_1h === 'BULLISH' ? '🟢 Alcista' : '🔴 Bajista'} | Precio ($${price_1h}) vs EMA200 ($${ema200_1h.toFixed(4)}). |\n`;
+
+            if (trend_4h && ema200_4h && price_4h) {
+                response += `| **Tendencia Suprema (4H)** | ${trend4hText} | Precio ($${price_4h}) vs EMA200 ($${ema200_4h.toFixed(4)}). |\n`;
+            }
+            if (trend_1d && ema200_1d && price_1d) {
+                response += `| **Tendencia Macro (1D)** | ${trend1dText} | Precio ($${price_1d}) vs EMA200 ($${ema200_1d.toFixed(4)}). |\n`;
+            }
+
+            response += `| **Veredicto Fractal** | ${fractalIcon} ${fractalStatus} | ${isFullyAligned ? '� **INSTITUTIONAL TSUNAMI:** Alineación perfecta en todas las temporalidades. Máxima convicción.' : '⚠️ Precaución: Fractura en la estructura temporal.'} |\n\n`;
+        }
+
         // IV. PLAN DE EJECUCIÓN DCA (Generado por módulo)
         response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime);
 

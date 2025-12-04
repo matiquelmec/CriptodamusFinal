@@ -157,6 +157,20 @@ export interface TechnicalIndicators {
     goldenCross: boolean;
     deathCross: boolean;
   };
+  // NEW: Multi-Timeframe Fractal Analysis (1H, 4H, 1D)
+  fractalAnalysis?: {
+    trend_1h: 'BULLISH' | 'BEARISH';
+    ema200_1h: number;
+    price_1h: number;
+    structure: 'ALIGNED' | 'DIVERGENT';
+    trend_4h?: 'BULLISH' | 'BEARISH';
+    ema200_4h?: number;
+    price_4h?: number;
+    trend_1d?: 'BULLISH' | 'BEARISH';
+    ema200_1d?: number;
+    price_1d?: number;
+  };
+
   ichimokuData?: IchimokuCloud;
 
   // Advanced Market Structure (Optional)
@@ -173,6 +187,8 @@ export interface TechnicalIndicators {
 
   // Market Regime Detection (Autonomous Strategy Selection)
   marketRegime?: import('./types-advanced').MarketRegime;
+
+
 }
 
 export enum TabView {
