@@ -719,18 +719,20 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
 
                 if (result) {
-                    // Weighted Score Accumulation
+                    // Weighted Score Accumulation - TODAS las estrategias contribuyen
                     totalScore += result.score * weight;
                     totalWeight += weight;
 
-                    if (result.score > 60) {
+                    // Solo agregamos detalles de estrategias fuertes para el mensaje
+                    if (result.score > 50) {
                         strategyDetails.push(`${strategyName}: ${result.detectionNote}`);
-                        // Update signal details if this is the highest weighted strategy or the first one
-                        if (strategyId === primaryStrategy || !specificTrigger) {
-                            signalSide = result.signalSide;
-                            specificTrigger = result.specificTrigger;
-                            detectionNote = result.detectionNote;
-                        }
+                    }
+
+                    // Update signal details from the highest weighted strategy
+                    if (strategyId === primaryStrategy || !specificTrigger) {
+                        signalSide = result.signalSide;
+                        specificTrigger = result.specificTrigger;
+                        detectionNote = result.detectionNote;
                     }
                 }
             }
@@ -745,7 +747,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             // --- FILTERING BY RISK ---
             // If Risk is High (News OR Manipulation), we only accept VERY high scores
-            const threshold = isHighRisk ? 75 : 60; // ADJUSTED: More realistic for real markets
+            const threshold = isHighRisk ? 70 : 50; // BALANCED: Estricto pero permite oportunidades reales
 
             // --- APPLY MACRO FILTERS (NEW) ---
             let finalScore = score;
@@ -754,7 +756,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             }
 
             // Re-check threshold after macro adjustment
-            const adjustedThreshold = isHighRisk ? 75 : 60; // ADJUSTED: More realistic for real markets
+            const adjustedThreshold = isHighRisk ? 70 : 50; // BALANCED: Estricto pero permite oportunidades reales
 
             // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
             if (finalScore >= adjustedThreshold) {
@@ -764,7 +766,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                 // NEW: Validar vigencia de la señal
                 const priceMove = ((livePrice - signalPrice) / signalPrice) * 100;
-                const maxPriceMove = 3.0; // 3% de tolerancia
+                const maxPriceMove = 5.0; // 5% de tolerancia (más flexible para mercados volátiles)
 
                 // Si el precio se movió mucho, la señal está obsoleta
                 if (Math.abs(priceMove) > maxPriceMove) {
@@ -781,21 +783,32 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         const ema200_1h = calculateEMA(prices1h, 200);
                         const currentPrice1h = prices1h[prices1h.length - 1];
 
-                        // REGLA DE ORO: No operar contra la estructura de 1H
+                        // REGLA DE ORO: No operar contra la estructura de 1H (AJUSTADO: Menos restrictivo)
                         let fractalPenalty = 0;
                         let fractalNote = "";
+                        const distanceFrom1hEMA = Math.abs((currentPrice1h - ema200_1h) / ema200_1h) * 100;
 
                         if (signalSide === 'LONG') {
                             if (currentPrice1h < ema200_1h) {
-                                fractalPenalty = 100; // KILL SWITCH: Long bajo EMA200 1H es suicida
-                                fractalNote = "⛔ Estructura 1H Bajista (Precio < EMA200)";
+                                // Solo descartamos si está MUY lejos (>5%) de la EMA200 1H
+                                if (distanceFrom1hEMA > 5) {
+                                    fractalPenalty = 100;
+                                    fractalNote = `⛔ Estructura 1H Muy Bajista (${distanceFrom1hEMA.toFixed(1)}% bajo EMA200)`;
+                                } else {
+                                    fractalNote = "⚠️ Cerca de EMA200 1H (Precaución)";
+                                }
                             } else {
                                 fractalNote = "✅ Confirmado por Estructura 1H";
                             }
                         } else { // SHORT
                             if (currentPrice1h > ema200_1h) {
-                                fractalPenalty = 100; // KILL SWITCH: Short sobre EMA200 1H es suicida
-                                fractalNote = "⛔ Estructura 1H Alcista (Precio > EMA200)";
+                                // Solo descartamos si está MUY lejos (>5%) de la EMA200 1H
+                                if (distanceFrom1hEMA > 5) {
+                                    fractalPenalty = 100;
+                                    fractalNote = `⛔ Estructura 1H Muy Alcista (${distanceFrom1hEMA.toFixed(1)}% sobre EMA200)`;
+                                } else {
+                                    fractalNote = "⚠️ Cerca de EMA200 1H (Precaución)";
+                                }
                             } else {
                                 fractalNote = "✅ Confirmado por Estructura 1H";
                             }
@@ -1100,37 +1113,37 @@ function applyMacroFilters(
     let adjustedScore = baseScore;
     const isBTC = symbol === 'BTC/USDT' || symbol === 'BTCUSDT';
 
-    // --- REGLA 0: KILL SWITCH (Volatilidad Extrema en Rango) ---
-    // Si hay mucha volatilidad pero sin dirección clara (Chop), no operar.
+    // --- REGLA 0: PRECAUCIÓN EN VOLATILIDAD EXTREMA (Ajustado: No kill switch total) ---
+    // Si hay mucha volatilidad pero sin dirección clara, reducir confianza pero no eliminar
     if (macro.btcRegime.volatilityStatus === 'HIGH' && macro.btcRegime.regime === 'RANGE') {
-        console.log(`[MacroFilter] Kill Switch activado para ${symbol}: Alta volatilidad en rango.`);
-        return 0;
+        console.log(`[MacroFilter] Alta volatilidad en rango para ${symbol}: Reduciendo confianza`);
+        adjustedScore *= 0.7; // Reducción moderada (antes era kill switch total)
     }
 
-    // --- REGLA 1: Régimen de BTC afecta a TODAS las altcoins ---
+    // --- REGLA 1: Régimen de BTC afecta a TODAS las altcoins (Ajustado: Menos agresivo) ---
     if (!isBTC && signalSide === 'LONG') {
         if (macro.btcRegime.regime === 'BEAR') {
-            adjustedScore *= 0.5; // Penalizar fuertemente
+            adjustedScore *= 0.7; // Penalizar moderadamente (antes 0.5x era muy agresivo)
         } else if (macro.btcRegime.regime === 'RANGE') {
-            adjustedScore *= 0.85;
+            adjustedScore *= 0.9; // Penalización leve (antes 0.85x)
         }
     }
 
-    // --- REGLA 2: BTC Dominance (Rotación de Capital) ---
+    // --- REGLA 2: BTC Dominance (Rotación de Capital) - Ajustado ---
     if (!isBTC) {
         const { trend, current } = macro.btcDominance;
         if (trend === 'RISING' || current > 55) {
-            adjustedScore *= 0.75; // Capital fluyendo a BTC
+            adjustedScore *= 0.85; // Capital fluyendo a BTC (antes 0.75x era muy agresivo)
         } else if (trend === 'FALLING' && current < 50) {
             adjustedScore *= 1.15; // Alt season
         }
     }
 
-    // --- REGLA 3: USDT Dominance (Correlación Inversa / Miedo) ---
+    // --- REGLA 3: USDT Dominance (Correlación Inversa / Miedo) - Ajustado ---
     // Si USDT.D sube, el mercado cripto baja (Flight to stablecoins)
     if (macro.usdtDominance.trend === 'RISING') {
         if (signalSide === 'LONG') {
-            adjustedScore *= 0.6; // Muy peligroso ir LONG si USDT sube
+            adjustedScore *= 0.75; // Precaución en LONGs (antes 0.6x era muy agresivo)
         } else {
             adjustedScore *= 1.2; // Buen momento para SHORT
         }
