@@ -547,7 +547,8 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
 
         return {
             ...result,
-            marketRegime
+            marketRegime,
+            fractalAnalysis // CRITICAL: Include fractal analysis in return object
         };
 
     } catch (e) {
