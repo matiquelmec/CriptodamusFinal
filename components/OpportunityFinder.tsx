@@ -1,4 +1,4 @@
-﻿
+
 
 import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
@@ -449,4 +449,5 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
 }
 
 export default OpportunityFinder;
+
 
