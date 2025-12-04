@@ -648,6 +648,13 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const avgVol = calculateSMA(volumes, 20);
             const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
 
+            // --- FILTRO DE VOLUMEN MÍNIMO (Calidad Profesional) ---
+            // No operar activos sin liquidez suficiente
+            if (rvol < 0.8) {
+                console.log(`[Scanner] ${coin.symbol} descartado por volumen bajo (RVOL: ${rvol.toFixed(2)}x)`);
+                return; // Skip this opportunity
+            }
+
             // Common structure check
             const trendDist = ((currentPrice - ema200) / ema200) * 100;
             structureNote = trendDist > 0 ? `Tendencia Alcista (+${trendDist.toFixed(1)}% sobre EMA200)` : `Tendencia Bajista (${trendDist.toFixed(1)}% bajo EMA200)`;
@@ -883,8 +890,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
         } catch (e) { return null; }
     }));
 
-    // Return pure math results instantly
-    return validMathCandidates.sort((a, b) => b.confidenceScore - a.confidenceScore);
+    // Return top 10 best opportunities only (Quality over Quantity)
+    return validMathCandidates
+        .sort((a, b) => b.confidenceScore - a.confidenceScore)
+        .slice(0, 10);
 };
 
 // --- MATH HELPERS (ROBUST) ---
