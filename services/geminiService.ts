@@ -99,6 +99,19 @@ export const streamMarketAnalysis = async function* (
         if (isCapitulation) bullishScore += 3; // Contrarian signal
         if (isEuphoria) bearishScore += 3; // Contrarian signal
 
+        // NEW: Order Block Proximity Boost
+        if (orderBlocks) {
+            const { bullish, bearish } = orderBlocks;
+            if (bullish && bullish.length > 0) {
+                const nearOB = bullish.find(ob => ob && ob.price && Math.abs(price - ob.price) / price < 0.02);
+                if (nearOB && nearOB.strength > 0.7) bullishScore += 2.5;
+            }
+            if (bearish && bearish.length > 0) {
+                const nearOB = bearish.find(ob => ob && ob.price && Math.abs(price - ob.price) / price < 0.02);
+                if (nearOB && nearOB.strength > 0.7) bearishScore += 2.5;
+            }
+        }
+
         // --- PHASE 1.5: MACRO ADJUSTMENTS (NEW) ---
         // Aquí es donde el "Trader Experto" ajusta las probabilidades
 
