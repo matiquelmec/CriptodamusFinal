@@ -1,10 +1,14 @@
-
+﻿
 
 import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
 import { scanMarketOpportunities, getMarketRisk } from '../services/cryptoService';
 import { STRATEGIES } from '../services/strategyContext';
-import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity } from 'lucide-react';
+import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database } from 'lucide-react';
+import { Tooltip } from 'react-tooltip';
+import { GLOSSARY } from '../constants/glossary';
+import { useOpportunityCache } from '../hooks/useOpportunityCache';
+import ProgressIndicator from './ProgressIndicator';
 
 interface OpportunityFinderProps {
     onSelectOpportunity: (symbol: string) => void;
@@ -19,37 +23,64 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     const [currentRisk, setCurrentRisk] = useState<MarketRisk | null>(null);
     const [selectedSignal, setSelectedSignal] = useState<AIOpportunity | null>(null);
 
+    // NEW: Progress tracking
+    const [scanProgress, setScanProgress] = useState({ step: '', progress: 0 });
+
+    // NEW: Cache integration
+    const { cachedData, saveCache, clearCache, cacheAge } = useOpportunityCache();
+    const [isFromCache, setIsFromCache] = useState(false);
+
     const scan = async () => {
         if (cooldown > 0) return;
 
         setLoading(true);
         setError(null);
         setOpportunities([]); // Clear previous
+        setIsFromCache(false);
+        clearCache(); // Clear old cache when doing fresh scan
 
         try {
-            // Parallel fetch for speed - Backend now uses autonomous regime detection
+            // NEW: Progress tracking
+            setScanProgress({ step: 'Obteniendo datos de mercado...', progress: 10 });
+
             const [opps, riskData] = await Promise.all([
-                scanMarketOpportunities('SCALP_AGRESSIVE'), // Placeholder - backend ignores this
+                scanMarketOpportunities('SCALP_AGRESSIVE'),
                 getMarketRisk()
             ]);
+
+            setScanProgress({ step: 'Procesando seÃ±ales...', progress: 90 });
+
             setOpportunities(opps);
             setCurrentRisk(riskData);
 
             // Extract detected regime from first opportunity
             if (opps.length > 0 && opps[0].strategy) {
                 setDetectedRegime(opps[0].strategy);
+                // NEW: Save to cache
+                saveCache(opps, opps[0].strategy);
             }
+
+            setScanProgress({ step: 'Completado', progress: 100 });
         } catch (e: any) {
             console.error(e);
-            setError("Error de conexión al obtener datos de mercado.");
+            setError("Error de conexiÃ³n al obtener datos de mercado.");
         } finally {
             setLoading(false);
         }
     };
 
-    // Auto-scan on mount
+    // Auto-scan on mount OR load from cache
     useEffect(() => {
-        scan();
+        // Try to load from cache first
+        if (cachedData && cachedData.opportunities.length > 0) {
+            console.log('[OpportunityFinder] Loading from cache...');
+            setOpportunities(cachedData.opportunities);
+            setDetectedRegime(cachedData.regime || null);
+            setIsFromCache(true);
+        } else {
+            // No cache, do fresh scan
+            scan();
+        }
     }, []);
 
     return (
@@ -63,7 +94,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         </div>
                         <div>
                             <h2 className="text-sm font-mono font-bold text-primary uppercase tracking-wider">Criptodamus Auto-Pilot</h2>
-                            <p className="text-[10px] text-secondary">Motor Matemático Autónomo v4.0</p>
+                            <p className="text-[10px] text-secondary">Motor MatemÃ¡tico AutÃ³nomo v4.0</p>
                         </div>
                     </div>
 
@@ -80,8 +111,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                 {/* Risk Shield Banner */}
                 {currentRisk && (
                     <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${currentRisk.level === 'HIGH' ? 'bg-danger/10 border-danger/20 text-danger' :
-                            currentRisk.level === 'MEDIUM' ? 'bg-warning/10 border-warning/20 text-warning' :
-                                'bg-success/5 border-success/10 text-success'
+                        currentRisk.level === 'MEDIUM' ? 'bg-warning/10 border-warning/20 text-warning' :
+                            'bg-success/5 border-success/10 text-success'
                         }`}>
                         {currentRisk.riskType === 'MANIPULATION' ? (
                             <Eye size={14} className={currentRisk.level === 'HIGH' ? 'animate-pulse' : ''} />
@@ -104,20 +135,31 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         <div className="flex items-center gap-2">
                             <Cpu className="text-blue-400 animate-pulse" size={16} />
                             <span className="text-xs font-mono font-bold text-blue-400 uppercase tracking-wider">
-                                Modo Autónomo Activo
+                                Modo AutÃ³nomo Activo
                             </span>
                         </div>
-                        {detectedRegime && (
-                            <div className="flex items-center gap-2 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20">
-                                <Activity size={12} className="text-cyan-400" />
-                                <span className="text-[10px] font-mono text-cyan-400">
-                                    {detectedRegime}
-                                </span>
-                            </div>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {detectedRegime && (
+                                <div className="flex items-center gap-2 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20">
+                                    <Activity size={12} className="text-cyan-400" />
+                                    <span className="text-[10px] font-mono text-cyan-400">
+                                        {detectedRegime}
+                                    </span>
+                                </div>
+                            )}
+                            {/* NEW: Cache Indicator */}
+                            {isFromCache && cacheAge && (
+                                <div className="flex items-center gap-1.5 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">
+                                    <Database size={12} className="text-amber-400" />
+                                    <span className="text-[10px] font-mono text-amber-400">
+                                        Cache: {cacheAge}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <p className="text-[10px] text-secondary mt-2 leading-relaxed">
-                        El sistema detecta automáticamente el régimen de mercado y selecciona las estrategias óptimas con ponderación inteligente.
+                        El sistema detecta automÃ¡ticamente el rÃ©gimen de mercado y selecciona las estrategias Ã³ptimas con ponderaciÃ³n inteligente.
                     </p>
                 </div>
             </div>
@@ -125,20 +167,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-background/50">
                 {loading ? (
-                    <div className="h-full flex flex-col items-center justify-center text-secondary gap-6">
-                        <div className="relative">
-                            <div className="w-16 h-16 border-4 border-border rounded-full border-t-accent animate-spin"></div>
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <Cpu size={24} className="text-accent animate-pulse" />
-                            </div>
-                        </div>
-                        <div className="text-center">
-                            <h3 className="text-sm font-mono font-bold text-primary mb-1">Ejecutando Algoritmos...</h3>
-                            <p className="text-xs font-mono opacity-70">
-                                Detectando régimen de mercado y seleccionando estrategias óptimas...
-                            </p>
-                        </div>
-                    </div>
+                    <ProgressIndicator step={scanProgress.step} progress={scanProgress.progress} />
                 ) : error ? (
                     <div className="h-full flex flex-col items-center justify-center text-secondary gap-3 opacity-80">
                         <div className="p-3 bg-danger/10 rounded-full text-danger mb-2">
@@ -153,13 +182,13 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                 ) : opportunities.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-secondary gap-3 opacity-60">
                         <BarChart2 size={48} strokeWidth={1} />
-                        <h3 className="font-mono text-sm font-bold">Sin Señales Claras</h3>
+                        <h3 className="font-mono text-sm font-bold">Sin SeÃ±ales Claras</h3>
                         <p className="text-xs text-center max-w-sm">
-                            El algoritmo autónomo ha analizado las criptomonedas principales y ninguna cumple los criterios estrictos del sistema en este momento.
+                            El algoritmo autÃ³nomo ha analizado las criptomonedas principales y ninguna cumple los criterios estrictos del sistema en este momento.
                         </p>
                         {currentRisk && currentRisk.level === 'HIGH' && (
                             <p className="text-[10px] mt-2 bg-danger/10 p-2 rounded border border-danger/20 font-mono text-danger">
-                                ⚠️ Filtro Activado: Señales débiles descartadas por {currentRisk.riskType === 'MANIPULATION' ? 'Manipulación' : 'Riesgo Macro'}.
+                                âš ï¸ Filtro Activado: SeÃ±ales dÃ©biles descartadas por {currentRisk.riskType === 'MANIPULATION' ? 'ManipulaciÃ³n' : 'Riesgo Macro'}.
                             </p>
                         )}
                         <p className="text-[10px] mt-2 bg-surface p-2 rounded border border-border font-mono text-accent">
@@ -187,9 +216,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         <div>
                             <div className="flex items-center gap-2 mb-1">
                                 <BookOpen size={18} className="text-accent" />
-                                <h3 className="text-lg font-mono font-bold text-white uppercase">Análisis Táctico: {selectedSignal.symbol}</h3>
+                                <h3 className="text-lg font-mono font-bold text-white uppercase">AnÃ¡lisis TÃ¡ctico: {selectedSignal.symbol}</h3>
                             </div>
-                            <p className="text-xs text-secondary">Desglose educativo de la señal detectada</p>
+                            <p className="text-xs text-secondary">Desglose educativo de la seÃ±al detectada</p>
                         </div>
                         <button
                             onClick={() => setSelectedSignal(null)}
@@ -210,7 +239,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                     {STRATEGIES.find(s => s.id === selectedSignal.strategy.toLowerCase())?.name || selectedSignal.strategy}
                                 </p>
                                 <p className="text-xs text-secondary leading-relaxed border-l-2 border-accent/50 pl-3">
-                                    {STRATEGIES.find(s => s.id === selectedSignal.strategy.toLowerCase())?.description || "Algoritmo de detección de patrones matemáticos avanzados."}
+                                    {STRATEGIES.find(s => s.id === selectedSignal.strategy.toLowerCase())?.description || "Algoritmo de detecciÃ³n de patrones matemÃ¡ticos avanzados."}
                                 </p>
                             </div>
                         </div>
@@ -245,20 +274,20 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                         </div>
                                     </div>
                                 ) : (
-                                    <p className="text-xs text-secondary italic">Métricas detalladas no disponibles para este tick.</p>
+                                    <p className="text-xs text-secondary italic">MÃ©tricas detalladas no disponibles para este tick.</p>
                                 )}
                             </div>
 
                             {/* 3. INTERPRETATION */}
                             <div className="bg-blue-500/5 rounded-xl p-5 border border-blue-500/20 col-span-2 md:col-span-1 flex flex-col justify-center">
                                 <h4 className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center gap-2">
-                                    <Cpu size={14} /> Interpretación Institucional
+                                    <Cpu size={14} /> InterpretaciÃ³n Institucional
                                 </h4>
                                 <p className="text-xs text-secondary leading-relaxed">
                                     "{selectedSignal.technicalReasoning}"
                                 </p>
                                 <p className="text-[10px] text-blue-300/60 mt-2 italic">
-                                    *El algoritmo detectó esta oportunidad porque la confluencia matemática supera el 70% de probabilidad.*
+                                    *El algoritmo detectÃ³ esta oportunidad porque la confluencia matemÃ¡tica supera el 70% de probabilidad.*
                                 </p>
                             </div>
                         </div>
@@ -266,16 +295,16 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         {/* 4. RISK MANAGEMENT */}
                         <div className="bg-surface rounded-xl p-5 border border-border">
                             <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
-                                <Shield size={14} /> Gestión de Riesgo Sugerida
+                                <Shield size={14} /> GestiÃ³n de Riesgo Sugerida
                             </h4>
                             <div className="flex items-center gap-4 text-xs">
                                 <div className="flex-1 bg-background p-3 rounded border border-border">
-                                    <span className="block text-[10px] text-secondary uppercase mb-1">Entrada Óptima</span>
+                                    <span className="block text-[10px] text-secondary uppercase mb-1">Entrada Ã“ptima</span>
                                     <span className="font-mono font-bold text-primary">${selectedSignal.entryZone.min}</span>
                                 </div>
                                 <ArrowRight size={16} className="text-secondary" />
                                 <div className="flex-1 bg-danger/10 p-3 rounded border border-danger/20">
-                                    <span className="block text-[10px] text-danger uppercase mb-1">Stop Loss (Invalidación)</span>
+                                    <span className="block text-[10px] text-danger uppercase mb-1">Stop Loss (InvalidaciÃ³n)</span>
                                     <span className="font-mono font-bold text-danger">${selectedSignal.stopLoss}</span>
                                 </div>
                             </div>
@@ -290,7 +319,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                             }}
                             className="px-6 py-2 bg-accent hover:bg-accentHover text-white rounded font-bold text-xs font-mono uppercase transition-colors"
                         >
-                            Ver Gráfico en Vivo
+                            Ver GrÃ¡fico en Vivo
                         </button>
                     </div>
                 </div>
@@ -322,7 +351,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                             </span>
                         </div>
                         <p className="text-[10px] text-secondary mt-0.5 font-mono">
-                            {new Date(data.timestamp).toLocaleTimeString()} • Score: <span className="text-accent">{data.confidenceScore}%</span>
+                            {new Date(data.timestamp).toLocaleTimeString()} â€¢ Score: <span className="text-accent">{data.confidenceScore}%</span>
                         </p>
                     </div>
                 </div>
@@ -337,7 +366,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     <button
                         onClick={(e) => { e.stopPropagation(); onShowDetails(); }}
                         className="mt-1 p-1 text-secondary hover:text-accent transition-colors"
-                        title="Ver Explicación Educativa"
+                        title="Ver ExplicaciÃ³n Educativa"
                     >
                         <BookOpen size={14} />
                     </button>
@@ -359,7 +388,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     </div>
                     <div className="space-y-1">
                         <label className="text-[10px] text-secondary uppercase font-bold flex items-center gap-1">
-                            <Layers size={10} /> {data.dcaLevel ? 'DCA (Límite)' : 'Entrada 2'}
+                            <Layers size={10} /> {data.dcaLevel ? 'DCA (LÃ­mite)' : 'Entrada 2'}
                         </label>
                         <div className={`p-2 bg-background border border-border rounded font-mono text-xs ${data.dcaLevel ? 'text-accent' : 'text-secondary/50'}`}>
                             {data.dcaLevel ? `$${data.dcaLevel}` : 'N/A'}
@@ -412,7 +441,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     onClick={onSelect}
                     className="w-full py-3 rounded-lg bg-primary hover:bg-white text-background font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 group-hover:scale-[1.02]"
                 >
-                    Ver en Gráfico <ArrowRight size={14} />
+                    Ver en GrÃ¡fico <ArrowRight size={14} />
                 </button>
             </div>
         </div>
@@ -420,3 +449,4 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
 }
 
 export default OpportunityFinder;
+
