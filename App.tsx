@@ -24,7 +24,7 @@ const App: React.FC = () => {
     switch (activeTab) {
       case TabView.DASHBOARD:
         return (
-          <div className="flex flex-col lg:flex-row gap-4 h-full">
+          <div className="flex flex-col lg:flex-row gap-4 lg:h-full">
             {/* 
                MOBILE LAYOUT STRATEGY: 
                On mobile, items stack. We give fixed heights so they don't collapse.
