@@ -211,8 +211,12 @@ export const streamMarketAnalysis = async function* (
             }
         }
 
+
         let sentiment = "NEUTRO";
         let mainIcon = "⚪";
+
+        const isBullish = bullishScore > bearishScore;
+        const primarySide: 'LONG' | 'SHORT' = isBullish ? 'LONG' : 'SHORT';
 
         if (bullishScore > bearishScore + 2) { sentiment = "ALCISTA (BULLISH)"; mainIcon = "🟢"; }
         else if (bearishScore > bullishScore + 2) { sentiment = "BAJISTA (BEARISH)"; mainIcon = "🔴"; }
@@ -228,27 +232,34 @@ export const streamMarketAnalysis = async function* (
         response += `|---|---|---|\n`;
         const trendNote = isRangeMarket
             ? "⚠️ Mercado en RANGO (ADX < 25). Evitar operar hasta breakout confirmado."
-            : "Impulso local, ideal para la captura de un rally de alivio.";
+            : primarySide === 'LONG'
+                ? "Impulso local alcista, buscando captura de liquidez."
+                : "Debilidad estructural, buscando ventas en zonas premium.";
+
         response += `| **Diagnóstico Táctico (15m)** | ${mainIcon} ${sentiment} | ${trendNote} |\n`;
-        response += `| **Score de Fuerza** | Bulls ${bullishScore.toFixed(1)} vs Bears ${bearishScore.toFixed(1)} | Confirma el control momentáneo de la demanda. |\n`;
+        response += `| **Score de Fuerza** | Bulls ${bullishScore.toFixed(1)} vs Bears ${bearishScore.toFixed(1)} | Confirma el bias direccional: **${primarySide}** |\n`;
 
         if (macroContext) {
             const { btcRegime } = macroContext;
             const regimeIcon = btcRegime.regime === 'BULL' ? '🟢' : btcRegime.regime === 'BEAR' ? '🔴' : '🟡';
-            response += `| **Régimen Macro (Diario)** | ${regimeIcon} ${btcRegime.regime} (${btcRegime.strength}% Fuerza) | El factor de riesgo predominante; todo long es un trade contra la "gravedad" macro. |\n`;
+            response += `| **Régimen Macro (Diario)** | ${regimeIcon} ${btcRegime.regime} (${btcRegime.strength}% Fuerza) | El factor de riesgo predominante. |\n`;
         }
 
-        response += `| **Estrategia Primaria** | ${formatStrategyName(strategyId)} | Enfoque en la mitigación de órdenes institucionales no ejecutadas (POI). |\n\n`;
+        response += `| **Estrategia Primaria** | ${formatStrategyName(strategyId)} | Enfoque en la mitigación de órdenes institucionales (${primarySide}). |\n\n`;
 
         // II. CONTEXTO MACROECONÓMICO
         if (macroContext) {
             const { btcRegime, btcDominance, usdtDominance } = macroContext;
             response += `## II. Contexto Macroeconómico: La Gravedad Estructural\n`;
-            response += `El contexto macroeconómico exige una gestión de riesgo inflexible. La tendencia de largo plazo se encuentra bajo presión crítica.\n\n`;
+            response += `El contexto macroeconómico exige una gestión de riesgo inflexible.\n\n`;
 
             response += `### 2.1. La Amenaza del Régimen ${btcRegime.regime}\n`;
             response += `La estructura técnica diaria muestra un régimen **${btcRegime.regime}**. ${btcRegime.reasoning}\n`;
-            response += `**Implicación:** El objetivo de este trade no es la continuación alcista perpetua, sino la captura eficiente de un rally de alivio antes de que la presión estructural reanude.\n\n`;
+
+            const biasText = primarySide === 'LONG'
+                ? "El objetivo es la captura eficiente de un movimiento al alza."
+                : "El objetivo es capitalizar la debilidad del activo mediante ventas tácticas.";
+            response += `**Implicación:** ${biasText}\n\n`;
 
             response += `### 2.2. Correlación de Liquidez Global\n`;
             response += `Bitcoin actúa como un "barómetro" de liquidez global.\n`;
@@ -261,14 +272,14 @@ export const streamMarketAnalysis = async function* (
 
         // Divergence Logic
         let divergenceText = "Alineación Confirmada";
-        if (macroContext && macroContext.btcRegime.regime === 'BEAR' && price > ema200) {
+        if (macroContext && macroContext.btcRegime.regime === 'BEAR' && price > ema200 && primarySide === 'LONG') {
             divergenceText = "⚠️ Divergencia Crítica (Posible Dead Cat Bounce)";
         }
         response += `El análisis del marco temporal de 15 minutos revela: **${divergenceText}**.\n\n`;
 
         response += `### 3.1. Validación del Riesgo\n`;
         response += `- **ADX (Fuerza de Tendencia):** ${adx.toFixed(1)} ${adx < 25 ? '(⚠️ RANGO - No operar)' : adx > 40 ? '(🔥 Tendencia Fuerte)' : '(✅ Tendencia Moderada)'}\n`;
-        response += `- **Volumen Relativo (RVOL):** ${rvol.toFixed(2)}x ${rvol < 1 ? '(❌ Poco Interés)' : '(✅ Interés Real)'}. Un rally con bajo volumen es sospechoso.\n`;
+        response += `- **Volumen Relativo (RVOL):** ${rvol.toFixed(2)}x ${rvol < 1 ? '(❌ Poco Interés)' : '(✅ Interés Real)'}. Un movimiento con bajo volumen es sospechoso.\n`;
 
         // Market Extremes Warning
         if (isCapitulation) {
@@ -308,21 +319,29 @@ export const streamMarketAnalysis = async function* (
         // SMC Logic Table
         // SMC Logic Table
         response += `### 3.2. Lógica SMC: Confluencia del POI de Alta Probabilidad\n`;
-        response += `La filosofía SMC dicta que la entrada óptima se encuentra en una zona de descuento profundo.\n\n`;
+        const poiContext = primarySide === 'LONG' ? "zona de descuento profundo" : "zona de premium (resistencia)";
+        response += `La filosofía SMC dicta que la entrada óptima se encuentra en una ${poiContext}.\n\n`;
 
-        if (confluenceAnalysis && confluenceAnalysis.topSupports.length > 0) {
+        if (confluenceAnalysis && ((primarySide === 'LONG' && confluenceAnalysis.topSupports.length > 0) || (primarySide === 'SHORT' && confluenceAnalysis.topResistances.length > 0))) {
             response += `| Nivel Clave (POI) | Precio Objetivo | Confluencia Institucional |\n`;
             response += `|---|---|---|\n`;
-            confluenceAnalysis.topSupports.forEach(poi => {
+            const poisToShow = primarySide === 'LONG' ? confluenceAnalysis.topSupports : confluenceAnalysis.topResistances;
+            poisToShow.forEach(poi => {
                 response += `| **${poi.factors[0]}** | $${poi.price.toFixed(4)} | ${poi.factors.join(' + ')} |\n`;
             });
             response += `\n`;
         } else {
-            const goldenPocket = fibonacci.level0_618;
+            // Updated Fallback Logic for Short Side
+            const goldenPocket = primarySide === 'LONG' ? fibonacci.level0_618 : fibonacci.level0_382; // Generic placeholder logic for Short Fibs if not inverted elsewhere
+            // Note: usually Shorting from high to low, 0.618 retracement is resistance. The API provides levels.
+            // Let's assume level0_618 is the generic Golden Pocket price regardless of trend direction if calculated correctly,
+            // OR we rely on standard interpretation.
+            // PRO FIX: We will label it correctly based on side.
+
             response += `| Nivel Clave (POI) | Precio Objetivo | Confluencia Institucional |\n`;
             response += `|---|---|---|\n`;
-            response += `| **Golden Pocket (Fib 0.618)** | $${goldenPocket.toFixed(4)} | Zona de descuento ideal para la reentrada. |\n`;
-            response += `| **EMA 200 Local** | $${ema200.toFixed(4)} | Soporte dinámico clave que refuerza la rigidez del POI. |\n`;
+            response += `| **Golden Pocket (Fib 0.618)** | $${fibonacci.level0_618.toFixed(4)} | ${primarySide === 'LONG' ? 'Zona de descuento' : 'Zona de rechazo (Venta)'} ideal. |\n`;
+            response += `| **EMA 200 Local** | $${ema200.toFixed(4)} | ${primarySide === 'LONG' ? 'Soporte' : 'Resistencia'} dinámico clave. |\n`;
             response += `| **Point of Control (PoC)** | $\\approx$ $${pivots.p.toFixed(4)} | Nivel de equilibrio de volumen (Pivote Central). |\n\n`;
         }
 
@@ -371,17 +390,24 @@ export const streamMarketAnalysis = async function* (
                 response += `| **Tendencia Macro (1D)** | ${trend1dText} | Precio ($${price_1d}) vs EMA200 ($${ema200_1d.toFixed(4)}). |\n`;
             }
 
-            response += `| **Veredicto Fractal** | ${fractalIcon} ${fractalStatus} | ${isFullyAligned ? '� **INSTITUTIONAL TSUNAMI:** Alineación perfecta en todas las temporalidades. Máxima convicción.' : '⚠️ Precaución: Fractura en la estructura temporal.'} |\n\n`;
+            response += `| **Veredicto Fractal** | ${fractalIcon} ${fractalStatus} | ${isFullyAligned ? ' **INSTITUTIONAL TSUNAMI:** Alineación perfecta en todas las temporalidades. Máxima convicción.' : '⚠️ Precaución: Fractura en la estructura temporal.'} |\n\n`;
         }
 
         // IV. PLAN DE EJECUCIÓN DCA (Generado por módulo)
-        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime);
+        // ESCENARIO A: DOMINANTE
+        const scenarioATitle = `## IV.A Escenario Principal: ${primarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${isBullish ? bullishScore.toFixed(0) : bearishScore.toFixed(0)})`;
+        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, primarySide, scenarioATitle);
+
+        // ESCENARIO B: ALTERNATIVO (HEDGING)
+        const secondarySide = primarySide === 'LONG' ? 'SHORT' : 'LONG';
+        const scenarioBTitle = `## IV.B Escenario Alternativo (Cobertura): ${secondarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${isBullish ? bearishScore.toFixed(0) : bullishScore.toFixed(0)})`;
+        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, secondarySide, scenarioBTitle);
 
         yield response;
     }
     // Lógica para preguntas puntuales
     else if (msg.includes('riesgo') || msg.includes('stop') || msg.includes('sl')) {
-        yield `### 🛡️ Clase de Gestión de Riesgo (ATR)\nEl ATR (Average True Range) mide cuánto se mueve el precio en promedio por vela. Úsalo para colocar tu Stop Loss fuera del "ruido" normal.\n\n**Datos actuales:**\n- ATR: $${atr.toFixed(4)}\n\n**Cálculo de Stop Loss:**\n- **Scalping:** Precio - (1.5 x ATR) = $${(price - (atr * 1.5)).toFixed(4)}\n- **Swing:** Precio - (2.5 x ATR) = $${(price - (atr * 2.5)).toFixed(4)}\n\n*Regla de Oro: Si tu SL está muy lejos, reduce el tamaño de tu posición para mantener el riesgo en dólares constante.*`;
+        yield `### 🛡️ Clase de Gestión de Riesgo (ATR)\nEl ATR (Average True Range) mide cuánto se mueve el precio en promedio por vela. Úsalo para colocar tu Stop Loss fuera del "ruido" normal.\n\n**Datos actuales:**\n- ATR: $${atr.toFixed(4)}\n\n**Cálculo de Stop Loss (LONG vs SHORT):**\n- **LONG (Compra):** Precio Entrada - (1.5 x ATR)\n- **SHORT (Venta):** Precio Entrada + (1.5 x ATR)\n\n**Ejemplo Práctico:**\n- Long: $${(price - (atr * 1.5)).toFixed(4)}\n- Short: $${(price + (atr * 1.5)).toFixed(4)}\n\n*Regla de Oro: Si tu SL está muy lejos, reduce el tamaño de tu posición para mantener el riesgo en dólares constante.*`;
     }
     else {
         // Fallback conversacional (DEBUG: Indica qué entendió)
