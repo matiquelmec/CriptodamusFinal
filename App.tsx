@@ -43,7 +43,7 @@ const App: React.FC = () => {
             {/* Mobile: Stacked below scanner. Desktop: Right column */}
             <div className="flex flex-col gap-4 flex-1 lg:h-full lg:w-3/4 min-h-[800px] lg:min-h-0">
               {/* Top: Chart */}
-              <div className="h-[500px] lg:flex-[3] w-full lg:min-h-0">
+              <div className="h-[65vh] min-h-[550px] lg:h-auto lg:flex-[3] w-full lg:min-h-0">
                 <TradingViewWidget symbol={selectedSymbol} />
               </div>
               {/* Bottom: AI */}

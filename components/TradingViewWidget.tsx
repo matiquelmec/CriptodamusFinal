@@ -10,7 +10,7 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({ symbol }) => {
   useEffect(() => {
     // Clean up previous script if it exists to prevent duplicates on re-render
     if (container.current) {
-        container.current.innerHTML = '';
+      container.current.innerHTML = '';
     }
 
     const script = document.createElement("script");
@@ -52,14 +52,14 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({ symbol }) => {
     });
 
     if (container.current) {
-        container.current.appendChild(script);
+      container.current.appendChild(script);
     }
   }, [symbol]);
 
   return (
     <div className="h-full w-full bg-surface border border-border rounded-xl overflow-hidden shadow-sm flex flex-col">
       <div className="tradingview-widget-container h-full w-full" ref={container}>
-        <div className="tradingview-widget-container__widget h-[calc(100%_-_32px)] w-full"></div>
+        <div className="tradingview-widget-container__widget h-full w-full"></div>
       </div>
     </div>
   );
