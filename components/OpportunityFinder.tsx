@@ -307,7 +307,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                             }}
                             className="px-6 py-2 bg-accent hover:bg-accentHover text-white rounded font-bold text-xs font-mono uppercase transition-colors"
                         >
-                            Ver GrÃ¡fico en Vivo
+                            Ver Gráfico en Vivo
                         </button>
                     </div>
                 </div>
