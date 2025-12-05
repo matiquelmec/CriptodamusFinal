@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
 import { scanMarketOpportunities, getMarketRisk } from '../services/cryptoService';
@@ -339,7 +338,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                             </span>
                         </div>
                         <p className="text-[10px] text-secondary mt-0.5 font-mono">
-                            {new Date(data.timestamp).toLocaleTimeString()} â€¢ Score: <span className="text-accent">{data.confidenceScore}%</span>
+                            {new Date(data.timestamp).toLocaleTimeString()} • Score: <span className="text-accent">{data.confidenceScore}%</span>
                         </p>
                     </div>
                 </div>
@@ -364,24 +363,39 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
             {/* Signal Body */}
             <div className="p-5 flex-1 space-y-5">
 
-                {/* Entry & DCA */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
+                {/* Entry & DCA (New Educational Layout) */}
+                <div className="space-y-2">
+                    <div className="flex justify-between items-center">
                         <label className="text-[10px] text-secondary uppercase font-bold flex items-center gap-1">
-                            <Target size={10} /> Zona Entrada
+                            <Layers size={10} /> Plan de Entrada Institucional (DCA)
                         </label>
-                        <div className="p-2 bg-background border border-border rounded font-mono text-xs text-primary">
+                        <span className="text-[9px] text-accent/80 italic">Promediación Inteligente</span>
+                    </div>
+
+                    {data.dcaPlan ? (
+                        <div className="grid grid-cols-3 gap-2">
+                            {/* Entry 1 */}
+                            <div className="p-2 bg-background border border-border rounded flex flex-col items-center group/entry hover:border-primary/30 transition-colors cursor-help" title="Entrada Inicial: 40% del capital asignado">
+                                <span className="text-[9px] text-secondary uppercase mb-0.5">Inicial (40%)</span>
+                                <span className="font-mono text-xs font-bold text-primary">${data.dcaPlan.entries[0].price}</span>
+                            </div>
+                            {/* Entry 2 */}
+                            <div className="p-2 bg-background border border-border rounded flex flex-col items-center group/entry hover:border-primary/30 transition-colors cursor-help" title="DCA 1: 30% del capital. Zona de soporte intermedio.">
+                                <span className="text-[9px] text-secondary uppercase mb-0.5">DCA 1 (30%)</span>
+                                <span className="font-mono text-xs font-bold text-primary">${data.dcaPlan.entries[1].price}</span>
+                            </div>
+                            {/* Entry 3 */}
+                            <div className="p-2 bg-background border border-border rounded flex flex-col items-center group/entry hover:border-accent/50 transition-colors cursor-help" title="DCA 2: 30% del capital. Zona de 'Golden Pocket' o soporte mayor.">
+                                <span className="text-[9px] text-secondary uppercase mb-0.5">DCA 2 (30%)</span>
+                                <span className="font-mono text-xs font-bold text-accent">${data.dcaPlan.entries[2].price}</span>
+                            </div>
+                        </div>
+                    ) : (
+                        // Fallback for old signals or errors
+                        <div className="p-2 bg-background border border-border rounded font-mono text-xs text-primary text-center">
                             ${data.entryZone.min} - ${data.entryZone.max}
                         </div>
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] text-secondary uppercase font-bold flex items-center gap-1">
-                            <Layers size={10} /> {data.dcaLevel ? 'DCA (Límite)' : 'Entrada 2'}
-                        </label>
-                        <div className={`p-2 bg-background border border-border rounded font-mono text-xs ${data.dcaLevel ? 'text-accent' : 'text-secondary/50'}`}>
-                            {data.dcaLevel ? `$${data.dcaLevel}` : 'N/A'}
-                        </div>
-                    </div>
+                    )}
                 </div>
 
                 {/* TP Stack */}
@@ -437,5 +451,3 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
 }
 
 export default OpportunityFinder;
-
-

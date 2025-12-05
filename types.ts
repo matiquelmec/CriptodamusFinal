@@ -169,6 +169,7 @@ export interface TechnicalIndicators {
     trend_1d?: 'BULLISH' | 'BEARISH';
     ema200_1d?: number;
     price_1d?: number;
+    trend_1d_structure?: string;
   };
 
   ichimokuData?: IchimokuCloud;
@@ -261,4 +262,5 @@ export interface AIOpportunity {
     structure: string;
     specificTrigger: string;
   };
+  dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI
 }

@@ -946,6 +946,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         structure: structureNote,
                         specificTrigger: specificTrigger
                     },
+                    dcaPlan: dcaPlan, // NEW: Pasar el plan completo
                     invalidated: false
                 };
 
