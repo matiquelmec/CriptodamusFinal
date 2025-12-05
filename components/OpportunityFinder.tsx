@@ -315,6 +315,16 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     );
 };
 
+// Helper for clean price formatting
+const formatPrice = (price: number) => {
+    if (!price) return '0.00';
+    if (price < 0.01) return price.toFixed(8);
+    if (price < 1) return price.toFixed(5); // Crypto penny stocks
+    if (price < 10) return price.toFixed(4);
+    if (price < 1000) return price.toFixed(2);
+    return price.toLocaleString('en-US', { maximumFractionDigits: 2 });
+};
+
 // Sub-component for the "Signal Ticket" look
 const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDetails: () => void }> = ({ data, onSelect, onShowDetails }) => {
     const isLong = data.side === 'LONG';
@@ -377,17 +387,17 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                             {/* Entry 1 */}
                             <div className="p-2 bg-background border border-border rounded flex flex-col items-center group/entry hover:border-primary/30 transition-colors cursor-help" title="Entrada Inicial: 40% del capital asignado">
                                 <span className="text-[9px] text-secondary uppercase mb-0.5">Inicial (40%)</span>
-                                <span className="font-mono text-xs font-bold text-primary">${data.dcaPlan.entries[0].price}</span>
+                                <span className="font-mono text-xs font-bold text-primary">${formatPrice(data.dcaPlan.entries[0].price)}</span>
                             </div>
                             {/* Entry 2 */}
                             <div className="p-2 bg-background border border-border rounded flex flex-col items-center group/entry hover:border-primary/30 transition-colors cursor-help" title="DCA 1: 30% del capital. Zona de soporte intermedio.">
                                 <span className="text-[9px] text-secondary uppercase mb-0.5">DCA 1 (30%)</span>
-                                <span className="font-mono text-xs font-bold text-primary">${data.dcaPlan.entries[1].price}</span>
+                                <span className="font-mono text-xs font-bold text-primary">${formatPrice(data.dcaPlan.entries[1].price)}</span>
                             </div>
                             {/* Entry 3 */}
                             <div className="p-2 bg-background border border-border rounded flex flex-col items-center group/entry hover:border-accent/50 transition-colors cursor-help" title="DCA 2: 30% del capital. Zona de 'Golden Pocket' o soporte mayor.">
                                 <span className="text-[9px] text-secondary uppercase mb-0.5">DCA 2 (30%)</span>
-                                <span className="font-mono text-xs font-bold text-accent">${data.dcaPlan.entries[2].price}</span>
+                                <span className="font-mono text-xs font-bold text-accent">${formatPrice(data.dcaPlan.entries[2].price)}</span>
                             </div>
                         </div>
                     ) : (
