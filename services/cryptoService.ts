@@ -671,6 +671,29 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const adx = calculateADX(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), 14);
             const atr = calculateATR(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), 14);
 
+            // NEW: Calculate Order Blocks and Confluence for strategies
+            const volumeProfile = calculateVolumeProfile(candles.slice(0, checkIndex + 1), atr);
+            const { bullishOB, bearishOB } = detectOrderBlocks(candles.slice(0, checkIndex + 1), atr, currentPrice);
+            const { bullishFVG, bearishFVG } = detectFVG(candles.slice(0, checkIndex + 1), atr, currentPrice);
+
+            // Calculate Confluence for resistances/supports
+            const confluenceAnalysis = calculatePOIs(
+                currentPrice,
+                fibs,
+                pivots,
+                ema200,
+                ema50,
+                atr,
+                volumeProfile,
+                bullishOB,
+                bearishOB,
+                bullishFVG,
+                bearishFVG
+            );
+
+            // Extract resistances for Breakout Strategy
+            const resistances = confluenceAnalysis.topResistances.map(r => r.price);
+
             // 2. Construct TechnicalIndicators for Regime Detection
             const techIndicators: TechnicalIndicators = {
                 symbol: coin.symbol,
@@ -712,10 +735,23 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     result = analyzeIchimoku(highs, lows, prices);
                     strategyName = "Ichimoku Cloud";
                 } else if (strategyId === 'breakout_momentum') {
-                    result = analyzeBreakoutSignal(prices.slice(0, checkIndex + 1), highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), rvol);
+                    result = analyzeBreakoutSignal(
+                        prices.slice(0, checkIndex + 1),
+                        highs.slice(0, checkIndex + 1),
+                        lows.slice(0, checkIndex + 1),
+                        rvol,
+                        resistances // NEW: Pasar resistencias para validación
+                    );
                     strategyName = "Breakout Momentum";
                 } else if (strategyId === 'smc_liquidity') {
-                    result = analyzeSwingSignal(prices.slice(0, checkIndex + 1), highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), fibs);
+                    result = analyzeSwingSignal(
+                        prices.slice(0, checkIndex + 1),
+                        highs.slice(0, checkIndex + 1),
+                        lows.slice(0, checkIndex + 1),
+                        fibs,
+                        volumes.slice(0, checkIndex + 1), // NEW: Pasar volumes para validación
+                        { bullishOB, bearishOB } // NEW: Pasar Order Blocks
+                    );
                     strategyName = "SMC Liquidity";
                 } else if (strategyId === 'quant_volatility') {
                     result = analyzeScalpSignal(prices.slice(0, checkIndex + 1), vwap, rsi);
@@ -828,6 +864,35 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                         // Añadir nota de confirmación
                         detectionNote += ` | ${fractalNote}`;
+
+                        // NEW: VALIDACIÓN FRACTAL 4H (Para todas las señales prometedoras)
+                        // Validamos 4H para asegurar alineación con estructura superior
+                        try {
+                            const candles4h = await fetchCandles(coin.id, '4h');
+                            if (candles4h.length >= 200) {
+                                const prices4h = candles4h.map(c => c.close);
+                                const ema200_4h = calculateEMA(prices4h, 200);
+                                const currentPrice4h = prices4h[prices4h.length - 1];
+
+                                const distanceFrom4hEMA = Math.abs((currentPrice4h - ema200_4h) / ema200_4h) * 100;
+
+                                // Penalización moderada si estructura 4H diverge
+                                if (signalSide === 'LONG' && currentPrice4h < ema200_4h && distanceFrom4hEMA > 3) {
+                                    finalScore *= 0.85; // Penalización moderada
+                                    detectionNote += " | ⚠️ Estructura 4H bajista";
+                                } else if (signalSide === 'SHORT' && currentPrice4h > ema200_4h && distanceFrom4hEMA > 3) {
+                                    finalScore *= 0.85;
+                                    detectionNote += " | ⚠️ Estructura 4H alcista";
+                                } else if (
+                                    (signalSide === 'LONG' && currentPrice4h > ema200_4h) ||
+                                    (signalSide === 'SHORT' && currentPrice4h < ema200_4h)
+                                ) {
+                                    detectionNote += " | ✅ Confirmado 4H";
+                                }
+                            }
+                        } catch (err4h) {
+                            // Silently fail, 4H validation is not critical
+                        }
                     }
                 } catch (err) {
                     console.warn(`[Scanner] Falló validación 1H para ${coin.symbol}, procediendo con precaución.`);

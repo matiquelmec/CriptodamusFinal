@@ -18,8 +18,17 @@ export const analyzeMemeSignal = (
     const checkIndex = prices.length - 1; // Live or last closed candle depending on input
     const currentPrice = prices[checkIndex];
     const ema20 = calculateEMA(prices, 20);
+    const ema50 = calculateEMA(prices, 50); // NEW: Anti-pump filter
 
-    // ESTRATEGIA 1: EL PUMP (MOMENTUM) - NOW WITH VWAP SAFETY
+    // NEW: FILTRO INSTITUCIONAL - Detectar pumps insostenibles
+    // Si el precio está >15% sobre EMA50, es un pump peligroso (FOMO trap)
+    const distanceFromEMA50 = ((currentPrice - ema50) / ema50) * 100;
+    if (distanceFromEMA50 > 15) {
+        // Pump demasiado alejado de estructura, alta probabilidad de dump
+        return null;
+    }
+
+    // ESTRATEGIA 1: EL PUMP (MOMENTUM) - NOW WITH VWAP SAFETY + ANTI-PUMP FILTER
     if (currentPrice > ema20 && currentPrice > vwap && rvol > 1.8 && rsi > 55) {
         const score = 80 + Math.min(rvol * 3, 15); // Higher volume = Higher score
         return {

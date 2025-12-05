@@ -182,18 +182,6 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                 ) : opportunities.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-secondary gap-3 opacity-60">
                         <BarChart2 size={48} strokeWidth={1} />
-                        <h3 className="font-mono text-sm font-bold">Sin SeÃ±ales Claras</h3>
-                        <p className="text-xs text-center max-w-sm">
-                            El algoritmo autÃ³nomo ha analizado las criptomonedas principales y ninguna cumple los criterios estrictos del sistema en este momento.
-                        </p>
-                        {currentRisk && currentRisk.level === 'HIGH' && (
-                            <p className="text-[10px] mt-2 bg-danger/10 p-2 rounded border border-danger/20 font-mono text-danger">
-                                âš ï¸ Filtro Activado: SeÃ±ales dÃ©biles descartadas por {currentRisk.riskType === 'MANIPULATION' ? 'ManipulaciÃ³n' : 'Riesgo Macro'}.
-                            </p>
-                        )}
-                        <p className="text-[10px] mt-2 bg-surface p-2 rounded border border-border font-mono text-accent">
-                            Paciencia = Rentabilidad.
-                        </p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

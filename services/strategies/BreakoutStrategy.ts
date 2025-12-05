@@ -12,7 +12,8 @@ export const analyzeBreakoutSignal = (
     prices: number[],
     highs: number[],
     lows: number[],
-    rvol: number
+    rvol: number,
+    resistances?: number[] // NEW: Resistencias conocidas para validación
 ): BreakoutSignal | null => {
     const checkIndex = prices.length - 1;
     const currentPrice = prices[checkIndex];
@@ -35,22 +36,76 @@ export const analyzeBreakoutSignal = (
 
     // 1. BULLISH BREAKOUT
     if (currentPrice > maxHigh20 && rvol > 1.5 && isExpanding) {
-        const score = 75 + Math.min((rvol * 5), 20);
+        // NEW: VALIDACIÓN DE CIERRE FUERTE (Institucional)
+        // Un breakout real debe cerrar fuerte (>70% del rango de la vela)
+        const currentHigh = highs[checkIndex];
+        const currentLow = lows[checkIndex];
+        const candleRange = currentHigh - currentLow;
+
+        if (candleRange > 0) {
+            const closeStrength = (currentPrice - currentLow) / candleRange;
+
+            // Si cerró débil (<70%), es posible bull trap
+            if (closeStrength < 0.7) {
+                return null; // Descartar breakout no confirmado
+            }
+        }
+
+        let score = 75 + Math.min((rvol * 5), 20);
+
+        // NEW: PENALIZACIÓN POR RESISTENCIAS CERCANAS
+        // Si hay resistencia <2% arriba, el breakout puede fallar
+        if (resistances && resistances.length > 0) {
+            const nearResistance = resistances.some(r =>
+                r > currentPrice && ((r - currentPrice) / currentPrice) < 0.02
+            );
+            if (nearResistance) {
+                score -= 20; // Penalización significativa
+            }
+        }
+
         return {
             score,
             signalSide: 'LONG',
             detectionNote: `Donchian Breakout: Ruptura de Máximo de 20 periodos con Expansión.`,
-            specificTrigger: `Price > ${maxHigh20} (20p High) + RVOL ${rvol.toFixed(1)}x`
+            specificTrigger: `Price > ${maxHigh20.toFixed(4)} (20p High) + RVOL ${rvol.toFixed(1)}x`
         };
     }
     // 2. BEARISH BREAKDOWN
     else if (currentPrice < minLow20 && rvol > 1.5 && isExpanding) {
-        const score = 75 + Math.min((rvol * 5), 20);
+        // NEW: VALIDACIÓN DE CIERRE FUERTE PARA SHORT
+        // Debe cerrar en el 30% inferior de la vela (presión vendedora)
+        const currentHigh = highs[checkIndex];
+        const currentLow = lows[checkIndex];
+        const candleRange = currentHigh - currentLow;
+
+        if (candleRange > 0) {
+            const closeStrength = (currentPrice - currentLow) / candleRange;
+
+            // Para SHORT, queremos cierre débil (<30%)
+            if (closeStrength > 0.3) {
+                return null; // Breakdown no confirmado
+            }
+        }
+
+        let score = 75 + Math.min((rvol * 5), 20);
+
+        // NEW: PENALIZACIÓN POR SOPORTES CERCANOS (para SHORTs)
+        if (resistances && resistances.length > 0) {
+            // Para SHORT, "resistances" actúan como soportes
+            const nearSupport = resistances.some(r =>
+                r < currentPrice && ((currentPrice - r) / currentPrice) < 0.02
+            );
+            if (nearSupport) {
+                score -= 20;
+            }
+        }
+
         return {
             score,
             signalSide: 'SHORT',
             detectionNote: `Donchian Breakdown: Pérdida de Soporte de 20 periodos.`,
-            specificTrigger: `Price < ${minLow20} (20p Low) + RVOL ${rvol.toFixed(1)}x`
+            specificTrigger: `Price < ${minLow20.toFixed(4)} (20p Low) + RVOL ${rvol.toFixed(1)}x`
         };
     }
 
