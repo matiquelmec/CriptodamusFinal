@@ -88,7 +88,7 @@ export const analyzeSwingSignal = (
             }
         }
 
-        const detectionNote = `SMC Sniper: Barrido de Liquidez${extraNotes.length > 0 ? ' + ' + extraNotes.join(' + ') : ''}.`;
+        const detectionNote = `SMC Sniper: Barrido de Liquidez${extraNotes.length > 0 ? ' + ' + extraNotes.join(' + ') : ''}. El precio tomó liquidez bajo el mínimo previo y cerró arriba, atrapando vendedores.`;
         const specificTrigger = `SFP (Swing Failure Pattern)${hasBullishDiv ? ' + Bull Div' : ''}`;
 
         return {
@@ -126,7 +126,7 @@ export const analyzeSwingSignal = (
             }
         }
 
-        const detectionNote = `SMC Setup: Rechazo de Estructura Bajista (SFP)${extraNotes.length > 0 ? ' + ' + extraNotes.join(' + ') : ''}.`;
+        const detectionNote = `SMC Setup: Rechazo de Estructura Bajista (SFP)${extraNotes.length > 0 ? ' + ' + extraNotes.join(' + ') : ''}. Barrido de stops sobre el máximo previo para capturar liquidez antes de caer.`;
 
         return {
             score,

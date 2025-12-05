@@ -48,7 +48,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                 getMarketRisk()
             ]);
 
-            setScanProgress({ step: 'Procesando seÃ±ales...', progress: 90 });
+            setScanProgress({ step: 'Procesando señales...', progress: 90 });
 
             setOpportunities(opps);
             setCurrentRisk(riskData);
@@ -63,7 +63,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
             setScanProgress({ step: 'Completado', progress: 100 });
         } catch (e: any) {
             console.error(e);
-            setError("Error de conexiÃ³n al obtener datos de mercado.");
+            setError("Error de conexión al obtener datos de mercado.");
         } finally {
             setLoading(false);
         }
@@ -94,7 +94,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         </div>
                         <div>
                             <h2 className="text-sm font-mono font-bold text-primary uppercase tracking-wider">Criptodamus Auto-Pilot</h2>
-                            <p className="text-[10px] text-secondary">Motor MatemÃ¡tico AutÃ³nomo v4.0</p>
+                            <p className="text-[10px] text-secondary">Motor Matemático Autónomo v4.0</p>
                         </div>
                     </div>
 
@@ -354,7 +354,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     <button
                         onClick={(e) => { e.stopPropagation(); onShowDetails(); }}
                         className="mt-1 p-1 text-secondary hover:text-accent transition-colors"
-                        title="Ver ExplicaciÃ³n Educativa"
+                        title="Ver Explicación Educativa"
                     >
                         <BookOpen size={14} />
                     </button>
@@ -376,7 +376,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     </div>
                     <div className="space-y-1">
                         <label className="text-[10px] text-secondary uppercase font-bold flex items-center gap-1">
-                            <Layers size={10} /> {data.dcaLevel ? 'DCA (LÃ­mite)' : 'Entrada 2'}
+                            <Layers size={10} /> {data.dcaLevel ? 'DCA (Límite)' : 'Entrada 2'}
                         </label>
                         <div className={`p-2 bg-background border border-border rounded font-mono text-xs ${data.dcaLevel ? 'text-accent' : 'text-secondary/50'}`}>
                             {data.dcaLevel ? `$${data.dcaLevel}` : 'N/A'}
@@ -429,7 +429,7 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     onClick={onSelect}
                     className="w-full py-3 rounded-lg bg-primary hover:bg-white text-background font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 group-hover:scale-[1.02]"
                 >
-                    Ver en GrÃ¡fico <ArrowRight size={14} />
+                    Ver en Gráfico <ArrowRight size={14} />
                 </button>
             </div>
         </div>

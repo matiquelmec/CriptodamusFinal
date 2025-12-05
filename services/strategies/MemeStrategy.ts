@@ -34,7 +34,7 @@ export const analyzeMemeSignal = (
         return {
             score,
             signalSide: 'LONG',
-            detectionNote: `Meme Pump: Volumen Explosivo (x${rvol.toFixed(1)}) + Precio sobre VWAP.`,
+            detectionNote: `Meme Pump: Volumen Explosivo (x${rvol.toFixed(1)}) + Precio sobre VWAP. El volumen confirma interés institucional real, no solo retail.`,
             specificTrigger: `RVOL > 1.8 (${rvol.toFixed(2)}x) + RSI Uptrend (${rsi.toFixed(0)})`
         };
     }
@@ -45,7 +45,7 @@ export const analyzeMemeSignal = (
         return {
             score: 80,
             signalSide: 'LONG', // Catch the knife safely
-            detectionNote: `Meme Oversold: Precio fuera de Bandas + StochRSI en Suelo (${stochRsi.k.toFixed(0)}).`,
+            detectionNote: `Meme Oversold: Precio fuera de Bandas + StochRSI en Suelo (${stochRsi.k.toFixed(0)}). Reacción técnica esperada por sobreventa extrema.`,
             specificTrigger: `StochRSI Sobrevendido (${stochRsi.k.toFixed(0)} < 15) + Break Banda Inf.`
         };
     }

@@ -67,7 +67,7 @@ export const analyzeBreakoutSignal = (
         return {
             score,
             signalSide: 'LONG',
-            detectionNote: `Donchian Breakout: Ruptura de Máximo de 20 periodos con Expansión.`,
+            detectionNote: `Donchian Breakout: Ruptura de Máximo de 20 periodos con Expansión. La expansión de bandas confirma que el movimiento tiene fuerza real y no es ruido.`,
             specificTrigger: `Price > ${maxHigh20.toFixed(4)} (20p High) + RVOL ${rvol.toFixed(1)}x`
         };
     }
@@ -104,7 +104,7 @@ export const analyzeBreakoutSignal = (
         return {
             score,
             signalSide: 'SHORT',
-            detectionNote: `Donchian Breakdown: Pérdida de Soporte de 20 periodos.`,
+            detectionNote: `Donchian Breakdown: Ruptura de Mínimo de 20 periodos con Expansión. La volatilidad creciente valida la continuación bajista y la debilidad del soporte.`,
             specificTrigger: `Price < ${minLow20.toFixed(4)} (20p Low) + RVOL ${rvol.toFixed(1)}x`
         };
     }
