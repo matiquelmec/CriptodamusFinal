@@ -3,6 +3,7 @@ import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from "..
 import { MacroContext } from './macroService';
 import { analyzeIchimokuSignal } from './ichimokuStrategy'; // NEW: Expert Logic
 import { generateDCAExecutionPlan } from './dcaReportGenerator'; // NEW: DCA System
+import { detectBullishDivergence, calculateRSIArray } from './mathUtils'; // NEW: Divergence Detection
 
 // --- MOTOR AUTÓNOMO (OFFLINE) ---
 // Este servicio reemplaza a la IA de Google.
@@ -99,6 +100,16 @@ export const streamMarketAnalysis = async function* (
         if (isCapitulation) bullishScore += 3; // Contrarian signal
         if (isEuphoria) bearishScore += 3; // Contrarian signal
 
+        // NEW: LIQUIDATION CASCADE DETECTION (INSTITUCIONAL)
+        const isLiquidationCascade = rvol > 3 && Math.abs(macd.histogram) > atr * 0.5;
+        if (isLiquidationCascade) {
+            if (rsi < 30) {
+                bullishScore += 4; // Liquidaciones de longs = oportunidad de compra
+            } else if (rsi > 70) {
+                bearishScore += 4; // Liquidaciones de shorts = oportunidad de venta
+            }
+        }
+
         // NEW: Order Block Proximity Boost
         if (orderBlocks) {
             const { bullish, bearish } = orderBlocks;
@@ -109,6 +120,41 @@ export const streamMarketAnalysis = async function* (
             if (bearish && bearish.length > 0) {
                 const nearOB = bearish.find(ob => ob && ob.price && Math.abs(price - ob.price) / price < 0.02);
                 if (nearOB && nearOB.strength > 0.7) bearishScore += 2.5;
+            }
+        }
+
+        // NEW: FAIR VALUE GAPS INTEGRATION (INSTITUCIONAL)
+        if (fairValueGaps) {
+            const { bullish, bearish } = fairValueGaps;
+            if (bullish && bullish.length > 0) {
+                const nearFVG = bullish.find(fvg =>
+                    fvg && !fvg.filled && Math.abs(price - fvg.midpoint) / price < 0.01
+                );
+                if (nearFVG) {
+                    bullishScore += 2; // FVG sin llenar = zona de imán
+                }
+            }
+            if (bearish && bearish.length > 0) {
+                const nearFVG = bearish.find(fvg =>
+                    fvg && !fvg.filled && Math.abs(price - fvg.midpoint) / price < 0.01
+                );
+                if (nearFVG) {
+                    bearishScore += 2;
+                }
+            }
+        }
+
+        // NEW: VOLUME PROFILE ANALYSIS (INSTITUCIONAL)
+        if (volumeProfile) {
+            const { poc, valueAreaHigh, valueAreaLow } = volumeProfile;
+            const inValueArea = price >= valueAreaLow && price <= valueAreaHigh;
+
+            if (!inValueArea) {
+                if (price < valueAreaLow) {
+                    bullishScore += 1.5; // Zona de descuento
+                } else if (price > valueAreaHigh) {
+                    bearishScore += 1.5; // Zona de premium
+                }
             }
         }
 
@@ -231,10 +277,33 @@ export const streamMarketAnalysis = async function* (
         if (isEuphoria) {
             response += `- **🚨 EUFORIA DETECTADA:** RSI > 80 + Volumen extremo. Alto riesgo de corrección.\n`;
         }
+        if (isLiquidationCascade) {
+            if (rsi < 30) {
+                response += `- **💥 CASCADA DE LIQUIDACIONES (LONGS):** Volumen extremo (${rvol.toFixed(1)}x) + RSI oversold. Liquidación masiva de posiciones largas = Oportunidad de compra institucional.\n`;
+            } else if (rsi > 70) {
+                response += `- **💥 CASCADA DE LIQUIDACIONES (SHORTS):** Volumen extremo (${rvol.toFixed(1)}x) + RSI overbought. Liquidación masiva de posiciones cortas = Posible corrección inminente.\n`;
+            }
+        }
 
         const bbWidth = bollinger.bandwidth.toFixed(2);
         const squeezeStatus = parseFloat(bbWidth) < 5 ? "🔥 SQUEEZE (Compresión)" : "⚡ Expansión";
-        response += `- **Volatilidad:** Bandas Bollinger en **${squeezeStatus}**. Esta fase precede invariablemente a un movimiento violento.\n\n`;
+
+        // NEW: SQUEEZE DIRECCIONAL
+        let squeezeDirection = "";
+        if (parseFloat(bbWidth) < 5) {
+            const directionBias = ema20 > ema50 ? 'ALCISTA' : 'BAJISTA';
+            const volumeTrend = rvol > 1.2 ? 'CRECIENTE' : 'DECRECIENTE';
+            squeezeDirection = ` → Breakout probable hacia ${directionBias} (Volumen ${volumeTrend})`;
+
+            // Bonus al scoring si squeeze + volumen alineados
+            if (directionBias === 'ALCISTA' && volumeTrend === 'CRECIENTE') {
+                bullishScore += 2;
+            } else if (directionBias === 'BAJISTA' && volumeTrend === 'CRECIENTE') {
+                bearishScore += 2;
+            }
+        }
+
+        response += `- **Volatilidad:** Bandas Bollinger en **${squeezeStatus}**${squeezeDirection}. Esta fase precede invariablemente a un movimiento violento.\n\n`;
 
         // SMC Logic Table
         // SMC Logic Table
