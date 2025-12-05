@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
 import { scanMarketOpportunities, getMarketRisk } from '../services/cryptoService';
 import { STRATEGIES } from '../services/strategyContext';
-import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database } from 'lucide-react';
+import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database, Lightbulb } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import { GLOSSARY } from '../constants/glossary';
 import { useOpportunityCache } from '../hooks/useOpportunityCache';
@@ -325,6 +325,29 @@ const formatPrice = (price: number) => {
     return price.toLocaleString('en-US', { maximumFractionDigits: 2 });
 };
 
+// Helper for strategy context
+const getStrategyReason = (id: string) => {
+    const strategy = id.toLowerCase();
+
+    // 1. Regímenes de Mercado (Auto-Pilot)
+    if (strategy.includes('trending')) return "Tendencia fuerte detectada (ADX > 25). Buscamos continuidad del movimiento.";
+    if (strategy.includes('ranging')) return "Mercado lateral. Operamos reversión a la media en extremos del rango.";
+    if (strategy.includes('volatile')) return "Expansión de volatilidad. Buscamos rupturas explosivas (Breakouts).";
+    if (strategy.includes('extreme')) return "Condiciones extremas (Sobrecompra/Venta). Buscamos reversiones.";
+
+    // 2. Estrategias Específicas
+    if (strategy.includes('breakout')) return "Mercado con momentum. Buscamos rupturas de niveles clave.";
+    if (strategy.includes('swing')) return "Mercado en rango/reversión. Buscamos rebotes en zonas de valor.";
+    if (strategy.includes('meme')) return "Alta volatilidad especulativa. Aprovechando hype y volumen.";
+    if (strategy.includes('scalp')) return "Micro-estructuras de corto plazo. Entradas y salidas rápidas.";
+    if (strategy.includes('smc')) return "Smart Money Concepts. Cazando liquidez institucional y Order Blocks.";
+    if (strategy.includes('ichimoku')) return "Equilibrio de mercado. Confirmación de tendencia con Nube Ichimoku.";
+    if (strategy.includes('quant')) return "Análisis cuantitativo. Explotando ineficiencias matemáticas.";
+
+    // 3. Fallback
+    return "Patrón de alta probabilidad estadística validado por el algoritmo.";
+};
+
 // Sub-component for the "Signal Ticket" look
 const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDetails: () => void }> = ({ data, onSelect, onShowDetails }) => {
     const isLong = data.side === 'LONG';
@@ -372,6 +395,17 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
 
             {/* Signal Body */}
             <div className="p-5 flex-1 space-y-5">
+
+                {/* Strategy Context (New) */}
+                <div className="flex items-start gap-2 p-2 bg-background border border-border rounded-lg">
+                    <Activity size={14} className="text-accent mt-0.5 shrink-0" />
+                    <div>
+                        <span className="block text-[9px] text-secondary uppercase font-bold">¿Por qué esta estrategia?</span>
+                        <p className="text-[10px] text-primary leading-tight">
+                            {getStrategyReason(data.strategy)}
+                        </p>
+                    </div>
+                </div>
 
                 {/* Entry & DCA (New Educational Layout) */}
                 <div className="space-y-2">
