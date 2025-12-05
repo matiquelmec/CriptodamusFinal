@@ -204,9 +204,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         <div>
                             <div className="flex items-center gap-2 mb-1">
                                 <BookOpen size={18} className="text-accent" />
-                                <h3 className="text-lg font-mono font-bold text-white uppercase">AnÃ¡lisis TÃ¡ctico: {selectedSignal.symbol}</h3>
+                                <h3 className="text-lg font-mono font-bold text-white uppercase">Análisis Táctico: {selectedSignal.symbol}</h3>
                             </div>
-                            <p className="text-xs text-secondary">Desglose educativo de la seÃ±al detectada</p>
+                            <p className="text-xs text-secondary">Desglose educativo de la señal detectada</p>
                         </div>
                         <button
                             onClick={() => setSelectedSignal(null)}
@@ -227,7 +227,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                     {STRATEGIES.find(s => s.id === selectedSignal.strategy.toLowerCase())?.name || selectedSignal.strategy}
                                 </p>
                                 <p className="text-xs text-secondary leading-relaxed border-l-2 border-accent/50 pl-3">
-                                    {STRATEGIES.find(s => s.id === selectedSignal.strategy.toLowerCase())?.description || "Algoritmo de detecciÃ³n de patrones matemÃ¡ticos avanzados."}
+                                    {STRATEGIES.find(s => s.id === selectedSignal.strategy.toLowerCase())?.description || "Algoritmo de detección de patrones matemáticos avanzados."}
                                 </p>
                             </div>
                         </div>
@@ -262,20 +262,20 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                         </div>
                                     </div>
                                 ) : (
-                                    <p className="text-xs text-secondary italic">MÃ©tricas detalladas no disponibles para este tick.</p>
+                                    <p className="text-xs text-secondary italic">Métricas detalladas no disponibles para este tick.</p>
                                 )}
                             </div>
 
                             {/* 3. INTERPRETATION */}
                             <div className="bg-blue-500/5 rounded-xl p-5 border border-blue-500/20 col-span-2 md:col-span-1 flex flex-col justify-center">
                                 <h4 className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center gap-2">
-                                    <Cpu size={14} /> InterpretaciÃ³n Institucional
+                                    <Cpu size={14} /> Interpretación Institucional
                                 </h4>
                                 <p className="text-xs text-secondary leading-relaxed">
                                     "{selectedSignal.technicalReasoning}"
                                 </p>
                                 <p className="text-[10px] text-blue-300/60 mt-2 italic">
-                                    *El algoritmo detectÃ³ esta oportunidad porque la confluencia matemÃ¡tica supera el 70% de probabilidad.*
+                                    *El algoritmo detectó esta oportunidad porque la confluencia matemática supera el 70% de probabilidad.*
                                 </p>
                             </div>
                         </div>
@@ -283,16 +283,16 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         {/* 4. RISK MANAGEMENT */}
                         <div className="bg-surface rounded-xl p-5 border border-border">
                             <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
-                                <Shield size={14} /> GestiÃ³n de Riesgo Sugerida
+                                <Shield size={14} /> Gestión de Riesgo Sugerida
                             </h4>
                             <div className="flex items-center gap-4 text-xs">
                                 <div className="flex-1 bg-background p-3 rounded border border-border">
-                                    <span className="block text-[10px] text-secondary uppercase mb-1">Entrada Ã“ptima</span>
+                                    <span className="block text-[10px] text-secondary uppercase mb-1">Entrada Óptima</span>
                                     <span className="font-mono font-bold text-primary">${selectedSignal.entryZone.min}</span>
                                 </div>
                                 <ArrowRight size={16} className="text-secondary" />
                                 <div className="flex-1 bg-danger/10 p-3 rounded border border-danger/20">
-                                    <span className="block text-[10px] text-danger uppercase mb-1">Stop Loss (InvalidaciÃ³n)</span>
+                                    <span className="block text-[10px] text-danger uppercase mb-1">Stop Loss (Invalidación)</span>
                                     <span className="font-mono font-bold text-danger">${selectedSignal.stopLoss}</span>
                                 </div>
                             </div>
