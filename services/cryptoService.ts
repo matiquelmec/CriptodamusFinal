@@ -799,7 +799,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             }
 
             // Re-check threshold after macro adjustment
-            const adjustedThreshold = isHighRisk ? 70 : 50; // BALANCED: Estricto pero permite oportunidades reales
+            // ADJUSTED: Lowered threshold to align with Advisor sensitivity
+            // Advisor uses 0-15 scale, Scanner uses 0-100 scale
+            // A score of 35-40 in Scanner ≈ score of 5-6 in Advisor (moderate bullish/bearish)
+            const adjustedThreshold = isHighRisk ? 50 : 35; // BALANCED: Permite señales válidas sin spam
 
             // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
             if (finalScore >= adjustedThreshold) {
