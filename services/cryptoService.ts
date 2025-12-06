@@ -798,14 +798,27 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 finalScore = applyMacroFilters(score, coin.symbol, signalSide, macroContext);
             }
 
-            // Re-check threshold after macro adjustment
-            // ADJUSTED: Lowered threshold to align with Advisor sensitivity
-            // Advisor uses 0-15 scale, Scanner uses 0-100 scale
-            // A score of 35-40 in Scanner ≈ score of 5-6 in Advisor (moderate bullish/bearish)
-            const adjustedThreshold = isHighRisk ? 50 : 35; // BALANCED: Permite señales válidas sin spam
+            // ═══════════════════════════════════════════════════════════════
+            // INSTITUTIONAL GRADE FILTERING (Professional Trader Philosophy)
+            // ═══════════════════════════════════════════════════════════════
+            // Tier System:
+            // 🔥 GOD MODE (90+): Perfect alignment across all timeframes + 4+ confluence factors
+            // ⭐ PREMIUM (70-89): Strong confluence, 2-3 timeframes aligned
+            // ✅ VALID (50-69): Technically sound but lower confluence
+            // ⚠️ MODERATE (35-49): Risky, only for experienced traders
+            //
+            // PRINCIPLE: "Quality over Quantity" - Show only GOD MODE + PREMIUM by default
+            // This is how institutional traders operate: Few trades, high conviction, big payoff.
+            // ═══════════════════════════════════════════════════════════════
+
+            const PREMIUM_THRESHOLD = 70;  // Only show PREMIUM or better (70+)
+            const GOD_MODE_THRESHOLD = 90; // Perfect setups
+
+            // Risk-adjusted threshold
+            const minimumThreshold = isHighRisk ? 80 : PREMIUM_THRESHOLD;
 
             // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
-            if (finalScore >= adjustedThreshold) {
+            if (finalScore >= minimumThreshold) {
                 // NEW: Usar precio de confirmación de señal (vela cerrada)
                 const signalPrice = prices[checkIndex]; // Precio donde se confirmó la señal
                 const livePrice = prices[prices.length - 1]; // Precio actual (para referencia)
@@ -921,12 +934,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // VWAP Dist % calculation (usando signalPrice)
                 const vwapDist = ((signalPrice - vwap) / vwap) * 100;
 
+                // Determine signal quality tier for UI badge
+                const signalTier = finalScore >= GOD_MODE_THRESHOLD ? '🔥 GOD MODE' : '⭐ PREMIUM';
+
                 const mathOpp: AIOpportunity = {
                     id: Date.now().toString() + Math.random(),
                     symbol: coin.symbol,
                     timestamp: Date.now(),
                     signalTimestamp: candles[checkIndex].timestamp,
-                    strategy: `Auto (${marketRegime.regime})`, // Show Regime
+                    strategy: `${signalTier} (${marketRegime.regime})`, // Show Quality + Regime
                     side: signalSide,
                     confidenceScore: Math.round(finalScore),
                     entryZone: {
