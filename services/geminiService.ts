@@ -157,17 +157,54 @@ export const streamMarketAnalysis = async function* (
                 }
             }
         }
-
         // --- PHASE 1.5: MACRO ADJUSTMENTS (NEW) ---
         // Aquí es donde el "Trader Experto" ajusta las probabilidades
 
-        // CRITICAL: Range Market Kill Switch
-        if (isHighVolatilityRange) {
-            // Mercado en rango con alta volatilidad = trampa mortal
+        // SESSION ANALYSIS (TIME-BASED)
+        const activeSession = getMarketSession();
+
+        // Session-based Scoring Adjustments
+        if (activeSession.session === 'ASIA') {
+            if (isRangeMarket) { bullishScore += 0.5; bearishScore += 0.5; }
+            else if (rvol < 2.5) { bullishScore *= 0.8; bearishScore *= 0.8; }
+        } else if (activeSession.session === 'LONDON') {
+            if (!isRangeMarket) { bullishScore *= 1.1; bearishScore *= 1.1; }
+        } else if (activeSession.session === 'NEW_YORK') {
+            // NY introduces volatility + reversals
+        }
+
+        // --- NEW: SFP / LIQUIDITY SWEEP LOGIC (SWING FAILURE PATTERN) ---
+        let isSFP = false;
+        let sfpType = 'NONE';
+
+        const distToR1 = Math.abs(price - pivots.r1) / price;
+        const distToS1 = Math.abs(price - pivots.s1) / price;
+
+        // Bearish SFP (Sweep Highs)
+        if ((distToR1 < 0.005 || price > bollinger.upper) && rvol > 1.5) {
+            if (stochRsi.k < stochRsi.d || rsi > 70) {
+                bearishScore += 4;
+                bullishScore *= 0.5;
+                isSFP = true;
+                sfpType = 'BEARISH_SWEEP';
+            }
+        }
+
+        // Bullish SFP (Sweep Lows)
+        if ((distToS1 < 0.005 || price < bollinger.lower) && rvol > 1.5) {
+            if (stochRsi.k > stochRsi.d || rsi < 30) {
+                bullishScore += 4;
+                bearishScore *= 0.5;
+                isSFP = true;
+                sfpType = 'BULLISH_SWEEP';
+            }
+        }
+
+        // CRITICAL: Range Market Kill Switch (SFP Aware)
+        if (isHighVolatilityRange && !isSFP) {
             bullishScore *= 0.1;
             bearishScore *= 0.1;
-        } else if (isRangeMarket) {
-            // Mercado lateral normal = reducir confianza
+        } else if (isRangeMarket && !isSFP) {
             bullishScore *= 0.5;
             bearishScore *= 0.5;
         }
@@ -230,6 +267,17 @@ export const streamMarketAnalysis = async function* (
         response += `## I. Diagnóstico Operacional: Conflicto Estructural (Macro vs. Micro)\n\n`;
         response += `| Métrica Clave | Lectura | Interpretación (Institutional Bias) |\n`;
         response += `|---|---|---|\n`;
+
+        // Add Session Info
+        const sessionIcon = activeSession.session === 'ASIA' ? '🌏' : activeSession.session === 'LONDON' ? '🇪🇺' : '🇺🇸';
+        response += `| **Sesión de Mercado** | ${sessionIcon} **${activeSession.session}** | ${activeSession.note} |\n`;
+
+        // Add SFP Alert
+        if (isSFP) {
+            const sfpText = sfpType === 'BEARISH_SWEEP' ? '🔴 SWEEP BAJISTA (Toma de Liquidez)' : '🟢 SWEEP ALCISTA (Toma de Liquidez)';
+            response += `| **⚡ ALERTA SFP** | **${sfpText}** | Patrón de reversión agresiva detectado cerca de Pivotes. |\n`;
+        }
+
         const trendNote = isRangeMarket
             ? "⚠️ Mercado en RANGO (ADX < 25). Evitar operar hasta breakout confirmado."
             : primarySide === 'LONG'
@@ -265,6 +313,26 @@ export const streamMarketAnalysis = async function* (
             response += `Bitcoin actúa como un "barómetro" de liquidez global.\n`;
             response += `- **USDT.D (Miedo):** ${usdtDominance.current.toFixed(1)}% (${usdtDominance.trend}). Si sube, indica fuga a refugio (Risk-Off).\n`;
             response += `- **BTC.D (Dominancia):** ${btcDominance.current.toFixed(1)}% (${btcDominance.trend}).\n\n`;
+        }
+
+        // --- NEW: INSTITUTIONAL INSIGHT (EDUCATIONAL) ---
+        // Explicación narrativa de por qué la sesión o el SFP importan
+        response += `### 💡 Insight Institucional: El "Porqué" del Mercado\n`;
+
+        // Session Education
+        if (activeSession.session === 'ASIA') {
+            response += `- **Factor Sesión (ASIA):** Los mercados asiáticos suelen tener menor volumen. Los movimientos bruscos aquí a menudo son "Liquidity Hunts" para atrapar traders antes de la apertura de Londres. **Lección:** No persigas rupturas sin volumen masivo.\n`;
+        } else if (activeSession.session === 'LONDON') {
+            response += `- **Factor Sesión (LONDRES):** Esta sesión define la tendencia real del día. El volumen institucional entra aquí. **Lección:** Las rupturas temprano en la mañana suelen ser genuinas.\n`;
+        } else if (activeSession.session === 'NEW_YORK') {
+            response += `- **Factor Sesión (NY):** La volatilidad aumenta drásticamente. A menudo revierte la tendencia de Londres o la acelera. **Lección:** Cuidado con los giros de las 10:00 AM EST.\n`;
+        }
+
+        // SFP Education
+        if (isSFP) {
+            response += `- **Factor SFP (Patrón de Trampa):** Hemos detectado una "Barrellida". El precio rompió un nivel clave (${sfpType === 'BEARISH_SWEEP' ? 'Resistencia' : 'Soporte'}) pero no pudo sostenerse, atrapando a traders impacientes. **Lección:** Operar CON la reversión nos pone del lado de la institución que causó la trampa.\n\n`;
+        } else {
+            response += `- **Estructura:** El mercado se mueve de una zona de liquidez a otra. Paciencia en los niveles intermedios.\n\n`;
         }
 
         // III. ESTRUCTURA TÁCTICA
@@ -423,6 +491,24 @@ export const streamMarketAnalysis = async function* (
     }
 }
 
+
+// Helper to get current market session (UTC)
+function getMarketSession(): { session: 'ASIA' | 'LONDON' | 'NEW_YORK' | 'OTHER', note: string } {
+    const now = new Date();
+    const hour = now.getUTCHours();
+
+    // Definitions (Approx UTC)
+    // ASIA: 00:00 - 08:00 (Tokyo/HK/Singapore)
+    // LONDON: 07:00 - 16:00 (Frankfurt/London)
+    // NY: 12:00 - 21:00 (New York)
+
+    // Simple priority logic (overlaps favor the more volatile session)
+    if (hour >= 13 && hour < 21) return { session: 'NEW_YORK', note: "Alta Volatilidad / Reversiones" };
+    if (hour >= 7 && hour < 13) return { session: 'LONDON', note: "Definición de Tendencia / Breakouts Reales" };
+    if (hour >= 0 && hour < 7) return { session: 'ASIA', note: "Rango / Manipulación (Liquidity Hunts)" };
+
+    return { session: 'OTHER', note: "Baja Liquidez / Cierre Diario" };
+}
 
 // Helper to format strategy name nicely
 const formatStrategyName = (id: string) => {
