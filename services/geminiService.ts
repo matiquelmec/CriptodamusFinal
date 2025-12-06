@@ -493,7 +493,7 @@ export const streamMarketAnalysis = async function* (
 
 
 // Helper to get current market session (UTC)
-function getMarketSession(): { session: 'ASIA' | 'LONDON' | 'NEW_YORK' | 'OTHER', note: string } {
+export function getMarketSession(): { session: 'ASIA' | 'LONDON' | 'NEW_YORK' | 'OTHER', note: string } {
     const now = new Date();
     const hour = now.getUTCHours();
 
