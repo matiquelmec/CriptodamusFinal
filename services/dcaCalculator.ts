@@ -216,6 +216,9 @@ export function calculateDCAPlan(
         ? confluenceAnalysis.topResistances
         : confluenceAnalysis.topSupports;
 
+    // SORT TPs by proximity to Average Entry (TP1 closest, TP3 furthest)
+    targetPOIs.sort((a, b) => Math.abs(a.price - averageEntry) - Math.abs(b.price - averageEntry));
+
     let tp1Price: number, tp2Price: number, tp3Price: number;
 
     if (targetPOIs.length >= 3) {
@@ -242,6 +245,12 @@ export function calculateDCAPlan(
             ? averageEntry + (atr * 8)
             : averageEntry - (atr * 8);
     }
+
+    // Final SORT Check for Prices (Just to be absolutely sure)
+    const tps = [tp1Price, tp2Price, tp3Price].sort((a, b) => side === 'LONG' ? a - b : b - a);
+    tp1Price = tps[0];
+    tp2Price = tps[1];
+    tp3Price = tps[2];
 
     const tpSizes = getRegimeAwareTPs(marketRegime);
 
