@@ -174,6 +174,7 @@ export interface TechnicalIndicators {
     trend_1w?: 'BULLISH' | 'BEARISH';
     ema50_1w?: number;
     price_1w?: number;
+    rsi_1w?: number; // Momentum Semanal
   };
 
   ichimokuData?: IchimokuCloud;

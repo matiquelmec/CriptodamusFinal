@@ -75,6 +75,7 @@ Eliminar los fallbacks genéricos que inventan niveles si no existen. Es mejor q
 ✅ **Fallback Lógico Corregido:** Se implementó una validación direccional estricta en `dcaReportGenerator.ts`. Si el nivel Fibonacci contradice la dirección del trade, el sistema ahora utiliza un cálculo basado en ATR para garantizar la seguridad de la entrada.
 ✅ **Verificación Exitosa:** El código ha sido compilado (`npm run build`) sin errores, confirmando la integridad sintáctica de las mejoras.
 ✅ **Análisis Semanal (1W):** Se agregó el "Ciclo de Mercado" (Weekly Timeframe) para dar una perspectiva institucional de largo plazo (Bull/Bear Market) en la validación fractal.
+✅ **Momentum Semanal (RSI 1W):** Se implementó `rsi_1w` para detectar "Agotamiento de Tendencia". Si el ciclo es bajista pero el RSI está sobrevendido (<35), el sistema anula el estado "God Mode" y advierte del riesgo de reversión, respondiendo al feedback experto del usuario.
 
 **Próximos Pasos Sugeridos:**
 - Monitorear el rendimiento en vivo del "Agente Autónomo" para validar la mejora en la calidad de las señales.

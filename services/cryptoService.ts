@@ -401,23 +401,6 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
                 trend_1d: price1d > ema200_1d ? 'BULLISH' : 'BEARISH'
             };
         }
-
-        // 1W Analysis (Cycle / Season)
-        if (candles1w.length >= 50 && fractalAnalysis) {
-            const prices1w = candles1w.map(c => c.close);
-            // Weekly EMA 50 is the "Bull Market Support Band" proxy often used in crypto
-            const ema50_1w = calculateEMA(prices1w, 50);
-            const price1w = prices1w[prices1w.length - 1];
-
-            fractalAnalysis = {
-                ...fractalAnalysis,
-                ema50_1w,
-                price_1w: price1w,
-                trend_1w: price1w > ema50_1w ? 'BULLISH' : 'BEARISH'
-            };
-        }
-
-
         // Calcs
         const currentPrice = prices[prices.length - 1];
         const rsi = calculateRSI(prices, 14);
