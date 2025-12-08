@@ -374,3 +374,13 @@ export function calculatePivotPoints(highs: number[], lows: number[], closes: nu
 }
 
 export function formatVolume(vol: number) { return vol >= 1e9 ? (vol / 1e9).toFixed(1) + 'B' : (vol / 1e6).toFixed(1) + 'M'; }
+
+// Helper to get current market session (UTC)
+export function getMarketSession(): { session: 'ASIA' | 'LONDON' | 'NEW_YORK' | 'OTHER', note: string } {
+    const now = new Date();
+    const hour = now.getUTCHours();
+    if (hour >= 13 && hour < 21) return { session: 'NEW_YORK', note: "Alta Volatilidad / Reversiones" };
+    if (hour >= 7 && hour < 13) return { session: 'LONDON', note: "Definición de Tendencia / Breakouts Reales" };
+    if (hour >= 0 && hour < 7) return { session: 'ASIA', note: "Rango / Manipulación (Liquidity Hunts)" };
+    return { session: 'OTHER', note: "Baja Liquidez / Cierre Diario" };
+}

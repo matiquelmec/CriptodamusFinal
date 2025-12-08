@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
 import { scanMarketOpportunities, getMarketRisk } from '../services/cryptoService';
 import { STRATEGIES } from '../services/strategyContext';
-import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database, Lightbulb } from 'lucide-react';
+import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database, Lightbulb, Clock, Globe } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import { GLOSSARY } from '../constants/glossary';
 import { useOpportunityCache } from '../hooks/useOpportunityCache';
@@ -413,6 +413,24 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     >
                         <BookOpen size={14} />
                     </button>
+                </div>
+            </div>
+
+            {/* Institutional Metadata Bar */}
+            <div className="flex items-center gap-4 px-5 py-2 bg-background/50 border-b border-border/50 text-[10px] text-secondary font-mono uppercase tracking-tight">
+                <div className="flex items-center gap-1.5" title="Timeframe Analizado">
+                    <Clock size={12} className="text-secondary/70" />
+                    <span>{data.timeframe || '15m'}</span>
+                </div>
+                <div className="flex items-center gap-1.5 border-l border-border/50 pl-4" title="Sesión de Mercado">
+                    <Globe size={12} className="text-secondary/70" />
+                    <span>{data.session || 'GLOBAL'}</span>
+                </div>
+                <div className="flex items-center gap-1.5 border-l border-border/50 pl-4" title="Ratio Riesgo:Beneficio (vs TP3)">
+                    <Target size={12} className="text-secondary/70" />
+                    <span className={data.riskRewardRatio && data.riskRewardRatio >= 3 ? "text-success font-bold" : "text-primary"}>
+                        R:R 1:{data.riskRewardRatio || 'N/A'}
+                    </span>
                 </div>
             </div>
 

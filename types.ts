@@ -240,6 +240,12 @@ export interface AIOpportunity {
   symbol: string;
   timestamp: number;
   signalTimestamp?: number; // NEW: Timestamp de la vela de confirmación
+
+  // NEW: Institutional Metadata
+  timeframe: string; // e.g. "15m"
+  session: string; // e.g. "ASIA"
+  riskRewardRatio: number; // e.g. 2.5
+
   strategy: string;
   side: 'LONG' | 'SHORT';
   confidenceScore: number;

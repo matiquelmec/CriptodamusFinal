@@ -12,7 +12,7 @@ import {
     calculateBollingerStats, calculateSMA, calculateEMA, calculateMACD,
     calculateEMAArray, calculateStdDev, calculateRSI, calculateStochRSI,
     calculateRSIArray, calculateCumulativeVWAP, calculateAutoFibs,
-    calculateATR, calculateADX, calculatePivotPoints, formatVolume
+    calculateATR, calculateADX, calculatePivotPoints, formatVolume, getMarketSession
 } from './mathUtils';
 import { calculateVolumeProfile } from './volumeProfile';
 import { detectOrderBlocks } from './orderBlocks';
@@ -968,7 +968,18 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // Determine signal quality tier for UI badge
                 const signalTier = finalScore >= GOD_MODE_THRESHOLD ? '🔥 GOD MODE' : '⭐ PREMIUM';
 
+                // --- INSTITUTIONAL METADATA ---
+                const session = getMarketSession();
+                const rrRatio = dcaPlan.entries.length > 0 && dcaPlan.stopLoss > 0
+                    ? Math.abs((dcaPlan.takeProfits.tp3.price - dcaPlan.entries[0].price) / (dcaPlan.entries[0].price - dcaPlan.stopLoss))
+                    : 0;
+
                 const mathOpp: AIOpportunity = {
+                    // Institutional Metadata
+                    timeframe: interval,
+                    session: session.session,
+                    riskRewardRatio: parseFloat(rrRatio.toFixed(2)),
+
                     id: Date.now().toString() + Math.random(),
                     symbol: coin.symbol,
                     timestamp: Date.now(),

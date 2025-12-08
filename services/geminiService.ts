@@ -3,7 +3,7 @@ import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from "..
 import { MacroContext } from './macroService';
 import { analyzeIchimokuSignal } from './ichimokuStrategy'; // NEW: Expert Logic
 import { generateDCAExecutionPlan } from './dcaReportGenerator'; // NEW: DCA System
-import { detectBullishDivergence, calculateRSIArray } from './mathUtils'; // NEW: Divergence Detection
+import { detectBullishDivergence, calculateRSIArray, getMarketSession } from './mathUtils'; // NEW: Divergence Detection
 
 // --- MOTOR AUTÓNOMO (OFFLINE) ---
 // Este servicio reemplaza a la IA de Google.
@@ -429,16 +429,6 @@ export const streamMarketAnalysis = async function* (
         yield `📊 **Resumen Rápido:**\n• Precio: $${price}\n• Tendencia: ${price > ema200 ? '✅ Alcista' : '🔻 Bajista'}\n\nℹ️ _Mensaje recibido: "${msg}". Escribe "Analisis" para ver el reporte experto._`;
     }
 };
-
-// Helper to get current market session (UTC)
-export function getMarketSession(): { session: 'ASIA' | 'LONDON' | 'NEW_YORK' | 'OTHER', note: string } {
-    const now = new Date();
-    const hour = now.getUTCHours();
-    if (hour >= 13 && hour < 21) return { session: 'NEW_YORK', note: "Alta Volatilidad / Reversiones" };
-    if (hour >= 7 && hour < 13) return { session: 'LONDON', note: "Definición de Tendencia / Breakouts Reales" };
-    if (hour >= 0 && hour < 7) return { session: 'ASIA', note: "Rango / Manipulación (Liquidity Hunts)" };
-    return { session: 'OTHER', note: "Baja Liquidez / Cierre Diario" };
-}
 
 // Helper to format strategy name nicely
 const formatStrategyName = (id: string) => {
