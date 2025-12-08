@@ -251,16 +251,14 @@ export const streamMarketAnalysis = async function* (
                 bearishScore *= 1.5; // Boost shorts en alts
             }
         }
-
         // --- NEW: FRACTAL & WEAKNESS PRE-CALCULATION (Lifted for Executive Summary) ---
         let weakTrendWarning = false;
         let trend_1w = techData.fractalAnalysis?.trend_1w;
         let cycleText = "N/A";
-        let isAlignedCycle = true; // Default assumption until proven otherwise
+        let isAlignedCycle = true;
 
         if (techData.fractalAnalysis && trend_1w) {
             const rsi1w = techData.fractalAnalysis.rsi_1w || 50;
-            // Calculate preliminary sentiment for alignment check
             const tempSentiment = bullishScore > bearishScore ? 'ALCISTA' : 'BAJISTA';
 
             isAlignedCycle = (tempSentiment === 'ALCISTA' && trend_1w === 'BULLISH') ||
@@ -283,13 +281,11 @@ export const streamMarketAnalysis = async function* (
         let sentiment = "NEUTRO";
         let mainIcon = "⚪";
 
-        const isBullish = bullishScore > bearishScore;
-        const scoreDiff = Math.abs(bullishScore - bearishScore);
-
         // TIE BREAKER: If Technical Draw + Weak Trend Warning -> Penalize Confidence heavily
+        const scoreDiff = Math.abs(bullishScore - bearishScore);
         if (scoreDiff < 2 && techData.fractalAnalysis?.trend_1w && !weakTrendWarning) {
             if (techData.fractalAnalysis.trend_1w === 'BULLISH') {
-                bullishScore += 3; // Force Breakout logic
+                bullishScore += 3;
             } else {
                 bearishScore += 3;
             }
@@ -304,11 +300,28 @@ export const streamMarketAnalysis = async function* (
 
         // Confidence Calculation (0-10 Scale normalized)
         const winningScore = finalIsBullish ? bullishScore : bearishScore;
-        const confidenceLevel = Math.min(Math.round(winningScore), 10); // Cap at 10
+        let confidenceLevel = Math.min(Math.round(winningScore), 10);
 
         // --- PHASE 2: GENERATE REPORT (INSTITUTIONAL FORMAT) ---
 
         // 0. FLASH EXECUTIVE SUMMARY (NEW)
+        // Calculate God Mode for Summary
+        let isGodMode = false;
+        if (techData.fractalAnalysis) {
+            const { trend_1h, trend_4h, trend_1d } = techData.fractalAnalysis;
+            const isAligned1h = (sentiment.includes('ALCISTA') && trend_1h === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_1h === 'BEARISH');
+            let isAligned4h = true;
+            if (trend_4h) isAligned4h = (sentiment.includes('ALCISTA') && trend_4h === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_4h === 'BEARISH');
+            let isAligned1d = true;
+            if (trend_1d) isAligned1d = (sentiment.includes('ALCISTA') && trend_1d === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_1d === 'BEARISH');
+            isGodMode = isAligned1h && isAligned4h && isAligned1d && isAlignedCycle && !weakTrendWarning;
+        }
+
+        // DOWNGRADE CONFIDENCE IF NOT ALIGNED
+        if (!isGodMode && confidenceLevel >= 8) {
+            confidenceLevel = 7;
+        }
+
         response += `> [!IMPORTANT]\n`;
         response += `> **SEÑAL INSTITUCIONAL: ${finalPrimarySide} (Confianza ${confidenceLevel}/10)**\n`;
 
@@ -316,19 +329,20 @@ export const streamMarketAnalysis = async function* (
             response += `> ⚠️ **ALERTA CRÍTICA:** Tendencia Semanal Agotada (RSI Oversold/Overbought). Rebote inminente. Riesgo extremo.\n`;
         } else if (isSFP) {
             response += `> ⚡ **ALERTA SFP:** ${sfpType === 'BEARISH_SWEEP' ? 'Barrido Bajista' : 'Barrido Alcista'} confirmado. Entrada de alta precisión.\n`;
-        } else if (confidenceLevel >= 8) {
-            response += `> 💎 **MODO DIOS:** Alineación total de timeframes. Alta probabilidad.\n`;
+        } else if (isGodMode) {
+            response += `> 💎 **MODO DIOS:** Alineación total de timeframes (15m-1W). Probabilidad Institucional.\n`;
+        } else if (confidenceLevel >= 7) {
+            response += `> 🔥 **ALTA CONVICCIÓN:** Estructura técnica sólida (sin alineación total).\n`;
         } else if (confidenceLevel <= 5) {
-            response += `> 🟡 **Precaución:** Mercado en Rango o Conflicto Técnico. Reducir tamaño de posición.\n`;
+            response += `> 🟡 **CORRECCIÓN/RANGO:** Conflicto Técnico. Reducir tamaño de posición.\n`;
         }
-        response += `\n`; // End Alert block
+        response += `\n`;
 
         // HEADER
         response += `# Evaluación de Riesgo y Estrategia Táctica para ${techData.symbol}\n\n`;
 
         // I. DIAGNÓSTICO OPERACIONAL
         response += `## I. Diagnóstico Operacional: Conflicto Estructural (Macro vs. Micro)\n\n`;
-        // ... (Diagnóstico Operacional Table - Keeping it concise for code block limits, but logic remains)
         response += `| Métrica Clave | Lectura | Interpretación (Institutional Bias) |\n`;
         response += `|---|---|---|\n`;
         const sessionIcon = activeSession.session === 'ASIA' ? '🌏' : activeSession.session === 'LONDON' ? '🇪🇺' : '🇺🇸';
@@ -345,11 +359,11 @@ export const streamMarketAnalysis = async function* (
 
         if (macroContext) {
             const { btcRegime } = macroContext;
-            const regimeIcon = btcRegime.regime === 'BULL' ? '🟢' : btcRegime.regime === 'BEAR' ? '�' : '🟡';
+            const regimeIcon = btcRegime.regime === 'BULL' ? '🟢' : btcRegime.regime === 'BEAR' ? '🔴' : '🟡';
             response += `| **Régimen Macro (Diario)** | ${regimeIcon} ${btcRegime.regime} (${btcRegime.strength}% Fuerza) | El factor de riesgo predominante. |\n`;
         }
 
-        // III. ESTRUCTURA TÁCTICA (Shortened for brevity but logic is key)
+        // III. ESTRUCTURA TÁCTICA 
         response += `\n## III. Estructura Táctica y Refinamiento del Punto de Interés (POI)\n`;
 
         // NEW: FRACTAL ANALYSIS SECTION
@@ -363,13 +377,16 @@ export const streamMarketAnalysis = async function* (
             if (trend_1d) isAligned1d = (sentiment.includes('ALCISTA') && trend_1d === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_1d === 'BEARISH');
 
             const isFullyAligned = isAligned1h && isAligned4h && isAligned1d;
-            const isGodMode = isFullyAligned && isAlignedCycle && !weakTrendWarning;
+            // Recalculate isGodMode here or reuse? Reuse isGodMode from above logic if accurate.
+            // But strict display logic:
 
             const fractalIcon = isGodMode ? "🚀🚀" : isFullyAligned ? "💎" : (isAligned1h && isAligned4h) ? "✅" : "⚠️";
             let fractalStatus = "Alineación Total (INSTITUCIONAL)";
+
             if (weakTrendWarning) fractalStatus = "Alerta: Tendencia Semanal perdiendo fuerza.";
             else if (!isAlignedCycle && trend_1w) fractalStatus = "Contra-Ciclo Semanal (Riesgo Alto)";
             else if (!isAligned1d) fractalStatus = "Conflicto Diario - Swing Peligroso";
+            else if (!isAligned1h) fractalStatus = "Divergencia Táctica (1H) - Ruido Local";
 
             if (isGodMode) fractalStatus = "GOD MODE (Alineación 15m a 1W sin Agotamiento)";
 
