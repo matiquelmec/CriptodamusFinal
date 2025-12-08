@@ -376,6 +376,14 @@ export const streamMarketAnalysis = async function* (
             let isAligned1d = true;
             if (trend_1d) isAligned1d = (sentiment.includes('ALCISTA') && trend_1d === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_1d === 'BEARISH');
 
+            // Re-affirm Cycle Alignment with FINAL sentiment
+            // This prevents "Contra-Ciclo" errors if Tie-Breaker moved us to match the Weekly trend.
+            if (trend_1w) {
+                isAlignedCycle = (sentiment.includes('ALCISTA') && trend_1w === 'BULLISH') ||
+                    (sentiment.includes('BAJISTA') && trend_1w === 'BEARISH');
+                if (weakTrendWarning) isAlignedCycle = false; // Weakness overrides alignment
+            }
+
             const isFullyAligned = isAligned1h && isAligned4h && isAligned1d;
             // Recalculate isGodMode here or reuse? Reuse isGodMode from above logic if accurate.
             // But strict display logic:
