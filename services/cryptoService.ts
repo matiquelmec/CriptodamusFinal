@@ -39,7 +39,7 @@ const MEME_SYMBOLS = [
 ];
 
 // UTILITY: Fetch with Timeout to prevent blocking UI
-const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 4000) => {
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 8000) => {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
     try {
@@ -209,7 +209,7 @@ const fetchCandles = async (symbolId: string, interval: string): Promise<{ times
     try {
         if (isBinance) {
             // Fetching 205 candles to ensure deep data for EMA200 calculation
-            const res = await fetchWithTimeout(`${BINANCE_API_BASE}/klines?symbol=${symbolId}&interval=${interval}&limit=205`, {}, 4000);
+            const res = await fetchWithTimeout(`${BINANCE_API_BASE}/klines?symbol=${symbolId}&interval=${interval}&limit=205`, {}, 8000);
             if (!res.ok) throw new Error("Binance Candle Error");
             const data = await res.json();
             return data.map((d: any[]) => ({
@@ -351,7 +351,8 @@ export const getMarketContextForAI = async (): Promise<string> => {
 
 // NEW: Returns STRUCTURED DATA for the AI (No String parsing needed)
 export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<TechnicalIndicators | null> => {
-    const rawSymbol = symbolDisplay.replace('/USDT', '');
+    // Ensure we strip any existing USDT suffix (with or without slash) to avoid "BTCUSDTUSDT"
+    const rawSymbol = symbolDisplay.replace('/USDT', '').replace(/USDT$/, '');
     const binanceSymbol = `${rawSymbol}USDT`;
 
     try {
