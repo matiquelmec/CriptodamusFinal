@@ -377,18 +377,19 @@ export const streamMarketAnalysis = async function* (
             if (trend_1d) isAligned1d = (sentiment.includes('ALCISTA') && trend_1d === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_1d === 'BEARISH');
 
             // Re-affirm Cycle Alignment with FINAL sentiment
-            // This prevents "Contra-Ciclo" errors if Tie-Breaker moved us to match the Weekly trend.
+            // Re-affirm Cycle Alignment with FINAL sentiment
             if (trend_1w) {
                 isAlignedCycle = (sentiment.includes('ALCISTA') && trend_1w === 'BULLISH') ||
                     (sentiment.includes('BAJISTA') && trend_1w === 'BEARISH');
-                if (weakTrendWarning) isAlignedCycle = false; // Weakness overrides alignment
+                if (weakTrendWarning) isAlignedCycle = false;
             }
 
             const isFullyAligned = isAligned1h && isAligned4h && isAligned1d;
-            // Recalculate isGodMode here or reuse? Reuse isGodMode from above logic if accurate.
-            // But strict display logic:
 
-            const fractalIcon = isGodMode ? "🚀🚀" : isFullyAligned ? "💎" : (isAligned1h && isAligned4h) ? "✅" : "⚠️";
+            // Recalculate God Mode locally to guarantee consistency
+            const localGodMode = isFullyAligned && isAlignedCycle && !weakTrendWarning;
+
+            const fractalIcon = localGodMode ? "🚀🚀" : isFullyAligned ? "💎" : (isAligned1h && isAligned4h) ? "✅" : "⚠️";
             let fractalStatus = "Alineación Total (INSTITUCIONAL)";
 
             if (weakTrendWarning) fractalStatus = "Alerta: Tendencia Semanal perdiendo fuerza.";
@@ -396,7 +397,7 @@ export const streamMarketAnalysis = async function* (
             else if (!isAligned1d) fractalStatus = "Conflicto Diario - Swing Peligroso";
             else if (!isAligned1h) fractalStatus = "Divergencia Táctica (1H) - Ruido Local";
 
-            if (isGodMode) fractalStatus = "GOD MODE (Alineación 15m a 1W sin Agotamiento)";
+            if (localGodMode) fractalStatus = "GOD MODE (Alineación 15m a 1W sin Agotamiento)";
 
             response += `### 3.3. Validación Fractal (Validación de Ciclo)\n`;
             response += `| Estructura | Estado | Análisis |\n|---|---|---|\n`;
@@ -405,7 +406,7 @@ export const streamMarketAnalysis = async function* (
                 const rsiWDisplay = techData.fractalAnalysis?.rsi_1w ? `RSI: ${techData.fractalAnalysis.rsi_1w.toFixed(1)}` : '';
                 response += `| **Ciclo de Mercado (1W)** | ${cycleText} | Precio $${price_1w} vs EMA50. ${rsiWDisplay} |\n`;
             }
-            response += `| **Veredicto Final** | ${fractalIcon} ${fractalStatus} | ${isGodMode ? '🌊 **Tsunami Institucional:** Toda la liquidez empuja en la misma dirección.' : 'Operar con precaución.'} |\n\n`;
+            response += `| **Veredicto Final** | ${fractalIcon} ${fractalStatus} | ${localGodMode ? '🌊 **Tsunami Institucional:** Toda la liquidez empuja en la misma dirección.' : 'Operar con precaución.'} |\n\n`;
         }
 
         // IV. PLAN DE EJECUCIÓN DCA
