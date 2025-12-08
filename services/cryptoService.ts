@@ -401,6 +401,23 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
                 trend_1d: price1d > ema200_1d ? 'BULLISH' : 'BEARISH'
             };
         }
+
+        // 1W Analysis (Market Cycle & Aggregation) - NEW
+        if (candles1w.length >= 50 && fractalAnalysis) {
+            const prices1w = candles1w.map(c => c.close);
+            // We use EMA50 on Weekly as a proxy for "Bull/Bear Market" line (institutional standard)
+            const ema50_1w = calculateEMA(prices1w, 50);
+            const price1w = prices1w[prices1w.length - 1];
+            const rsi1w = calculateRSI(prices1w, 14);
+
+            fractalAnalysis = {
+                ...fractalAnalysis,
+                ema50_1w,
+                price_1w,
+                trend_1w: price1w > ema50_1w ? 'BULLISH' : 'BEARISH',
+                rsi_1w: rsi1w
+            };
+        }
         // Calcs
         const currentPrice = prices[prices.length - 1];
         const rsi = calculateRSI(prices, 14);
