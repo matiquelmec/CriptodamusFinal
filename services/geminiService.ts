@@ -114,11 +114,13 @@ export const streamMarketAnalysis = async function* (
         if (orderBlocks) {
             const { bullish, bearish } = orderBlocks;
             if (bullish && bullish.length > 0) {
-                const nearOB = bullish.find(ob => ob && ob.price && Math.abs(price - ob.price) / price < 0.02);
+                // HARDENING: Tolerance reduced to 0.5% (Sniper Mode)
+                const nearOB = bullish.find(ob => ob && ob.price && Math.abs(price - ob.price) / price < 0.005);
                 if (nearOB && nearOB.strength > 0.7) bullishScore += 2.5;
             }
             if (bearish && bearish.length > 0) {
-                const nearOB = bearish.find(ob => ob && ob.price && Math.abs(price - ob.price) / price < 0.02);
+                // HARDENING: Tolerance reduced to 0.5% (Sniper Mode)
+                const nearOB = bearish.find(ob => ob && ob.price && Math.abs(price - ob.price) / price < 0.005);
                 if (nearOB && nearOB.strength > 0.7) bearishScore += 2.5;
             }
         }
@@ -127,16 +129,18 @@ export const streamMarketAnalysis = async function* (
         if (fairValueGaps) {
             const { bullish, bearish } = fairValueGaps;
             if (bullish && bullish.length > 0) {
+                // HARDENING: Tolerance reduced to 0.5% (Precision)
                 const nearFVG = bullish.find(fvg =>
-                    fvg && !fvg.filled && Math.abs(price - fvg.midpoint) / price < 0.01
+                    fvg && !fvg.filled && Math.abs(price - fvg.midpoint) / price < 0.005
                 );
                 if (nearFVG) {
                     bullishScore += 2; // FVG sin llenar = zona de imán
                 }
             }
             if (bearish && bearish.length > 0) {
+                // HARDENING: Tolerance reduced to 0.5% (Precision)
                 const nearFVG = bearish.find(fvg =>
-                    fvg && !fvg.filled && Math.abs(price - fvg.midpoint) / price < 0.01
+                    fvg && !fvg.filled && Math.abs(price - fvg.midpoint) / price < 0.005
                 );
                 if (nearFVG) {
                     bearishScore += 2;
@@ -421,9 +425,9 @@ export const streamMarketAnalysis = async function* (
         }
 
         // NEW: FRACTAL ANALYSIS SECTION (1H & 4H Validation)
-        // NEW: FRACTAL ANALYSIS SECTION (1H, 4H & 1D Validation)
+        // NEW: FRACTAL ANALYSIS SECTION (1H, 4H, 1D & 1W Validation)
         if (techData.fractalAnalysis) {
-            const { trend_1h, ema200_1h, price_1h, trend_4h, ema200_4h, price_4h, trend_1d, ema200_1d, price_1d } = techData.fractalAnalysis;
+            const { trend_1h, ema200_1h, price_1h, trend_4h, ema200_4h, price_4h, trend_1d, ema200_1d, price_1d, trend_1w, ema50_1w, price_1w } = techData.fractalAnalysis;
 
             const isAligned1h = (sentiment.includes('ALCISTA') && trend_1h === 'BULLISH') ||
                 (sentiment.includes('BAJISTA') && trend_1h === 'BEARISH');
@@ -444,28 +448,43 @@ export const streamMarketAnalysis = async function* (
                 trend1dText = trend_1d === 'BULLISH' ? '🟢 Alcista' : '🔴 Bajista';
             }
 
+            // Weekly Cycle Check
+            let cycleText = "N/A";
+            let isAlignedCycle = true;
+            if (trend_1w) {
+                isAlignedCycle = (sentiment.includes('ALCISTA') && trend_1w === 'BULLISH') ||
+                    (sentiment.includes('BAJISTA') && trend_1w === 'BEARISH');
+                cycleText = trend_1w === 'BULLISH' ? '🐂 Bull Cycles' : '🐻 Bear Winter';
+            }
+
             const isFullyAligned = isAligned1h && isAligned4h && isAligned1d;
-            const fractalIcon = isFullyAligned ? "💎💎" : (isAligned1h && isAligned4h) ? "✅✅" : isAligned1h ? "✅⚠️" : "⛔";
+            const isGodMode = isFullyAligned && isAlignedCycle;
 
-            let fractalStatus = "Alineación Total (GOD MODE)";
-            if (!isAligned1h) fractalStatus = "Conflicto Táctico (1H) - Alto Riesgo";
-            else if (!isAligned4h) fractalStatus = "Conflicto Estructural (4H) - Scalp Corto Plazo";
-            else if (!isAligned1d) fractalStatus = "Conflicto Macro (1D) - Swing Peligroso";
+            const fractalIcon = isGodMode ? "🚀🚀" : isFullyAligned ? "💎" : (isAligned1h && isAligned4h) ? "✅" : "⚠️";
 
-            response += `### 3.3. Validación Fractal (1H + 4H + 1D) - La Visión del Dragón\n`;
-            response += `Validación multi-timeframe completa: Táctico (1H), Estructural (4H) y Macro (1D).\n\n`;
+            let fractalStatus = "Alineación Total (INSTITUCIONAL)";
+            if (!isAlignedCycle && trend_1w) fractalStatus = "Contra-Ciclo Semanal (Riesgo Alto)";
+            else if (!isAligned1d) fractalStatus = "Conflicto Diario - Swing Peligroso";
+            else if (!isAligned4h) fractalStatus = "Conflicto Estructural (4H)";
+            if (isGodMode) fractalStatus = "GOD MODE (Alineación 15m a 1W)";
+
+            response += `### 3.3. Validación Fractal (Validación de Ciclo)\n`;
+            response += `Validación multi-timeframe completa: Táctico, Estructural, Macro y Ciclo.\n\n`;
             response += `| Estructura | Estado | Análisis |\n`;
             response += `|---|---|---|\n`;
-            response += `| **Tendencia Táctica (1H)** | ${trend_1h === 'BULLISH' ? '🟢 Alcista' : '🔴 Bajista'} | Precio ($${price_1h}) vs EMA200 ($${ema200_1h.toFixed(4)}). |\n`;
+            response += `| **Tendencia Táctica (1H)** | ${trend_1h === 'BULLISH' ? '🟢 Alcista' : '🔴 Bajista'} | Precio ($${price_1h}) vs EMA200. |\n`;
 
-            if (trend_4h && ema200_4h && price_4h) {
-                response += `| **Tendencia Suprema (4H)** | ${trend4hText} | Precio ($${price_4h}) vs EMA200 ($${ema200_4h.toFixed(4)}). |\n`;
+            if (trend_4h) {
+                response += `| **Tendencia Suprema (4H)** | ${trend4hText} | Estructura H4 clave. |\n`;
             }
-            if (trend_1d && ema200_1d && price_1d) {
-                response += `| **Tendencia Macro (1D)** | ${trend1dText} | Precio ($${price_1d}) vs EMA200 ($${ema200_1d.toFixed(4)}). |\n`;
+            if (trend_1d) {
+                response += `| **Tendencia Macro (1D)** | ${trend1dText} | Bias Diario. |\n`;
+            }
+            if (trend_1w) {
+                response += `| **Ciclo de Mercado (1W)** | ${cycleText} | Precio ($${price_1w}) vs EMA50 Semanal. |\n`;
             }
 
-            response += `| **Veredicto Fractal** | ${fractalIcon} ${fractalStatus} | ${isFullyAligned ? ' **INSTITUTIONAL TSUNAMI:** Alineación perfecta en todas las temporalidades. Máxima convicción.' : '⚠️ Precaución: Fractura en la estructura temporal.'} |\n\n`;
+            response += `| **Veredicto Final** | ${fractalIcon} ${fractalStatus} | ${isGodMode ? '🌊 **Tsunami Institucional:** Toda la liquidez empuja en la misma dirección.' : 'Operar con precaución según el timeframe alineado.'} |\n\n`;
         }
 
         // IV. PLAN DE EJECUCIÓN DCA (Generado por módulo)

@@ -90,11 +90,23 @@ export function generateDCAExecutionPlan(
         response += `4. **Trailing stop** en TP2\n\n`;
         response += `> **Regla de Oro**: Si Entry 1 no se ejecuta en 24h, cancelar el setup.\n`;
     } else {
-        // Fallback simple
-        const entryPrice = fibonacci.level0_618; // Logic is flawed for Shorts here without recalc, but fallback is rarely used.
-        // Assuming simple fallback follows similar logic, but for safety in short we might need inversion.
-        // For now, let's keep it simple as this path is a fail-safe.
-        const slPrice = fibonacci.level0_786;
+        // HARDENING DOCTRINE: Validación Estricta de Niveles
+        // No confiar ciegamente en Fibs si vamos contra-tendencia.
+        let entryPrice = fibonacci.level0_618;
+        let slPrice = fibonacci.level0_786;
+
+        const isValidLong = side === 'LONG' && entryPrice < price;
+        const isValidShort = side === 'SHORT' && entryPrice > price;
+
+        // Si el Fib no es válido (ej: Short en Uptrend donde Fib es Soporte), usar ATR puro.
+        if (!isValidLong && !isValidShort) {
+            const atrEntryMult = 2.0; // Buscar retroceso profundo
+            const atrSLMult = 3.5;
+            const dir = side === 'LONG' ? -1 : 1;
+
+            entryPrice = price + (atr * atrEntryMult * dir);
+            slPrice = price + (atr * atrSLMult * dir);
+        }
 
         const tpmult = side === 'LONG' ? 1 : -1;
 

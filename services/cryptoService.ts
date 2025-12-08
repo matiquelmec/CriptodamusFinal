@@ -341,12 +341,13 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
     const binanceSymbol = `${rawSymbol}USDT`;
 
     try {
-        // PARALLEL FETCH: 15m (Main) + 1H (Fractal) + 4H (Supreme) + 1D (Bias)
-        const [candles, candles1h, candles4h, candles1d] = await Promise.all([
+        // PARALLEL FETCH: 15m (Main) + 1H (Fractal) + 4H (Supreme) + 1D (Bias) + 1W (Cycle)
+        const [candles, candles1h, candles4h, candles1d, candles1w] = await Promise.all([
             fetchCandles(binanceSymbol, '15m'),
             fetchCandles(binanceSymbol, '1h').catch(() => []),
             fetchCandles(binanceSymbol, '4h').catch(() => []),
-            fetchCandles(binanceSymbol, '1d').catch(() => []) // NEW: 1D Fetch
+            fetchCandles(binanceSymbol, '1d').catch(() => []), // NEW: 1D Fetch
+            fetchCandles(binanceSymbol, '1w').catch(() => [])  // NEW: 1W Fetch
         ]);
 
         if (candles.length < 50) return null;
@@ -356,7 +357,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         const highs = candles.map(c => c.high);
         const lows = candles.map(c => c.low);
 
-        // --- FRACTAL ANALYSIS (1H & 4H) ---
+        // --- FRACTAL ANALYSIS (1H & 4H & 1D & 1W) ---
         let fractalAnalysis: any = undefined; // Using any temporarily to bypass strict type check if interface isn't fully updated
 
         // 1H Analysis
@@ -398,6 +399,21 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
                 ema200_1d,
                 price_1d: price1d,
                 trend_1d: price1d > ema200_1d ? 'BULLISH' : 'BEARISH'
+            };
+        }
+
+        // 1W Analysis (Cycle / Season)
+        if (candles1w.length >= 50 && fractalAnalysis) {
+            const prices1w = candles1w.map(c => c.close);
+            // Weekly EMA 50 is the "Bull Market Support Band" proxy often used in crypto
+            const ema50_1w = calculateEMA(prices1w, 50);
+            const price1w = prices1w[prices1w.length - 1];
+
+            fractalAnalysis = {
+                ...fractalAnalysis,
+                ema50_1w,
+                price_1w: price1w,
+                trend_1w: price1w > ema50_1w ? 'BULLISH' : 'BEARISH'
             };
         }
 

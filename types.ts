@@ -170,6 +170,10 @@ export interface TechnicalIndicators {
     ema200_1d?: number;
     price_1d?: number;
     trend_1d_structure?: string;
+    // NEW: Weekly Cycle Analysis
+    trend_1w?: 'BULLISH' | 'BEARISH';
+    ema50_1w?: number;
+    price_1w?: number;
   };
 
   ichimokuData?: IchimokuCloud;
