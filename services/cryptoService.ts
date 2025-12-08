@@ -221,7 +221,14 @@ const fetchCandles = async (symbolId: string, interval: string): Promise<{ times
                 volume: parseFloat(d[5])
             }));
         } else {
-            const ccInterval = interval === '15m' ? 'm15' : 'h1';
+            const intervalMap: Record<string, string> = {
+                '15m': 'm15',
+                '1h': 'h1',
+                '4h': 'h4',
+                '1d': 'd1',
+                '1w': 'w1'
+            };
+            const ccInterval = intervalMap[interval] || 'h1'; // Default to h1 if unknown
             const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${symbolId}&quoteId=tether`, {}, 4000);
             if (!res.ok) return [];
             const json = await res.json();
@@ -240,7 +247,14 @@ const fetchCandles = async (symbolId: string, interval: string): Promise<{ times
             const fallbackId = mapBinanceToCoinCap(symbolId);
             if (fallbackId) {
                 try {
-                    const ccInterval = interval === '15m' ? 'm15' : 'h1';
+                    const intervalMap: Record<string, string> = {
+                        '15m': 'm15',
+                        '1h': 'h1',
+                        '4h': 'h4',
+                        '1d': 'd1',
+                        '1w': 'w1'
+                    };
+                    const ccInterval = intervalMap[interval] || 'h1';
                     const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${fallbackId}&quoteId=tether`, {}, 4000);
                     if (!res.ok) return [];
                     const json = await res.json();
@@ -413,7 +427,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
             fractalAnalysis = {
                 ...fractalAnalysis,
                 ema50_1w,
-                price_1w,
+                price_1w: price1w,
                 trend_1w: price1w > ema50_1w ? 'BULLISH' : 'BEARISH',
                 rsi_1w: rsi1w
             };
