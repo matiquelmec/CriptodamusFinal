@@ -11,11 +11,12 @@ import {
     detectBullishDivergence, calculateIchimokuLines, calculateIchimokuCloud,
     calculateBollingerStats, calculateSMA, calculateEMA, calculateMACD,
     calculateEMAArray, calculateStdDev, calculateRSI, calculateStochRSI,
-    calculateRSIArray, calculateCumulativeVWAP, calculateAutoFibs,
+    calculateRSIArray, calculateCumulativeVWAP, calculateAutoFibs, calculateFractals, // NEW
     calculateATR, calculateADX, calculatePivotPoints, formatVolume, getMarketSession
 } from './mathUtils';
 import { calculateVolumeProfile } from './volumeProfile';
 import { detectOrderBlocks } from './orderBlocks';
+import { detectHarmonicPatterns } from './harmonicPatterns'; // NEW
 import { detectFVG } from './fairValueGaps';
 import { calculatePOIs } from './confluenceEngine';
 import { detectMarketRegime } from './marketRegimeDetector';
@@ -451,8 +452,12 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         const macd = calculateMACD(prices);
         const pivots = calculatePivotPoints(highs, lows, prices);
         const bb = calculateBollingerStats(prices);
-        const fibs = calculateAutoFibs(highs, lows, ema200); // NEW
-        const ichimokuData = calculateIchimokuData(highs, lows, prices); // NEW: Full Ichimoku Cloud
+        const fibs = calculateAutoFibs(highs, lows, ema200); // Uses Fractals internally now
+        const ichimokuData = calculateIchimokuData(highs, lows, prices);
+
+        // NEW: Fractal & Harmonic Analysis
+        const { fractalHighs, fractalLows } = calculateFractals(highs, lows);
+        const harmonicPatterns = detectHarmonicPatterns(prices, highs, lows, fractalHighs, fractalLows);
 
         // Determine Alignment
         let emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC' = 'CHAOTIC';
@@ -522,12 +527,17 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
                 level0_382: fibs.level0_382,
                 level0_5: fibs.level0_5,
                 level0_618: fibs.level0_618,
+                level0_65: fibs.level0_65,  // NEW
                 level0_786: fibs.level0_786,
+                level0_886: fibs.level0_886, // NEW
                 level1: fibs.level1,
                 tp1: fibs.tp1,
                 tp2: fibs.tp2,
-                tp3: fibs.tp3
+                tp3: fibs.tp3,
+                tp4: fibs.tp4,
+                tp5: fibs.tp5
             },
+            harmonicPatterns, // NEW
 
             ichimokuData: ichimokuData || undefined, // NEW
             trendStatus: {
@@ -673,7 +683,13 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes);
             const stochRsi = calculateStochRSI(prices, 14);
             const rsi = calculateRSI(prices.slice(0, checkIndex + 1), 14);
+
+            // NEW: Institutional Logic Integration
+            const { fractalHighs, fractalLows } = calculateFractals(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1));
+            // Ensure AutoFibs uses the correct fractal logic internally or passed if upgraded (currently passing manually computed fibs)
             const fibs = calculateAutoFibs(highs, lows, calculateEMA(prices, 200));
+
+            const harmonicPatterns = detectHarmonicPatterns(prices.slice(0, checkIndex + 1), highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), fractalHighs, fractalLows);
             const ema200 = calculateEMA(prices.slice(0, checkIndex + 1), 200);
             const currentPrice = prices[checkIndex];
             const avgVol = calculateSMA(volumes, 20);
@@ -735,6 +751,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 bollinger: { upper: bb.upper, lower: bb.lower, middle: bb.sma, bandwidth: bb.bandwidth },
                 pivots,
                 fibonacci: fibs,
+                harmonicPatterns: harmonicPatterns, // NEW: Include Harmonics
                 technicalReasoning: "",
                 invalidated: false,
                 trendStatus: {
@@ -1008,6 +1025,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         specificTrigger: specificTrigger
                     },
                     dcaPlan: dcaPlan, // NEW: Pasar el plan completo
+                    harmonicPatterns: harmonicPatterns, // NEW: Pasar patrones armónicos
                     invalidated: false
                 };
 

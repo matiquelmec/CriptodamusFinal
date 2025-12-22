@@ -133,12 +133,18 @@ export interface TechnicalIndicators {
     level0_382: number;
     level0_5: number;
     level0_618: number;
+    level0_65: number;   // NEW
     level0_786: number;
+    level0_886: number;  // NEW
     level1: number;
     tp1: number;
     tp2: number;
-    tp3: number; // Moonbag
+    tp3: number;
+    tp4: number;
+    tp5: number;
   };
+
+  harmonicPatterns?: import('./types-advanced').HarmonicPattern[];
 
   technicalReasoning: string;
   invalidated: boolean; // Si el precio ya tocó SL o TP
@@ -274,4 +280,5 @@ export interface AIOpportunity {
     specificTrigger: string;
   };
   dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI
+  harmonicPatterns?: import('./types-advanced').HarmonicPattern[]; // NEW: Patrones para UI
 }

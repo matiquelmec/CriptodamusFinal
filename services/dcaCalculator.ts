@@ -83,7 +83,9 @@ export function calculateDCAPlan(
     marketRegime?: MarketRegime, // NEW: Contexto de mercado
     fibonacciLevels?: {
         level0_618: number;
+        level0_65: number;   // NEW
         level0_786: number;
+        level0_886: number;  // NEW
         level0_5: number;
     }
 ): DCAPlan {
@@ -119,8 +121,10 @@ export function calculateDCAPlan(
         if (selectedPOIs.length < 3) {
             const fibLevels = [
                 { p: fibonacciLevels.level0_618, label: 'Golden Pocket (0.618)', score: 5 },
+                { p: fibonacciLevels.level0_65, label: 'Golden Pocket Low (0.65)', score: 5 }, // Strong
                 { p: fibonacciLevels.level0_5, label: 'Fib 0.5', score: 2 },
-                { p: fibonacciLevels.level0_786, label: 'Fib 0.786', score: 3 }
+                { p: fibonacciLevels.level0_786, label: 'Fib 0.786', score: 3 },
+                { p: fibonacciLevels.level0_886, label: 'Deep 0.886', score: 4 }
             ];
 
             for (const fib of fibLevels) {
@@ -142,8 +146,10 @@ export function calculateDCAPlan(
         // Fallback completo a Fibonacci (Validado)
         const potentialFibs = [
             { p: fibonacciLevels.level0_618, label: 'Golden Pocket (0.618)', score: 5 },
+            { p: fibonacciLevels.level0_65, label: 'Golden Pocket Low (0.65)', score: 5 },
             { p: fibonacciLevels.level0_5, label: 'Fib 0.5', score: 2 },
-            { p: fibonacciLevels.level0_786, label: 'Fib 0.786', score: 3 }
+            { p: fibonacciLevels.level0_786, label: 'Fib 0.786', score: 3 },
+            { p: fibonacciLevels.level0_886, label: 'Deep 0.886', score: 4 }
         ];
 
         selectedPOIs = potentialFibs

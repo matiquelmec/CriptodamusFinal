@@ -43,7 +43,7 @@ export const streamMarketAnalysis = async function* (
     }
 
     // 2. EXTRAER DATOS (YA NO SE PARSEA TEXTO, SE USAN OBJETOS)
-    const { price, rsi, stochRsi, vwap, adx, atr, rvol, ema20, ema50, ema100, ema200, macd, bollinger, pivots, fibonacci, trendStatus, volumeProfile, orderBlocks, fairValueGaps, confluenceAnalysis, fractalAnalysis } = techData;
+    const { price, rsi, stochRsi, vwap, adx, atr, rvol, ema20, ema50, ema100, ema200, macd, bollinger, pivots, fibonacci, trendStatus, volumeProfile, orderBlocks, fairValueGaps, confluenceAnalysis, fractalAnalysis, harmonicPatterns } = techData;
 
     // --- LÓGICA DE COMANDO: DETECCIÓN AMPLIA ---
     const isAnalysisRequest =
@@ -161,6 +161,19 @@ export const streamMarketAnalysis = async function* (
                 }
             }
         }
+
+        // NEW: HARMONIC PATTERNS (INSTITUCIONAL GEOMETRY)
+        if (harmonicPatterns && harmonicPatterns.length > 0) {
+            harmonicPatterns.forEach(pattern => {
+                // Only consider patterns that are complete and recent (Logic implicit in detection)
+                if (pattern.direction === 'BULLISH') {
+                    bullishScore += 4; // High conviction pattern
+                } else {
+                    bearishScore += 4;
+                }
+            });
+        }
+
         // --- PHASE 1.5: MACRO ADJUSTMENTS (NEW) ---
         // Aquí es donde el "Trader Experto" ajusta las probabilidades
 
@@ -407,6 +420,17 @@ export const streamMarketAnalysis = async function* (
                 response += `| **Ciclo de Mercado (1W)** | ${cycleText} | Precio $${price_1w} vs EMA50. ${rsiWDisplay} |\n`;
             }
             response += `| **Veredicto Final** | ${fractalIcon} ${fractalStatus} | ${localGodMode ? '🌊 **Tsunami Institucional:** Toda la liquidez empuja en la misma dirección.' : 'Operar con precaución.'} |\n\n`;
+        }
+
+        if (harmonicPatterns && harmonicPatterns.length > 0) {
+            response += `### 3.4. Geometría de Mercado (Patrones Armónicos)\n`;
+            response += `| Patrón | Dirección | Confianza | PRZ (Zona) |\n`;
+            response += `|---|---|---|---|\n`;
+            harmonicPatterns.forEach(p => {
+                const icon = p.direction === 'BULLISH' ? '🟢' : '🔴';
+                response += `| **${p.type}** | ${icon} ${p.direction} | ${p.confidence}% | $${p.prz.toFixed(4)} |\n`;
+            });
+            response += `> *Validación matemática de proporciones 0.618/0.786/0.886 exitosa.*\n\n`;
         }
 
         // IV. PLAN DE EJECUCIÓN DCA

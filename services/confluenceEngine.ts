@@ -71,7 +71,9 @@ export function calculatePOIs(
         { price: fibonacci.level0_382, name: 'Fib 0.382', score: 2 },
         { price: fibonacci.level0_5, name: 'Fib 0.5', score: 2 },
         { price: fibonacci.level0_618, name: 'Golden Pocket (0.618)', score: 3 },
-        { price: fibonacci.level0_786, name: 'Fib 0.786', score: 1 }
+        { price: fibonacci.level0_65, name: 'Golden Pocket Low (0.65)', score: 3 }, // Institutional
+        { price: fibonacci.level0_786, name: 'Fib 0.786', score: 2 },
+        { price: fibonacci.level0_886, name: 'Shark/Deep (0.886)', score: 3 } // Stop Hunt zone
     ];
 
     fibLevels.forEach(fib => {
@@ -138,6 +140,23 @@ export function calculatePOIs(
     bearishFVGs.filter(fvg => !fvg.filled && fvg.midpoint > currentPrice).forEach(fvg => {
         addOrUpdatePOI(resistancePOIs, fvg.midpoint, 3, 'Bearish FVG', 'RESISTANCE');
     });
+
+    // SYNERGY BONUS: Fib + Order Block
+    // If a POI contains both a Fibonacci level and an Order Block, it's an institutional trap.
+    const applySynergy = (list: POI[]) => {
+        list.forEach(poi => {
+            const hasFib = poi.factors.some(f => f.includes('Fib') || f.includes('Golden'));
+            const hasOB = poi.factors.some(f => f.includes('OB'));
+
+            if (hasFib && hasOB) {
+                poi.score = Math.ceil(poi.score * 1.5); // 50% Boost
+                poi.factors.push('🔥 INSTITUTIONAL CONFLUENCE');
+            }
+        });
+    };
+
+    applySynergy(supportPOIs);
+    applySynergy(resistancePOIs);
 
     // Ordenar por score descendente
     supportPOIs.sort((a, b) => b.score - a.score);

@@ -217,63 +217,170 @@ export function calculateCumulativeVWAP(highs: number[], lows: number[], closes:
     return cumVol > 0 ? cumTPV / cumVol : closes[closes.length - 1];
 };
 
-// NEW: Auto Fibonacci Retracements (Dynamic Lookback)
+// NEW: Auto Fibonacci Retracements (Dynamic Lookback with FRACTALS)
+// Implements Bill Williams Fractals (5 bars) for institutional anchor points
+export function calculateFractals(highs: number[], lows: number[]) {
+    const fractalHighs: { price: number; index: number }[] = [];
+    const fractalLows: { price: number; index: number }[] = [];
+
+    // Need at least 5 bars. Loop from 2 to length-2
+    for (let i = 2; i < highs.length - 2; i++) {
+        // Bearish Fractal (High)
+        const isHigh = highs[i] > highs[i - 1] && highs[i] > highs[i - 2] &&
+                       highs[i] > highs[i + 1] && highs[i] > highs[i + 2];
+        if (isHigh) fractalHighs.push({ price: highs[i], index: i });
+
+        // Bullish Fractal (Low)
+        const isLow = lows[i] < lows[i - 1] && lows[i] < lows[i - 2] &&
+                      lows[i] < lows[i + 1] && lows[i] < lows[i + 2];
+        if (isLow) fractalLows.push({ price: lows[i], index: i });
+    }
+    return { fractalHighs, fractalLows };
+}
+
 export function calculateAutoFibs(highs: number[], lows: number[], ema200: number) {
     const currentPrice = highs[highs.length - 1];
     const isUptrend = currentPrice > ema200;
 
-    // Buscamos un Swing significativo en un rango amplio (300 velas o todo el historial)
-    // para encontrar el verdadero inicio del impulso.
-    const lookback = Math.min(highs.length, 300);
-    const subsetHighs = highs.slice(-lookback);
-    const subsetLows = lows.slice(-lookback);
-
-    let maxHigh = -Infinity;
-    let minLow = Infinity;
-
-    // En tendencia alcista, el punto clave es el Mínimo más bajo desde donde partió el impulso
-    // En bajista, es el Máximo más alto.
-
-    if (isUptrend) {
-        maxHigh = Math.max(...subsetHighs); // El pico actual
-        // Buscamos el mínimo más bajo de los últimos N periodos
-        minLow = Math.min(...subsetLows);
-    } else {
-        minLow = Math.min(...subsetLows); // El fondo actual
-        maxHigh = Math.max(...subsetHighs);
+    // Use Fractals for precision anchoring
+    const { fractalHighs, fractalLows } = calculateFractals(highs, lows);
+    
+    // Fallback if no fractals found (rare but possible in very short arrays)
+    if (fractalHighs.length === 0 || fractalLows.length === 0) {
+        // Simple Min/Max fallback
+         const lookback = Math.min(highs.length, 300);
+         const subsetHighs = highs.slice(-lookback);
+         const subsetLows = lows.slice(-lookback);
+         const maxHigh = Math.max(...subsetHighs);
+         const minLow = Math.min(...subsetLows);
+         const diff = maxHigh - minLow;
+         
+         if (isUptrend) {
+             return {
+                 trend: 'UP' as const,
+                 level0: maxHigh,
+                 level0_236: maxHigh - (diff * 0.236),
+                 level0_382: maxHigh - (diff * 0.382),
+                 level0_5: maxHigh - (diff * 0.5),
+                 level0_618: maxHigh - (diff * 0.618),
+                 level0_65: maxHigh - (diff * 0.65), // Institutional Zone Start
+                 level0_786: maxHigh - (diff * 0.786),
+                 level0_886: maxHigh - (diff * 0.886), // Stop Hunt / Shark
+                 level1: minLow,
+                 tp1: maxHigh + (diff * 0.272),
+                 tp2: maxHigh + (diff * 0.618),
+                 tp3: maxHigh + (diff * 1.0),
+                 tp4: maxHigh + (diff * 1.618), // Golden Extension
+                 tp5: maxHigh + (diff * 2.618)  // Euphoria
+             };
+         } else {
+             return {
+                 trend: 'DOWN' as const,
+                 level0: minLow,
+                 level0_236: minLow + (diff * 0.236),
+                 level0_382: minLow + (diff * 0.382),
+                 level0_5: minLow + (diff * 0.5),
+                 level0_618: minLow + (diff * 0.618),
+                 level0_65: minLow + (diff * 0.65),
+                 level0_786: minLow + (diff * 0.786),
+                 level0_886: minLow + (diff * 0.886),
+                 level1: maxHigh,
+                 tp1: minLow - (diff * 0.272),
+                 tp2: minLow - (diff * 0.618),
+                 tp3: minLow - (diff * 1.0),
+                 tp4: minLow - (diff * 1.618),
+                 tp5: minLow - (diff * 2.618)
+             };
+         }
     }
 
-    const diff = maxHigh - minLow;
+    let anchorHigh = -Infinity;
+    let anchorLow = Infinity;
 
     if (isUptrend) {
-        // Low to High (Supports)
+        // En tendencia alcista:
+        // 1. Encontrar el MAXIMO MAS ALTO RECIENTE (Swing High)
+        // 2. Encontrar el MINIMO MAS BAJO ANTERIOR a ese máximo (Swing Low origen)
+        
+        // Tomamos el fractal High más alto de los últimos X periodos relevantes
+        const relevantHighs = fractalHighs.filter(f => f.index > highs.length - 300);
+        if (relevantHighs.length > 0) {
+            // Find the absolute highest fractal
+            const highestFractal = relevantHighs.reduce((prev, curr) => curr.price > prev.price ? curr : prev);
+            anchorHigh = highestFractal.price;
+
+            // Find the lowest fractal BEFORE that high (origin of the move)
+            const relevantLows = fractalLows.filter(f => f.index < highestFractal.index && f.index > highestFractal.index - 300);
+            if (relevantLows.length > 0) {
+                 const lowestFractal = relevantLows.reduce((prev, curr) => curr.price < prev.price ? curr : prev);
+                 anchorLow = lowestFractal.price;
+            } else {
+                 anchorLow = Math.min(...lows.slice(Math.max(0, highestFractal.index - 100), highestFractal.index));
+            }
+        }
+    } else {
+        // En tendencia bajista:
+        // 1. Encontrar el MINIMO MAS BAJO RECIENTE (Swing Low)
+        // 2. Encontrar el MAXIMO MAS ALTO ANTERIOR a ese mínimo (Swing High origen)
+        
+        const relevantLows = fractalLows.filter(f => f.index > lows.length - 300);
+        if (relevantLows.length > 0) {
+            const lowestFractal = relevantLows.reduce((prev, curr) => curr.price < prev.price ? curr : prev);
+            anchorLow = lowestFractal.price;
+
+             const relevantHighs = fractalHighs.filter(f => f.index < lowestFractal.index && f.index > lowestFractal.index - 300);
+             if (relevantHighs.length > 0) {
+                 const highestFractal = relevantHighs.reduce((prev, curr) => curr.price > prev.price ? curr : prev);
+                 anchorHigh = highestFractal.price;
+             } else {
+                 anchorHigh = Math.max(...highs.slice(Math.max(0, lowestFractal.index - 100), lowestFractal.index));
+             }
+        }
+    }
+    
+    // Safety check
+    if (anchorHigh === -Infinity) anchorHigh = Math.max(...highs);
+    if (anchorLow === Infinity) anchorLow = Math.min(...lows);
+
+    const diff = anchorHigh - anchorLow;
+
+    if (isUptrend) {
+        // Retracement calc (Downwards from High)
         return {
             trend: 'UP' as const,
-            level0: maxHigh, // Top
-            level0_236: maxHigh - (diff * 0.236),
-            level0_382: maxHigh - (diff * 0.382),
-            level0_5: maxHigh - (diff * 0.5),
-            level0_618: maxHigh - (diff * 0.618), // GOLDEN POCKET
-            level0_786: maxHigh - (diff * 0.786),
-            level1: minLow,
-            tp1: maxHigh + (diff * 0.272),
-            tp2: maxHigh + (diff * 0.618),
-            tp3: maxHigh + (diff * 1.0)
+            level0: anchorHigh, // Top (0%)
+            level0_236: anchorHigh - (diff * 0.236),
+            level0_382: anchorHigh - (diff * 0.382),
+            level0_5: anchorHigh - (diff * 0.5),
+            level0_618: anchorHigh - (diff * 0.618), // Golden Pocket Top
+            level0_65: anchorHigh - (diff * 0.65),   // Golden Pocket Bottom
+            level0_786: anchorHigh - (diff * 0.786),
+            level0_886: anchorHigh - (diff * 0.886), // Deep
+            level1: anchorLow, // Bottom (100%)
+            tp1: anchorHigh + (diff * 0.272),
+            tp2: anchorHigh + (diff * 0.618),
+            tp3: anchorHigh + (diff * 1.0),
+            tp4: anchorHigh + (diff * 1.618),
+            tp5: anchorHigh + (diff * 2.618)
         };
     } else {
-        // High to Low (Resistances)
+        // Retracement calc (Upwards from Low)
         return {
             trend: 'DOWN' as const,
-            level0: minLow, // Bottom
-            level0_236: minLow + (diff * 0.236),
-            level0_382: minLow + (diff * 0.382),
-            level0_5: minLow + (diff * 0.5),
-            level0_618: minLow + (diff * 0.618), // GOLDEN POCKET
-            level0_786: minLow + (diff * 0.786),
-            level1: maxHigh,
-            tp1: minLow - (diff * 0.272),
-            tp2: minLow - (diff * 0.618),
-            tp3: minLow - (diff * 1.0)
+            level0: anchorLow, // Bottom (0%)
+            level0_236: anchorLow + (diff * 0.236),
+            level0_382: anchorLow + (diff * 0.382),
+            level0_5: anchorLow + (diff * 0.5),
+            level0_618: anchorLow + (diff * 0.618),
+            level0_65: anchorLow + (diff * 0.65),
+            level0_786: anchorLow + (diff * 0.786),
+            level0_886: anchorLow + (diff * 0.886),
+            level1: anchorHigh, // Top (100%)
+            tp1: anchorLow - (diff * 0.272),
+            tp2: anchorLow - (diff * 0.618),
+            tp3: anchorLow - (diff * 1.0),
+            tp4: anchorLow - (diff * 1.618),
+            tp5: anchorLow - (diff * 2.618)
         };
     }
 }

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
 import { scanMarketOpportunities, getMarketRisk } from '../services/cryptoService';
 import { STRATEGIES } from '../services/strategyContext';
-import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database, Lightbulb, Clock, Globe } from 'lucide-react';
+import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database, Lightbulb, Clock, Globe, Hexagon } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import { GLOSSARY } from '../constants/glossary';
 import { useOpportunityCache } from '../hooks/useOpportunityCache';
@@ -432,6 +432,13 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                         R:R 1:{data.riskRewardRatio || 'N/A'}
                     </span>
                 </div>
+                {/* NEW: Harmonic Badge */}
+                {data.harmonicPatterns && data.harmonicPatterns.length > 0 && (
+                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-purple-400 animate-pulse">
+                        <Hexagon size={12} />
+                        <span className="font-bold">{data.harmonicPatterns[0].type}</span>
+                    </div>
+                )}
             </div>
 
             {/* Signal Body */}

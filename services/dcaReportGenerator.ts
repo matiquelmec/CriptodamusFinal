@@ -38,7 +38,9 @@ export function generateDCAExecutionPlan(
     const dcaPlan = confluenceAnalysis
         ? calculateDCAPlan(price, confluenceAnalysis, atr, side, marketRegime, {
             level0_618: fibonacci.level0_618,
+            level0_65: fibonacci.level0_65,
             level0_786: fibonacci.level0_786,
+            level0_886: fibonacci.level0_886,
             level0_5: fibonacci.level0_5
         })
         : null;

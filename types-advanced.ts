@@ -50,6 +50,19 @@ export interface AdvancedTechnicalIndicators {
         bearish: FairValueGapData[];
     };
     confluenceAnalysis?: ConfluenceData;
+    harmonicPatterns?: HarmonicPattern[];
+}
+
+export interface HarmonicPattern {
+    type: 'GARTLEY' | 'BAT' | 'BUTTERFLY' | 'CRAB';
+    direction: 'BULLISH' | 'BEARISH';
+    startIndex: number;
+    endIndex: number;
+    points: { X: number; A: number; B: number; C: number; D: number };
+    prz: number; // Potential Reversal Zone
+    stopLoss: number;
+    takeProfits: [number, number];
+    confidence: number;
 }
 
 export interface AutoFibsResult {
@@ -59,8 +72,15 @@ export interface AutoFibsResult {
     level0_382: number;
     level0_5: number;
     level0_618: number;
+    level0_65: number;   // NEW: Golden Pocket Low
     level0_786: number;
+    level0_886: number;  // NEW: Deep retracement
     level1: number;
+    tp1: number;
+    tp2: number;
+    tp3: number;
+    tp4: number; // 1.618 / 2.618
+    tp5: number; // 2.618 / 4.236
 }
 
 // --- MARKET REGIME DETECTION ---
