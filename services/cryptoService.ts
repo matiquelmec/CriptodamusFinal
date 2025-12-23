@@ -213,8 +213,8 @@ const fetchCandles = async (symbolId: string, interval: string): Promise<{ times
 
     try {
         if (isBinance) {
-            // Fetching 205 candles to ensure deep data for EMA200 calculation
-            const res = await fetchWithTimeout(`${BINANCE_API_BASE}/klines?symbol=${symbolId}&interval=${interval}&limit=205`, {}, 8000);
+            // Fetching 1000 candles to ensure deep data for EMA200 calculation (Institutional Precision)
+            const res = await fetchWithTimeout(`${BINANCE_API_BASE}/klines?symbol=${symbolId}&interval=${interval}&limit=1000`, {}, 8000);
             if (!res.ok) throw new Error("Binance Candle Error");
             const data = await res.json();
             return data.map((d: any[]) => ({
