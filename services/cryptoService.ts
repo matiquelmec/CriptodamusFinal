@@ -720,8 +720,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
 
             // --- FILTRO DE VOLUMEN MÍNIMO (Calidad Profesional) ---
-            // No operar activos sin liquidez suficiente
-            if (rvol < 0.8) {
+            // No operar activos sin liquidez suficiente (Ajustado a 0.5 para permitir Asia Session/Ranges)
+            if (rvol < 0.5) {
                 console.log(`[Scanner] ${coin.symbol} descartado por volumen bajo (RVOL: ${rvol.toFixed(2)}x)`);
                 return; // Skip this opportunity
             }
@@ -953,7 +953,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             // This is how institutional traders operate: Few trades, high conviction, big payoff.
             // ═══════════════════════════════════════════════════════════════
 
-            const PREMIUM_THRESHOLD = 70;  // Only show PREMIUM or better (70+)
+            const PREMIUM_THRESHOLD = 60;  // Adjusted: Show VALID+ signals (60+) to avoid "Empty Screen" syndrome
             const GOD_MODE_THRESHOLD = 90; // Perfect setups
 
             // Risk-adjusted threshold
