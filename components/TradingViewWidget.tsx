@@ -42,8 +42,8 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({ symbol }) => {
         "BB@tv-basicstudies",     // Bandas de Bollinger
         "RSI@tv-basicstudies",    // RSI
         "MACD@tv-basicstudies",   // MACD
-        "MASimple@tv-basicstudies", // SMA 50
-        "MASimple@tv-basicstudies"  // SMA 200
+        "MAExp@tv-basicstudies",    // EMA 50 (Configurar en UI)
+        "MAExp@tv-basicstudies"     // EMA 200 (Configurar en UI)
       ],
       "support_host": "https://www.tradingview.com"
     });
