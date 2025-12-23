@@ -109,12 +109,18 @@ export function calculateMACD(prices: number[], fast = 12, slow = 26, signal = 9
     }
 
     const signalLine = calculateEMAArray(macdLine, signal);
-    const histogram = macdLine[macdLine.length - 1] - signalLine[signalLine.length - 1];
+    const histogramValues = [];
+    for (let i = 0; i < macdLine.length; i++) {
+        histogramValues.push(macdLine[i] - signalLine[i]);
+    }
+
+    const histogram = histogramValues[histogramValues.length - 1];
 
     return {
         macdLine: macdLine[macdLine.length - 1],
         signalLine: signalLine[signalLine.length - 1],
-        histogram: histogram
+        histogram: histogram,
+        histogramValues: histogramValues // NEW: For Divergence
     };
 }
 

@@ -23,6 +23,7 @@ import { detectHarmonicPatterns } from './harmonicPatterns'; // NEW
 import { detectFVG } from './fairValueGaps';
 import { calculatePOIs } from './confluenceEngine';
 import { detectMarketRegime } from './marketRegimeDetector';
+import { detectGenericDivergence } from './divergenceDetector'; // NEW
 import { selectStrategies } from './strategySelector';
 import { calculateDCAPlan } from './dcaCalculator';
 
@@ -440,14 +441,15 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         // Calcs
         const currentPrice = prices[prices.length - 1];
         const rsi = calculateRSI(prices, 14);
-        const stochRsi = calculateStochRSI(prices, 14); // NEW
+        const rsiArray = calculateRSIArray(prices, 14); // NEW: Needed for Expert Analysis
+        const stochRsi = calculateStochRSI(prices, 14);
         const adx = calculateADX(highs, lows, prices, 14);
         const atr = calculateATR(highs, lows, prices, 14);
         const ema20 = calculateEMA(prices, 20);
         const ema50 = calculateEMA(prices, 50);
         const ema100 = calculateEMA(prices, 100);
         const ema200 = calculateEMA(prices, 200);
-        const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes); // NEW
+        const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes);
 
         const avgVol = calculateSMA(volumes, 20);
         const rvol = avgVol > 0 ? (volumes[volumes.length - 1] / avgVol) : 0;
@@ -455,7 +457,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         const macd = calculateMACD(prices);
         const pivots = calculatePivotPoints(highs, lows, prices);
         const bb = calculateBollingerStats(prices);
-        const fibs = calculateAutoFibs(highs, lows, ema200); // Uses Fractals internally now
+        const fibs = calculateAutoFibs(highs, lows, ema200);
         const ichimokuData = calculateIchimokuData(highs, lows, prices);
 
         // NEW: Fractal & Harmonic Analysis
@@ -467,14 +469,19 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         if (ema20 > ema50 && ema50 > ema100 && ema100 > ema200) emaAlignment = 'BULLISH';
         if (ema20 < ema50 && ema50 < ema100 && ema100 < ema200) emaAlignment = 'BEARISH';
 
-        // NEW: Advanced Market Structure Calculations (Máximo Potencial)
+        // NEW: Advanced Market Structure Calculations
         const volumeProfile = calculateVolumeProfile(candles, atr);
         const { bullishOB, bearishOB } = detectOrderBlocks(candles, atr, currentPrice);
         const { bullishFVG, bearishFVG } = detectFVG(candles, atr, currentPrice);
 
         // NEW: Expert EMA Metrics (Z-Score & Slope)
         const zScore = calculateZScore(prices, ema200);
-        const emaSlope = calculateSlope(calculateEMAArray(prices, 200), 10); // Check slope of EMA200 over last 10 bars
+        const emaSlope = calculateSlope(calculateEMAArray(prices, 200), 10);
+
+        // NEW: EXPERT MACD & RSI ANALYSIS (Missing in previous version)
+        const macdDivergence = detectGenericDivergence(candles, macd.histogramValues, 'MACD_HIST');
+        const isSqueeze = bb.bandwidth < 10 && Math.abs(macd.histogram) < (currentPrice * 0.0005);
+        const rsiExpertResults = analyzeRSIExpert(prices, rsiArray);
 
         // Calculate Confluence Analysis
         const confluenceAnalysis = calculatePOIs(
@@ -510,8 +517,15 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
             ema50,
             ema100,
             ema200,
-            zScore, // NEW
-            emaSlope, // NEW
+            zScore,
+            emaSlope,
+            macdDivergence, // NEW
+            isSqueeze,      // NEW
+            rsiExpert: {    // NEW
+                range: rsiExpertResults.range.type,
+                target: rsiExpertResults.reversalTarget?.active ? rsiExpertResults.reversalTarget.targetPrice : null,
+                targetType: rsiExpertResults.reversalTarget?.type || null
+            },
             macd: {
                 line: macd.macdLine,
                 signal: macd.signalLine,
@@ -692,6 +706,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes);
             const stochRsi = calculateStochRSI(prices, 14);
             const rsi = calculateRSI(prices.slice(0, checkIndex + 1), 14);
+            const rsiArray = calculateRSIArray(prices.slice(0, checkIndex + 1), 14); // NEW: Needed for Expert Analysis
 
             // NEW: Institutional Logic Integration
             const { fractalHighs, fractalLows } = calculateFractals(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1));
