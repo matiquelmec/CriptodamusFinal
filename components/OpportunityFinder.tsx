@@ -190,7 +190,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                             </p>
                             <div className="bg-surface border border-border rounded-lg p-4 text-left space-y-2">
                                 <p className="text-xs text-secondary leading-relaxed">
-                                    <span className="text-blue-400 font-bold">💡 Filosofía Institucional:</span> Los mejores traders esperan setup perfectos en lugar de forzar operaciones. El sistema solo muestra señales con <span className="text-accent font-bold">70+ de confianza</span> (PREMIUM o GOD MODE).
+                                    <span className="text-blue-400 font-bold">💡 Filosofía Institucional:</span> Los mejores traders esperan setup perfectos en lugar de forzar operaciones. El sistema solo muestra señales con <span className="text-accent font-bold">60+ de confianza</span> (VALID o PREMIUM).
                                 </p>
                                 <div className="flex items-start gap-2 text-xs text-secondary/80 pt-2 border-t border-border/50">
                                     <Shield size={14} className="text-success mt-0.5 shrink-0" />
