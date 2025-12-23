@@ -897,6 +897,39 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 detectionNote = strategyDetails.join(" | ");
             }
 
+            // ═══════════════════════════════════════════════════════════════
+            // 5. EXPERT BOOSTERS (Institutional Edge)
+            // ═══════════════════════════════════════════════════════════════
+            // These high-quality setups should push a "Good" trade to "Great" (Premium/God Mode)
+
+            // A) TTM Squeeze (Volatilidad Explosiva Inminente)
+            if (isSqueeze) {
+                totalScore += 10;
+                detectionNote += " | ⚡ TTM Squeeze (Explosión)";
+            }
+
+            // B) RSI Cardwell Target (Proyección Institucional)
+            if (rsiExpertResults.reversalTarget?.active) {
+                totalScore += 15; // High confidence setup
+                detectionNote += ` | 🎯 Cardwell Target ($${rsiExpertResults.reversalTarget.targetPrice.toLocaleString()})`;
+            }
+
+            // C) Super Range (Momentum)
+            if (rsiExpertResults.range.type.includes('SUPER')) {
+                totalScore += 10;
+                detectionNote += " | 🚀 Super Range Momentum";
+            }
+
+            // D) MACD Divergence
+            if (macdDivergence) {
+                totalScore += 10;
+                detectionNote += ` | ⚠️ Div ${macdDivergence.type}`;
+            }
+
+            // Cap Score at 99
+            if (totalScore > 99) totalScore = 99;
+            score = totalWeight > 0 ? totalScore : 0; // Re-assign filtered score
+
             // --- FILTERING BY RISK ---
             // If Risk is High (News OR Manipulation), we only accept VERY high scores
             const threshold = isHighRisk ? 70 : 50; // BALANCED: Estricto pero permite oportunidades reales
