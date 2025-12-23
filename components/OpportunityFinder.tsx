@@ -466,6 +466,23 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                             {data.strategy.split('_')[0]}
                         </span>
                     </div>
+
+                    {/* NEW: TIER BADGE */}
+                    {data.tier && (
+                        <div className={`mt-1 px-2 py-0.5 rounded border text-[10px] font-bold font-mono flex items-center gap-1
+                            ${data.tier === 'S' ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500' :
+                                data.tier === 'A' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' :
+                                    data.tier === 'C' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
+                                        'bg-gray-500/10 border-gray-500/30 text-gray-400'
+                            }`}
+                            title={`Fundamental Tier: ${data.tier} (Risk Assessment)`}
+                        >
+                            {data.tier === 'S' && <Shield size={10} />}
+                            {data.tier === 'C' && <AlertTriangle size={10} />}
+                            TIER {data.tier}
+                        </div>
+                    )}
+
                     {/* INFO BUTTON */}
                     <button
                         onClick={(e) => { e.stopPropagation(); onShowDetails(); }}

@@ -7,7 +7,10 @@ export interface MarketData {
   rsi: number;
   volume: string;
   trend: 'bullish' | 'bearish' | 'neutral';
+  tier?: FundamentalTier; // NEW: Fundamental Classification
 }
+
+export type FundamentalTier = 'S' | 'A' | 'B' | 'C';
 
 export interface ChatMessage {
   id: string;
@@ -223,7 +226,7 @@ export interface TechnicalIndicators {
   // Market Regime Detection (Autonomous Strategy Selection)
   marketRegime?: import('./types-advanced').MarketRegime;
 
-
+  tier?: FundamentalTier; // NEW: Propagate Tier
 }
 
 export enum TabView {
@@ -312,4 +315,5 @@ export interface AIOpportunity {
   };
   dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI
   harmonicPatterns?: import('./types-advanced').HarmonicPattern[]; // NEW: Patrones para UI
+  tier?: FundamentalTier; // NEW: Tier Badge for UI
 }

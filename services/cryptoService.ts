@@ -1,4 +1,4 @@
-import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from '../types';
+import { MarketData, FearAndGreedData, AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk, FundamentalTier } from '../types';
 import { hasActiveSession } from './geminiService';
 import { analyzeIchimoku } from './strategies/IchimokuAdapter';
 import { calculateIchimokuData } from './ichimokuStrategy'; // NEW: Direct calculation for Advisor
@@ -208,6 +208,26 @@ const mapBinanceToCoinCap = (symbol: string) => {
     const map: Record<string, string> = { 'BTCUSDT': 'bitcoin', 'ETHUSDT': 'ethereum', 'SOLUSDT': 'solana', 'DOGEUSDT': 'dogecoin', 'BNBUSDT': 'binance-coin', 'XRPUSDT': 'xrp', 'ADAUSDT': 'cardano' };
     return map[symbol];
 }
+
+// NEW: FUNDAMENTAL TIER CALCULATOR
+// Approximates tier based on Symbol (Hardcoded Elite) or Volume/Memes
+const calculateFundamentalTier = (symbol: string, isMeme: boolean): FundamentalTier => {
+    // S TIER: The Kings (Store of Value / L1 Std)
+    const S_TIER = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'];
+    if (S_TIER.includes(symbol)) return 'S';
+
+    // C TIER: Memes & Low Cap Speculation
+    if (isMeme) return 'C';
+    const C_TIER_PATTERNS = ['PEPE', 'DOGE', 'SHIB', 'BONK', 'WIF', 'FLOKI', '1000SATS', 'ORDI'];
+    if (C_TIER_PATTERNS.some(p => symbol.includes(p))) return 'C';
+
+    // A TIER: Established Blue Chips (Defi/L1/L2 High Vol)
+    const A_TIER = ['XRPUSDT', 'ADAUSDT', 'LINKUSDT', 'AVAXUSDT', 'DOTUSDT', 'TRXUSDT', 'TONUSDT', 'SUIUSDT', 'APTUSDT'];
+    if (A_TIER.includes(symbol)) return 'A';
+
+    // B TIER: The rest (Mid Caps)
+    return 'B';
+};
 
 const fetchCandles = async (symbolId: string, interval: string): Promise<{ timestamp: number, close: number, volume: number, high: number, low: number, open: number }[]> => {
     const isBinance = symbolId === symbolId.toUpperCase() && symbolId.endsWith('USDT');
@@ -723,6 +743,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const avgVol = calculateSMA(volumes, 20);
             const rvol = avgVol > 0 ? (volumes[checkIndex] / avgVol) : 0;
 
+            // NEW: DETERMINE FUNDAMENTAL TIER
+            const tier = calculateFundamentalTier(coin.id, style === 'MEME_SCALP');
+
+
             // --- FILTRO DE VOLUMEN MÍNIMO (Calidad Profesional) ---
             // No operar activos sin liquidez suficiente (Ajustado a 0.5 para permitir Asia Session/Ranges)
             if (rvol < 0.5) {
@@ -1124,7 +1148,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     atr,
                     signalSide,
                     marketRegime,
-                    fibs
+                    fibs,
+                    tier // NEW: Pass Tier for Dynamic Stop Loss
                 );
 
                 // --- FINAL SCORE ADJUSTMENT (CORRELATION FILTER) ---
@@ -1196,6 +1221,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     // Institutional Metadata
                     timeframe: interval,
                     session: session.session,
+                    tier: tier, // NEW: Tier logic
                     riskRewardRatio: parseFloat(rrRatio.toFixed(2)),
 
                     id: Date.now().toString() + Math.random(),

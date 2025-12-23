@@ -1,5 +1,6 @@
 import { ConfluenceAnalysis, POI } from './confluenceEngine';
 import { MarketRegime } from '../types-advanced';
+import { FundamentalTier } from '../types'; // NEW Import
 
 export interface DCAEntry {
     level: number; // 1, 2, 3
@@ -87,7 +88,8 @@ export function calculateDCAPlan(
         level0_786: number;
         level0_886: number;  // NEW
         level0_5: number;
-    }
+    },
+    tier: FundamentalTier = 'B' // NEW: Fundamental Tier (Default to average)
 ): DCAPlan {
     // 1. Seleccionar POIs según el lado del trade
     let relevantPOIs = side === 'LONG'
@@ -231,10 +233,18 @@ export function calculateDCAPlan(
     );
 
     // 7. Stop Loss Final
+    // DYNAMIC ATR MULTIPLIER BASED ON TIER
+    // S: Wide (2.5x), A: Std (2.0x), B: Tight (1.5x), C: Sniper (1.0x)
+    let atrMultiplier = 1.5; // Default (Tier B)
+    if (tier === 'S') atrMultiplier = 2.5;
+    else if (tier === 'A') atrMultiplier = 2.0;
+    else if (tier === 'B') atrMultiplier = 1.5;
+    else if (tier === 'C') atrMultiplier = 1.0;
+
     const finalDeepest = entries[entries.length - 1].price;
     const stopLoss = side === 'LONG'
-        ? finalDeepest - (atr * 1.5)
-        : finalDeepest + (atr * 1.5);
+        ? finalDeepest - (atr * atrMultiplier)
+        : finalDeepest + (atr * atrMultiplier);
 
     // 8. Calcular riesgo total
     const riskPerShare = Math.abs(averageEntry - stopLoss) / averageEntry;
