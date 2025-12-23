@@ -377,6 +377,14 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                 <div className="flex-1 bg-danger/10 p-3 rounded border border-danger/20">
                                     <span className="block text-[10px] text-danger uppercase mb-1">Stop Loss (Invalidación)</span>
                                     <span className="font-mono font-bold text-danger">${selectedSignal.stopLoss}</span>
+                                    {selectedSignal.tier && (
+                                        <span className="block text-[9px] text-danger/70 mt-0.5">
+                                            {selectedSignal.tier === 'S' ? '(2.5 ATR - Tier S)' :
+                                                selectedSignal.tier === 'A' ? '(2.0 ATR - Tier A)' :
+                                                    selectedSignal.tier === 'B' ? '(1.5 ATR - Tier B)' :
+                                                        '(1.0 ATR - Sniper)'}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </div>

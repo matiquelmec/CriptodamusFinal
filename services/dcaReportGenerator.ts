@@ -1,5 +1,5 @@
 import { calculateDCAPlan, formatConfluenceStars } from './dcaCalculator';
-import { TechnicalIndicators } from '../types';
+import { TechnicalIndicators, FundamentalTier } from '../types';
 import type { ConfluenceAnalysis } from './confluenceEngine';
 
 /**
@@ -16,7 +16,8 @@ export function generateDCAExecutionPlan(
     customHeader?: string,
     rsiExpert?: { target: number | null; range: string; },
     macroContext?: import('../services/macroService').MacroContext,
-    executionPhilosophy?: string // NEW: AI Narrative Injection
+    executionPhilosophy?: string, // NEW: AI Narrative Injection
+    tier: FundamentalTier = 'B' // NEW: Fundamental Tier
 ): string {
     let response = '';
 
@@ -46,7 +47,7 @@ export function generateDCAExecutionPlan(
             level0_786: fibonacci.level0_786,
             level0_886: fibonacci.level0_886,
             level0_5: fibonacci.level0_5
-        })
+        }, tier) // Pass Tier
         : null;
 
     // EXPERT TUNING: RSI TARGET INJECTION
@@ -82,9 +83,17 @@ export function generateDCAExecutionPlan(
         response += `### 4.3. Gestión de Riesgo\n\n`;
         response += `| Métrica | Valor | Justificación |\n`;
         response += `|---------|-------|---------------|\n`;
+
+        // DYNAMIC TEXT BASED ON TIER
+        let multiplierText = "1.5";
+        if (tier === 'S') multiplierText = "2.5 (Tier S)";
+        else if (tier === 'A') multiplierText = "2.0 (Tier A)";
+        else if (tier === 'B') multiplierText = "1.5 (Tier B)";
+        else if (tier === 'C') multiplierText = "1.0 (Sniper Tier C)";
+
         const slJustification = side === 'LONG'
-            ? "1.5 ATR debajo del Entry 3"
-            : "1.5 ATR encima del Entry 3";
+            ? `${multiplierText} ATR debajo del Entry 3`
+            : `${multiplierText} ATR encima del Entry 3`;
 
         response += `| **Stop Loss Global** | $${dcaPlan.stopLoss.toFixed(4)} | ${slJustification} |\n`;
         response += `| **Riesgo Total** | ${dcaPlan.totalRisk.toFixed(2)}% | Exposición máxima |\n`;

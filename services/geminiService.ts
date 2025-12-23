@@ -560,7 +560,8 @@ export const streamMarketAnalysis = async function* (
             price, atr, fibonacci, confluenceAnalysis as any,
             techData.marketRegime, finalPrimarySide,
             scenarioATitle, rsiExpert, macroContext,
-            executionPhilosophy // Passed from AI
+            executionPhilosophy, // Passed from AI
+            techData.tier // NEW: Tier logic
         );
 
         // ESCENARIO B: ALTERNATIVO (HEDGING)
@@ -572,7 +573,9 @@ export const streamMarketAnalysis = async function* (
         response += generateDCAExecutionPlan(
             price, atr, fibonacci, confluenceAnalysis as any,
             techData.marketRegime, secondarySide,
-            scenarioBTitle, rsiExpert, macroContext
+            scenarioBTitle, rsiExpert, macroContext,
+            undefined, // No philosophy for B
+            techData.tier // NEW: Tier logic
         );
 
         yield response;
