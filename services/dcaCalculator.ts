@@ -186,11 +186,11 @@ export function calculateDCAPlan(
     // 3. Ordenar POIs (de menor a mayor para LONG, de mayor a menor para SHORT)
     selectedPOIs.sort((a, b) => side === 'LONG' ? b.price - a.price : a.price - b.price);
 
-    // 4. Position sizing institucional (Adaptativo por régimen)
+    // 4. Position sizing institucional
     const positionSizes = getRegimeAwarePositionSizing(marketRegime);
 
-    // 5. Crear entradas DCA
-    const entries: DCAEntry[] = selectedPOIs.map((poi, index) => ({
+    // 5. Crear entradas DCA (Initial Draft)
+    let entries: DCAEntry[] = selectedPOIs.map((poi, index) => ({
         level: index + 1,
         price: poi.price,
         positionSize: positionSizes[index],
@@ -201,28 +201,50 @@ export function calculateDCAPlan(
             : ((poi.price - signalPrice) / signalPrice) * 100
     }));
 
-    // 6. Calcular precio promedio ponderado (WAP - Weighted Average Price)
+    // --- EXPERT OPTIMIZATION: R:R CHECK & ADJUSTMENT ---
+    // Calculate hypothetical WAP and Risk to check R:R BEFORE finalizing
+    const tempWAP = entries.reduce((sum, e) => sum + (e.price * e.positionSize / 100), 0);
+    const deepestPrice = entries[entries.length - 1].price;
+    const tempSL = side === 'LONG' ? deepestPrice - (atr * 1.5) : deepestPrice + (atr * 1.5);
+
+    // Estimate TP2 (Impulse) for R:R check
+    const estTP2 = side === 'LONG' ? tempWAP + (atr * 4) : tempWAP - (atr * 4);
+    const estRisk = Math.abs(tempWAP - tempSL);
+    const estReward = Math.abs(tempWAP - estTP2);
+    const initialRR = estReward / estRisk;
+
+    // IF R:R IS POOR (< 1.5), AGGRESSIVELY SHIFT ENTRIES DEEPER
+    if (initialRR < 1.5) {
+        // Shift Factor: Demand 2% better price on all entries
+        const shiftMult = side === 'LONG' ? 0.98 : 1.02;
+        entries = entries.map(e => ({
+            ...e,
+            price: e.price * shiftMult,
+            factors: [...e.factors, "⚡ R:R Opt."]
+        }));
+    }
+
+    // 6. Recalculate Final WAP
     const totalWeight = entries.reduce((sum, e) => sum + e.positionSize, 0);
     const averageEntry = entries.reduce((sum, e) =>
         sum + (e.price * e.positionSize / totalWeight), 0
     );
 
-    // 7. Stop Loss: 1.5 ATR más allá del Entry 3 (más profundo)
-    const deepestEntry = entries[entries.length - 1].price;
+    // 7. Stop Loss Final
+    const finalDeepest = entries[entries.length - 1].price;
     const stopLoss = side === 'LONG'
-        ? deepestEntry - (atr * 1.5)
-        : deepestEntry + (atr * 1.5);
+        ? finalDeepest - (atr * 1.5)
+        : finalDeepest + (atr * 1.5);
 
-    // 8. Calcular riesgo total (% de cuenta)
+    // 8. Calcular riesgo total
     const riskPerShare = Math.abs(averageEntry - stopLoss) / averageEntry;
-    const totalRisk = riskPerShare * 100; // Asumiendo 100% de capital asignado
+    const totalRisk = riskPerShare * 100;
 
-    // 9. Take Profits basados en resistencias/soportes de confluencia
+    // 9. Take Profits
     const targetPOIs = side === 'LONG'
         ? confluenceAnalysis.topResistances
         : confluenceAnalysis.topSupports;
 
-    // SORT TPs by proximity to Average Entry (TP1 closest, TP3 furthest)
     targetPOIs.sort((a, b) => Math.abs(a.price - averageEntry) - Math.abs(b.price - averageEntry));
 
     let tp1Price: number, tp2Price: number, tp3Price: number;
@@ -231,32 +253,39 @@ export function calculateDCAPlan(
         tp1Price = targetPOIs[0].price;
         tp2Price = targetPOIs[1].price;
         tp3Price = targetPOIs[2].price;
-    } else if (targetPOIs.length >= 1) {
-        tp1Price = targetPOIs[0].price;
-        tp2Price = targetPOIs[1]?.price || (side === 'LONG'
-            ? averageEntry + (atr * 4)
-            : averageEntry - (atr * 4));
-        tp3Price = targetPOIs[2]?.price || (side === 'LONG'
-            ? averageEntry + (atr * 8)
-            : averageEntry - (atr * 8));
     } else {
-        // Fallback a ATR
-        tp1Price = side === 'LONG'
-            ? averageEntry + (atr * 2)
-            : averageEntry - (atr * 2);
-        tp2Price = side === 'LONG'
-            ? averageEntry + (atr * 4)
-            : averageEntry - (atr * 4);
-        tp3Price = side === 'LONG'
-            ? averageEntry + (atr * 8)
-            : averageEntry - (atr * 8);
+        // Fallback ATR
+        const dir = side === 'LONG' ? 1 : -1;
+        tp1Price = averageEntry + (atr * 2 * dir);
+        tp2Price = averageEntry + (atr * 4 * dir);
+        tp3Price = averageEntry + (atr * 8 * dir);
     }
 
-    // Final SORT Check for Prices (Just to be absolutely sure)
+    // --- EXPERT OPTIMIZATION: RSI TARGET INJECTION ---
+    // If we have an expert RSI target that aligns with trade direction, use it as TP3 (Moonbag)
+    /* 
+       Note: Passing rsiExpert param would require signature update. 
+       For now, we will handle this in dcaReportGenerator by passing the value down or overriding.
+       Actually, let's stick to core calculation here. 
+       If I want to use RSI target, I should pass it in 'fibonacciLevels' or a new 'expertTargets' param.
+       Since I am editing this file, I will add the param to the function signature in a separate edit 
+       or just assume standard TPs and let the report generator override/note it.
+       
+       Better approach: Keep this function pure math based on POIs.
+       Real "Pro" move: The report generator will check RSI target and SWAP TP3 if valid.
+    */
+
     const tps = [tp1Price, tp2Price, tp3Price].sort((a, b) => side === 'LONG' ? a - b : b - a);
-    tp1Price = tps[0];
-    tp2Price = tps[1];
-    tp3Price = tps[2];
+
+    // Validate TPs are profitable (TP > Entry for Long)
+    // If TP1 is invalid (below entry for long), shift it up.
+    if ((side === 'LONG' && tps[0] <= averageEntry) || (side === 'SHORT' && tps[0] >= averageEntry)) {
+        const dir = side === 'LONG' ? 1 : -1;
+        tps[0] = averageEntry + (atr * 1.5 * dir);
+        tps[1] = averageEntry + (atr * 3.5 * dir);
+        tps[2] = averageEntry + (atr * 7 * dir);
+    }
+
 
     const tpSizes = getRegimeAwareTPs(marketRegime);
 
@@ -266,9 +295,9 @@ export function calculateDCAPlan(
         totalRisk,
         stopLoss,
         takeProfits: {
-            tp1: { price: tp1Price, exitSize: tpSizes[0] },
-            tp2: { price: tp2Price, exitSize: tpSizes[1] },
-            tp3: { price: tp3Price, exitSize: tpSizes[2] }
+            tp1: { price: tps[0], exitSize: tpSizes[0] },
+            tp2: { price: tps[1], exitSize: tpSizes[1] },
+            tp3: { price: tps[2], exitSize: tpSizes[2] }
         }
     };
 }

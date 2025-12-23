@@ -514,7 +514,7 @@ export const streamMarketAnalysis = async function* (
         }
 
         // NEW: RSI EXPERT DIAGNOSIS (Cardwell/Brown)
-        if (rsiExpert && (rsiExpert.range.includes('SUPER') || rsiExpert.target)) {
+        if (rsiExpert) {
             response += `### 3.6. Diagnóstico RSI Experto (Estructura de Mercado)\n`;
             response += `| Análisis | Estado | Detalle |\n`;
             response += `|---|---|---|\n`;
@@ -534,12 +534,12 @@ export const streamMarketAnalysis = async function* (
 
         // IV. PLAN DE EJECUCIÓN DCA
         const scenarioATitle = `## IV.A Escenario Principal: ${finalPrimarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${finalIsBullish ? bullishScore.toFixed(0) : bearishScore.toFixed(0)})`;
-        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, finalPrimarySide, scenarioATitle);
+        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, finalPrimarySide, scenarioATitle, rsiExpert);
 
         // ESCENARIO B: ALTERNATIVO (HEDGING)
         const secondarySide = finalPrimarySide === 'LONG' ? 'SHORT' : 'LONG';
         const scenarioBTitle = `## IV.B Escenario Alternativo (Cobertura): ${secondarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${finalIsBullish ? bearishScore.toFixed(0) : bullishScore.toFixed(0)})`;
-        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, secondarySide, scenarioBTitle);
+        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, secondarySide, scenarioBTitle, rsiExpert);
 
         yield response;
     }
