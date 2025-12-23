@@ -282,6 +282,8 @@ export interface AIOpportunity {
     specificTrigger: string;
     zScore?: number; // NEW
     emaSlope?: number; // NEW
+    isSqueeze?: boolean; // NEW
+    macdDivergence?: string; // NEW: Description or Type
   };
   dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI
   harmonicPatterns?: import('./types-advanced').HarmonicPattern[]; // NEW: Patrones para UI

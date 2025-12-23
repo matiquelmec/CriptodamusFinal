@@ -455,6 +455,20 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                         <span className="font-bold">{data.harmonicPatterns[0].type}</span>
                     </div>
                 )}
+                {/* NEW: Squeeze Badge */}
+                {data.metrics?.isSqueeze && (
+                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-warning animate-pulse">
+                        <Zap size={12} />
+                        <span className="font-bold">TTM SQUEEZE</span>
+                    </div>
+                )}
+                {/* NEW: MACD Div Badge */}
+                {data.metrics?.macdDivergence && (
+                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-cyan-400">
+                        <Target size={12} />
+                        <span className="font-bold">DIV MACD</span>
+                    </div>
+                )}
             </div>
 
             {/* Signal Body */}

@@ -13,88 +13,100 @@ export interface Divergence {
  * @param rsiValues - Array de valores RSI correspondientes
  * @returns Divergencia detectada o null
  */
+/**
+ * Generic Divergence Detector
+ * Works for RSI, MACD Line, MACD Histogram, etc.
+ */
+export function detectGenericDivergence(
+    candles: any[],
+    oscillatorValues: number[],
+    sourceName: string = 'RSI',
+    pivotLookback: number = 5
+): Divergence | null {
+    if (!candles || !oscillatorValues || candles.length < pivotLookback || oscillatorValues.length < pivotLookback) {
+        return null;
+    }
+
+    const recentCandles = candles.slice(-pivotLookback);
+    const recentOsc = oscillatorValues.slice(-pivotLookback);
+
+    // Indices (0 = oldest in slice, 4 = newest in slice)
+    const startIdx = 0;
+    const endIdx = pivotLookback - 1;
+
+    // === REGULAR BEARISH (Reversal Down) ===
+    // Price: Higher High
+    // Oscillator: Lower High
+    if (recentCandles[endIdx].high > recentCandles[startIdx].high && recentOsc[endIdx] < recentOsc[startIdx]) {
+        // Filter: meaningful values (e.g. RSI > 60 for bearish div)
+        const isValidLevel = sourceName === 'RSI' ? recentOsc[startIdx] > 60 : recentOsc[startIdx] > 0; // MACD > 0 for bearish div
+
+        if (isValidLevel) {
+            return {
+                type: 'BEARISH',
+                strength: 0.8,
+                description: `Regular Bearish Divergence (${sourceName}): Price made Higher High, but ${sourceName} made Lower High.`
+            };
+        }
+    }
+
+    // === REGULAR BULLISH (Reversal Up) ===
+    // Price: Lower Low
+    // Oscillator: Higher Low
+    if (recentCandles[endIdx].low < recentCandles[startIdx].low && recentOsc[endIdx] > recentOsc[startIdx]) {
+        // Filter
+        const isValidLevel = sourceName === 'RSI' ? recentOsc[startIdx] < 40 : recentOsc[startIdx] < 0; // MACD < 0 for bullish div
+
+        if (isValidLevel) {
+            return {
+                type: 'BULLISH',
+                strength: 0.8,
+                description: `Regular Bullish Divergence (${sourceName}): Price made Lower Low, but ${sourceName} made Higher Low.`
+            };
+        }
+    }
+
+    // === HIDDEN BULLISH (Continuation Up) ===
+    // Price: Higher Low
+    // Oscillator: Lower Low
+    if (recentCandles[endIdx].low > recentCandles[startIdx].low && recentOsc[endIdx] < recentOsc[startIdx]) {
+        const isValidLevel = sourceName === 'RSI' ? recentOsc[endIdx] > 40 : recentOsc[endIdx] > 0; // MACD usually stays positive in strong uptrend pullbacks
+
+        if (isValidLevel) {
+            return {
+                type: 'HIDDEN_BULLISH',
+                strength: 0.9, // Higher confidence for hidden divs in expert doc
+                description: `Hidden Bullish Divergence (${sourceName}): Price Higher Low (Continuation) while ${sourceName} cooled off (Lower Low).`
+            };
+        }
+    }
+
+    // === HIDDEN BEARISH (Continuation Down) ===
+    // Price: Lower High
+    // Oscillator: Higher High
+    if (recentCandles[endIdx].high < recentCandles[startIdx].high && recentOsc[endIdx] > recentOsc[startIdx]) {
+        const isValidLevel = sourceName === 'RSI' ? recentOsc[endIdx] < 60 : recentOsc[endIdx] < 0;
+
+        if (isValidLevel) {
+            return {
+                type: 'HIDDEN_BEARISH',
+                strength: 0.9,
+                description: `Hidden Bearish Divergence (${sourceName}): Price Lower High (Continuation) while ${sourceName} bounced high (Higher High).`
+            };
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Detecta divergencias (Legacy Wrapper or Specific Logic)
+ */
 export function detectDivergences(
     candles: any[],
     rsiValues: number[]
 ): Divergence | null {
-    // Validación de datos
-    if (!candles || !rsiValues || candles.length < 5 || rsiValues.length < 5) {
-        return null;
-    }
-
-    const recentCandles = candles.slice(-5);
-    const recentRSI = rsiValues.slice(-5);
-
-    // Validar que los datos sean válidos
-    if (recentCandles.some(c => !c || typeof c.high !== 'number' || typeof c.low !== 'number')) {
-        return null;
-    }
-
-    if (recentRSI.some(r => typeof r !== 'number' || isNaN(r))) {
-        return null;
-    }
-
-    // === DIVERGENCIA BAJISTA REGULAR ===
-    // Precio: Higher High (HH)
-    // RSI: Lower High (LH)
-    // Interpretación: Agotamiento alcista, posible reversión a la baja
-    const priceHigherHigh = recentCandles[4].high > recentCandles[0].high;
-    const rsiLowerHigh = recentRSI[4] < recentRSI[0];
-
-    if (priceHigherHigh && rsiLowerHigh && recentRSI[0] > 60) {
-        return {
-            type: 'BEARISH',
-            strength: 0.8,
-            description: 'Divergencia Bajista: Precio hace máximos más altos pero RSI hace máximos más bajos. Señal de agotamiento alcista.'
-        };
-    }
-
-    // === DIVERGENCIA ALCISTA REGULAR ===
-    // Precio: Lower Low (LL)
-    // RSI: Higher Low (HL)
-    // Interpretación: Agotamiento bajista, posible reversión al alza
-    const priceLowerLow = recentCandles[4].low < recentCandles[0].low;
-    const rsiHigherLow = recentRSI[4] > recentRSI[0];
-
-    if (priceLowerLow && rsiHigherLow && recentRSI[0] < 40) {
-        return {
-            type: 'BULLISH',
-            strength: 0.8,
-            description: 'Divergencia Alcista: Precio hace mínimos más bajos pero RSI hace mínimos más altos. Señal de agotamiento bajista.'
-        };
-    }
-
-    // === DIVERGENCIA OCULTA ALCISTA (Hidden Bullish) ===
-    // Precio: Higher Low (HL) - Tendencia alcista intacta
-    // RSI: Lower Low (LL)
-    // Interpretación: Continuación de tendencia alcista
-    const priceHigherLow = recentCandles[4].low > recentCandles[0].low;
-    const rsiLowerLow = recentRSI[4] < recentRSI[0];
-
-    if (priceHigherLow && rsiLowerLow && recentRSI[4] > 40) {
-        return {
-            type: 'HIDDEN_BULLISH',
-            strength: 0.6,
-            description: 'Divergencia Oculta Alcista: Señal de continuación de tendencia alcista.'
-        };
-    }
-
-    // === DIVERGENCIA OCULTA BAJISTA (Hidden Bearish) ===
-    // Precio: Lower High (LH) - Tendencia bajista intacta
-    // RSI: Higher High (HH)
-    // Interpretación: Continuación de tendencia bajista
-    const priceLowerHigh = recentCandles[4].high < recentCandles[0].high;
-    const rsiHigherHigh = recentRSI[4] > recentRSI[0];
-
-    if (priceLowerHigh && rsiHigherHigh && recentRSI[4] < 60) {
-        return {
-            type: 'HIDDEN_BEARISH',
-            strength: 0.6,
-            description: 'Divergencia Oculta Bajista: Señal de continuación de tendencia bajista.'
-        };
-    }
-
-    return null;
+    return detectGenericDivergence(candles, rsiValues, 'RSI');
 }
 
 /**

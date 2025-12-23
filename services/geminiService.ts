@@ -43,7 +43,7 @@ export const streamMarketAnalysis = async function* (
     }
 
     // 2. EXTRAER DATOS (YA NO SE PARSEA TEXTO, SE USAN OBJETOS)
-    const { price, rsi, stochRsi, vwap, adx, atr, rvol, ema20, ema50, ema100, ema200, zScore, emaSlope, macd, bollinger, pivots, fibonacci, trendStatus, volumeProfile, orderBlocks, fairValueGaps, confluenceAnalysis, fractalAnalysis, harmonicPatterns } = techData;
+    const { price, rsi, stochRsi, vwap, adx, atr, rvol, ema20, ema50, ema100, ema200, zScore, emaSlope, macd, bollinger, pivots, fibonacci, trendStatus, volumeProfile, orderBlocks, fairValueGaps, confluenceAnalysis, fractalAnalysis, harmonicPatterns, macdDivergence, isSqueeze } = techData;
 
     // --- LÓGICA DE COMANDO: DETECCIÓN AMPLIA ---
     const isAnalysisRequest =
@@ -198,6 +198,26 @@ export const streamMarketAnalysis = async function* (
                     bearishScore += 4;
                 }
             });
+        }
+
+        // NEW: MACD EXPERT LOGIC (Divergences & Squeeze)
+        if (macdDivergence) {
+            const isHidden = macdDivergence.type?.includes('HIDDEN');
+            const isBullish = macdDivergence.type?.includes('BULLISH');
+
+            // Expert Doc: Hidden Divergence is "Holy Grail" for continuation
+            const boost = isHidden ? 5 : 3; // Massive boost for Hidden
+
+            if (isBullish) bullishScore += boost;
+            else bearishScore += boost;
+        }
+
+        // TTM Squeeze Logic
+        if (isSqueeze) {
+            // If squeezing, potential explosion. Bias towards break direction.
+            // If price > ema20, likely expansion up.
+            if (price > ema20) bullishScore += 2;
+            else bearishScore += 2;
         }
 
         // --- PHASE 1.5: MACRO ADJUSTMENTS (NEW) ---
@@ -403,6 +423,10 @@ export const streamMarketAnalysis = async function* (
             const zStatus = zScore > 2 ? 'SOBRECOMPRA (Extrema)' : zScore < -2 ? 'SOBREVENTA (Extrema)' : 'Normal (Mean Reversion)';
             response += `| **Z-Score (Desviación)** | ${zScore.toFixed(2)}σ | ${zStatus} - ${Math.abs(zScore) > 2 ? '⚠️ Posible Reversión' : 'Tendencia Sostenible'} |\n`;
         }
+        if (emaSlope !== undefined) {
+            const slopeStatus = Math.abs(emaSlope) < 1 ? 'PLANA (Rango)' : emaSlope > 0 ? 'ALCISTA' : 'BAJISTA';
+            response += `| **Pendiente EMA200** | ${emaSlope.toFixed(2)}° | ${slopeStatus} |\n`;
+        }
 
         if (macroContext) {
             const { btcRegime } = macroContext;
@@ -465,6 +489,23 @@ export const streamMarketAnalysis = async function* (
                 response += `| **${p.type}** | ${icon} ${p.direction} | ${p.confidence}% | $${p.prz.toFixed(4)} |\n`;
             });
             response += `> *Validación matemática de proporciones 0.618/0.786/0.886 exitosa.*\n\n`;
+        }
+
+        // NEW: MACD EXPERT DIAGNOSIS
+        if (macdDivergence || isSqueeze) {
+            response += `### 3.5. Diagnóstico MACD Experto (Momentum Avanzado)\n`;
+            response += `| Métrica | Estado | Interpretación |\n`;
+            response += `|---|---|---|\n`;
+
+            if (isSqueeze) {
+                response += `| **Volatilidad** | ⚡ **TTM SQUEEZE** | Compresión extrema (Bollinger dentro de Keltner implícito). Explosión inminente. |\n`;
+            }
+            if (macdDivergence) {
+                const icon = macdDivergence.type?.includes('BULLISH') ? '🟢' : '🔴';
+                const typeName = macdDivergence.type?.replace('_', ' ');
+                response += `| **Divergencia** | ${icon} **${typeName}** | ${macdDivergence.description} |\n`;
+            }
+            response += `\n`;
         }
 
         // IV. PLAN DE EJECUCIÓN DCA
