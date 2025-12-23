@@ -38,27 +38,28 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({ symbol }) => {
       "save_image": false,
       "calendar": false,
       "hide_volume": false,
-      "BB@tv-basicstudies",     // Bandas de Bollinger
-      "RSI@tv-basicstudies",    // RSI
-      "MACD@tv-basicstudies",   // MACD
-      "MASimple@tv-basicstudies", // SMA 50 (User can adjust to EMA) - Widget constraints often default to SMA/EMA 9
-      "MASimple@tv-basicstudies"  // SMA 200
+      "studies": [
+        "BB@tv-basicstudies",     // Bandas de Bollinger
+        "RSI@tv-basicstudies",    // RSI
+        "MACD@tv-basicstudies",   // MACD
+        "MASimple@tv-basicstudies", // SMA 50
+        "MASimple@tv-basicstudies"  // SMA 200
       ],
-"support_host": "https://www.tradingview.com"
+      "support_host": "https://www.tradingview.com"
     });
 
-if (container.current) {
-  container.current.appendChild(script);
-}
+    if (container.current) {
+      container.current.appendChild(script);
+    }
   }, [symbol]);
 
-return (
-  <div className="h-full w-full bg-surface border border-border rounded-xl overflow-hidden shadow-sm flex flex-col">
-    <div className="tradingview-widget-container h-full w-full" ref={container}>
-      <div className="tradingview-widget-container__widget h-full w-full"></div>
+  return (
+    <div className="h-full w-full bg-surface border border-border rounded-xl overflow-hidden shadow-sm flex flex-col">
+      <div className="tradingview-widget-container h-full w-full" ref={container}>
+        <div className="tradingview-widget-container__widget h-full w-full"></div>
+      </div>
     </div>
-  </div>
-);
+  );
 };
 
 export default memo(TradingViewWidget);
