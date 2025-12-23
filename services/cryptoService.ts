@@ -991,41 +991,42 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                                     detectionNote += " | ✅ Confirmado 4H";
                                 }
                             }
-                            detectionNote += " | ✅ Confirmado 4H";
+                        } catch (err4h) {
+                            // Silently fail, 4H validation is not critical
                         }
+
+                        // NEW: ELDER'S IMPULSE SYSTEM CHECK (Daily Alignment)
+                        // Expert Doc: "Never trade against the Weekly/Daily Tide"
+                        if (techIndicators.fractalAnalysis?.trend_1d) {
+                            const trend1d = techIndicators.fractalAnalysis.trend_1d;
+                            const isPinball = strategyDetails.some(s => s.includes("Institutional Pinball"));
+
+                            if (signalSide === 'LONG' && trend1d === 'BEARISH') {
+                                // STRICT FILTER: Elder says NO LONGs if Daily is Bearish
+                                if (!macdDivergence && !isPinball) {
+                                    finalScore *= 0.5; // Kill the score
+                                    detectionNote += " | ⛔ Contra-Tendencia Diaria (Elder Rule)";
+                                } else {
+                                    detectionNote += " | ⚠️ Contra-Tendencia (Validado por Pinball/Div)";
+                                }
+                            } else if (signalSide === 'SHORT' && trend1d === 'BULLISH') {
+                                if (!macdDivergence && !isPinball) {
+                                    finalScore *= 0.5;
+                                    detectionNote += " | ⛔ Contra-Tendencia Diaria (Elder Rule)";
+                                } else {
+                                    detectionNote += " | ⚠️ Contra-Tendencia (Validado por Pinball/Div)";
+                                }
+                            } else {
+                                // ALIGNED!
+                                finalScore += 5; // Boost score for Elder Alignment
+                                detectionNote += " | 🌊 Marea a favor (Elder Aligned)";
                             }
-                } catch (err4h) {
-                    // Silently fail, 4H validation is not critical
-                }
-
-                // NEW: ELDER'S IMPULSE SYSTEM CHECK (Daily Alignment)
-                // Expert Doc: "Never trade against the Weekly/Daily Tide"
-                if (techData.fractalAnalysis?.trend_1d) {
-                    const trend1d = techData.fractalAnalysis.trend_1d;
-
-                    if (signalSide === 'LONG' && trend1d === 'BEARISH') {
-                        // STRICT FILTER: Elder says NO LONGs if Daily is Bearish
-                        // We will severely penalize it unless it's a "God Mode" reversal (e.g. Pinball + Div)
-                        if (!macdDivergence && !isPinballBuy) {
-                            finalScore *= 0.5; // Kill the score
-                            detectionNote += " | ⛔ Contra-Tendencia Diaria (Elder Rule)";
-                        } else {
-                            detectionNote += " | ⚠️ Contra-Tendencia (Validado por Pinball/Div)";
                         }
-                    } else if (signalSide === 'SHORT' && trend1d === 'BULLISH') {
-                        if (!macdDivergence && !isPinballSell) {
-                            finalScore *= 0.5;
-                            detectionNote += " | ⛔ Contra-Tendencia Diaria (Elder Rule)";
-                        } else {
-                            detectionNote += " | ⚠️ Contra-Tendencia (Validado por Pinball/Div)";
-                        }
-                    } else {
-                        // ALIGNED!
                         finalScore += 5; // Boost score for Elder Alignment
                         detectionNote += " | 🌊 Marea a favor (Elder Aligned)";
                     }
                 }
-            }
+                    }
         } catch (err) {
             console.warn(`[Scanner] Falló validación 1H para ${coin.symbol}, procediendo con precaución.`);
         }
