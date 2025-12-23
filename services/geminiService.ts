@@ -2,7 +2,7 @@ import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from "..
 import { MacroContext } from './macroService';
 import { analyzeIchimokuSignal } from './ichimokuStrategy'; // NEW: Expert Logic
 import { generateDCAExecutionPlan } from './dcaReportGenerator'; // NEW: DCA System
-import { detectBullishDivergence, calculateRSIArray, getMarketSession } from './mathUtils'; // NEW: Divergence Detection
+import { detectBullishDivergence, calculateRSIArray } from './mathUtils'; // NEW: Divergence Detection
 import { generateInvestmentThesis, generateExecutionPlanNarrative } from './narrativeService'; // Moved to top
 
 // --- MOTOR AUTÓNOMO (OFFLINE) ---
@@ -228,18 +228,8 @@ export const streamMarketAnalysis = async function* (
         // --- PHASE 1.5: MACRO ADJUSTMENTS (NEW) ---
         // Aquí es donde el "Trader Experto" ajusta las probabilidades
 
-        // SESSION ANALYSIS (TIME-BASED)
-        const activeSession = getMarketSession();
-
-        // Session-based Scoring Adjustments
-        if (activeSession.session === 'ASIA') {
-            if (isRangeMarket) { bullishScore += 0.5; bearishScore += 0.5; }
-            else if (rvol < 2.5) { bullishScore *= 0.8; bearishScore *= 0.8; }
-        } else if (activeSession.session === 'LONDON') {
-            if (!isRangeMarket) { bullishScore *= 1.1; bearishScore *= 1.1; }
-        } else if (activeSession.session === 'NEW_YORK') {
-            // NY introduces volatility + reversals
-        }
+        // SESSION ANALYSIS (TIME-BASED Legacy Removed - Uses TechData now)
+        // Adjustments moved to reliance on techData.sessionAnalysis indirectly via bias check later if needed
 
         // --- NEW: SFP / LIQUIDITY SWEEP LOGIC (SWING FAILURE PATTERN) ---
         let isSFP = false;
@@ -421,8 +411,28 @@ export const streamMarketAnalysis = async function* (
         response += `## I. Diagnóstico Operacional: Conflicto Estructural (Macro vs. Micro)\n\n`;
         response += `| Métrica Clave | Lectura | Interpretación (Institutional Bias) |\n`;
         response += `|---|---|---|\n`;
-        const sessionIcon = activeSession.session === 'ASIA' ? '🌏' : activeSession.session === 'LONDON' ? '🇪🇺' : '🇺🇸';
-        response += `| **Sesión de Mercado** | ${sessionIcon} **${activeSession.session}** | ${activeSession.note} |\n`;
+
+        // NEW: Advanced Session Analysis
+        if (techData.sessionAnalysis) {
+            const { currentSession, activeNote, judasSwing, bias } = techData.sessionAnalysis;
+            const sessionIcon = currentSession === 'ASIA' ? '🌏' : currentSession === 'LONDON' ? '🇪🇺' : currentSession === 'NEW_YORK' ? '🇺🇸' : '🌑';
+
+            let biasIcon = bias === 'BULLISH' ? '🟢' : bias === 'BEARISH' ? '🔴' : '⚪';
+            let judasNote = "";
+
+            if (judasSwing === 'BULLISH_REVERSAL') {
+                judasNote = " 🐢 **TURTLE SOUP LONG Detectado** (Falso quiebre bajista).";
+                biasIcon = "🟢🔥";
+            } else if (judasSwing === 'BEARISH_REVERSAL') {
+                judasNote = " 🐢 **TURTLE SOUP SHORT Detectado** (Falso quiebre alcista).";
+                biasIcon = "🔴🔥";
+            }
+
+            response += `| **Sesión de Mercado** | ${sessionIcon} **${currentSession}** ${biasIcon} | ${activeNote}${judasNote} |\n`;
+        } else {
+            // Fallback
+            response += `| **Sesión de Mercado** | ⚠️ N/A | Datos insuficientes para análisis de ORB. |\n`;
+        }
 
         const trendNote = isRangeMarket
             ? "⚠️ Mercado en RANGO. Evitar operar hasta breakout."

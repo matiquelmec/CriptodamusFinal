@@ -14,7 +14,7 @@ import {
     calculateBollingerStats, calculateSMA, calculateEMA, calculateMACD,
     calculateEMAArray, calculateStdDev, calculateRSI, calculateStochRSI,
     calculateRSIArray, calculateCumulativeVWAP, calculateAutoFibs, calculateFractals, // NEW
-    calculateATR, calculateADX, calculatePivotPoints, formatVolume, getMarketSession,
+    calculateATR, calculateADX, calculatePivotPoints, formatVolume,
     calculateZScore, calculateSlope // NEW
 } from './mathUtils';
 import { calculateVolumeProfile } from './volumeProfile';
@@ -22,6 +22,7 @@ import { detectOrderBlocks } from './orderBlocks';
 import { detectHarmonicPatterns } from './harmonicPatterns'; // NEW
 import { detectFVG } from './fairValueGaps';
 import { calculatePOIs } from './confluenceEngine';
+import { analyzeSessionContext, getCurrentSessionSimple } from './sessionExpert'; // NEW: Session Logic
 import { detectMarketRegime } from './marketRegimeDetector';
 import { detectGenericDivergence } from './divergenceDetector'; // NEW
 import { selectStrategies } from './strategySelector';
@@ -598,6 +599,10 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
                     filled: fvg.filled
                 }))
             },
+
+            // NEW: Session Analysis Injection
+            sessionAnalysis: analyzeSessionContext(currentPrice, volumes[volumes.length - 1], candles1h),
+
             confluenceAnalysis: {
                 topSupports: confluenceAnalysis.topSupports,
                 topResistances: confluenceAnalysis.topResistances
@@ -1135,7 +1140,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const signalTier = finalScore >= GOD_MODE_THRESHOLD ? '🔥 GOD MODE' : '⭐ PREMIUM';
 
                 // --- INSTITUTIONAL METADATA ---
-                const session = getMarketSession();
+                const session = getCurrentSessionSimple();
                 const rrRatio = dcaPlan.entries.length > 0 && dcaPlan.stopLoss > 0
                     ? Math.abs((dcaPlan.takeProfits.tp3.price - dcaPlan.entries[0].price) / (dcaPlan.entries[0].price - dcaPlan.stopLoss))
                     : 0;

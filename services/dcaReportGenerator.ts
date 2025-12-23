@@ -68,7 +68,6 @@ export function generateDCAExecutionPlan(
         const discountLabel = side === 'LONG' ? 'Descuento' : 'Premium';
         response += `| Nivel | Precio | Confluencia | Factores | ${discountLabel} | Tamaño |\n`;
         response += `|-------|--------|-------------|----------|-----------|--------|\n`;
-        response += `|-------|--------|-------------|----------|-----------|--------|\n`;
 
         dcaPlan.entries.forEach(entry => {
             const stars = formatConfluenceStars(entry.confluenceScore);

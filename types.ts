@@ -144,8 +144,7 @@ export interface TechnicalIndicators {
     tp3: number;
     tp4: number;
     tp5: number;
-    tp4: number;
-    tp5: number;
+
   };
 
   // NEW: EXPERT METRICS
@@ -205,6 +204,9 @@ export interface TechnicalIndicators {
   };
 
   ichimokuData?: IchimokuCloud;
+
+  // NEW: Session Expert Analysis
+  sessionAnalysis?: import('./services/sessionExpert').SessionAnalysis;
 
   // Advanced Market Structure (Optional)
   volumeProfile?: import('./types-advanced').VolumeProfileData;
