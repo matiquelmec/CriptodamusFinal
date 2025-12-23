@@ -910,20 +910,41 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             // B) RSI Cardwell Target (Proyección Institucional)
             if (rsiExpertResults.reversalTarget?.active) {
-                totalScore += 15; // High confidence setup
-                detectionNote += ` | 🎯 Cardwell Target ($${rsiExpertResults.reversalTarget.targetPrice.toLocaleString()})`;
+                // Validate Alignment
+                const targetIsBullish = rsiExpertResults.reversalTarget.type === 'POSITIVE';
+                const targetIsBearish = rsiExpertResults.reversalTarget.type === 'NEGATIVE';
+
+                if ((signalSide === 'LONG' && targetIsBullish) || (signalSide === 'SHORT' && targetIsBearish)) {
+                    totalScore += 15; // High confidence setup ALIGNED
+                    detectionNote += ` | 🎯 Cardwell Target ($${rsiExpertResults.reversalTarget.targetPrice.toLocaleString()})`;
+                }
             }
 
             // C) Super Range (Momentum)
             if (rsiExpertResults.range.type.includes('SUPER')) {
-                totalScore += 10;
-                detectionNote += " | 🚀 Super Range Momentum";
+                // Super Range is momentum driven. If Bull Range -> Long. If Bear Range -> Short.
+                const isBullRange = rsiExpertResults.range.type.includes('BULL');
+                const isBearRange = rsiExpertResults.range.type.includes('BEAR');
+
+                if ((signalSide === 'LONG' && isBullRange) || (signalSide === 'SHORT' && isBearRange)) {
+                    totalScore += 10;
+                    detectionNote += " | 🚀 Super Range Momentum";
+                }
             }
 
             // D) MACD Divergence
             if (macdDivergence) {
-                totalScore += 10;
-                detectionNote += ` | ⚠️ Div ${macdDivergence.type}`;
+                const divIsBullish = macdDivergence.type.includes('BULLISH');
+                const divIsBearish = macdDivergence.type.includes('BEARISH');
+
+                if ((signalSide === 'LONG' && divIsBullish) || (signalSide === 'SHORT' && divIsBearish)) {
+                    totalScore += 10;
+                    detectionNote += ` | ⚠️ Div ${macdDivergence.type}`;
+                } else {
+                    // Divergence against us! Warning/Penalty
+                    totalScore -= 10;
+                    detectionNote += ` | ⛔ Div Opuesta (${macdDivergence.type})`;
+                }
             }
 
             // Cap Score at 99
