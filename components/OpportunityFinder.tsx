@@ -298,6 +298,22 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                                 </span>
                                             </div>
                                         )}
+                                        {selectedSignal.metrics.rsiExpert?.target && (
+                                            <div className="flex justify-between border-b border-border/50 pb-1">
+                                                <span className="text-secondary">🎯 RSI Target (Cardwell):</span>
+                                                <span className="text-accent font-bold">
+                                                    ${selectedSignal.metrics.rsiExpert.target.toLocaleString()}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {selectedSignal.metrics.rsiExpert?.range && (
+                                            <div className="flex justify-between border-b border-border/50 pb-1">
+                                                <span className="text-secondary">Rango RSI:</span>
+                                                <span className={selectedSignal.metrics.rsiExpert.range.includes('SUPER') ? 'text-accent font-bold' : 'text-primary'}>
+                                                    {selectedSignal.metrics.rsiExpert.range.replace('_', ' ')}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
                                     <p className="text-xs text-secondary italic">Métricas detalladas no disponibles para este tick.</p>

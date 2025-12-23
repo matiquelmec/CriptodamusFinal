@@ -144,6 +144,17 @@ export interface TechnicalIndicators {
     tp3: number;
     tp4: number;
     tp5: number;
+    tp4: number;
+    tp5: number;
+  };
+
+  // NEW: EXPERT METRICS
+  macdDivergence?: import('./services/divergenceDetector').Divergence;
+  isSqueeze?: boolean;
+  rsiExpert?: {
+    range: string;
+    target: number | null;
+    targetType: 'POSITIVE' | 'NEGATIVE' | null;
   };
 
   harmonicPatterns?: import('./types-advanced').HarmonicPattern[];
@@ -158,6 +169,14 @@ export interface TechnicalIndicators {
     vwapDist: number; // Distance to VWAP %
     structure: string; // e.g. "Above EMA200"
     specificTrigger: string; // e.g. "Bollinger Bandwidth < 3%"
+    zScore?: number;
+    emaSlope?: number;
+    isSqueeze?: boolean;
+    macdDivergence?: string;
+    rsiExpert?: {
+      range: string;
+      target: number | null;
+    };
   };
 
   trendStatus: {
@@ -277,11 +296,15 @@ export interface AIOpportunity {
   metrics?: {
     rvol: number;
     rsi: number;
-    vwapDist: number;
-    structure: string;
-    specificTrigger: string;
+    vwapDist: number; // Distance to VWAP %
+    structure: string; // e.g. "Above EMA200"
+    specificTrigger: string; // e.g. "Bollinger Bandwidth < 3%"
     zScore?: number; // NEW
     emaSlope?: number; // NEW
+    rsiExpert?: {
+      range: string;
+      target: number | null;
+    };
     isSqueeze?: boolean; // NEW
     macdDivergence?: string; // NEW: Description or Type
   };

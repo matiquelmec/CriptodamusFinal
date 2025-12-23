@@ -6,7 +6,8 @@ import { analyzeMemeSignal } from './strategies/MemeStrategy';
 import { analyzeSwingSignal } from './strategies/SwingStrategy';
 import { analyzeBreakoutSignal } from './strategies/BreakoutStrategy';
 import { analyzeScalpSignal } from './strategies/ScalpStrategy';
-import { analyzePinballSignal } from './strategies/PinballStrategy'; // NEW
+import { analyzePinballSignal } from './strategies/PinballStrategy';
+import { analyzeRSIExpert } from './rsiExpert'; // NEW // NEW
 import { getMacroContext, formatMacroForAI, type MacroContext } from './macroService';
 import {
     detectBullishDivergence, calculateIchimokuLines, calculateIchimokuCloud,
@@ -735,9 +736,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const zScore = calculateZScore(prices.slice(0, checkIndex + 1), ema200);
             const emaSlope = calculateSlope(calculateEMAArray(prices.slice(0, checkIndex + 1), 200), 10);
 
-            // NEW: Expert MACD Divergence & Squeeze
-            const macdDivergence = detectGenericDivergence(candles.slice(0, checkIndex + 1), macd.macdLine, 'MACD_Line');
+            // NEW: EXPERT MACD & RSI ANALYSIS
+            const macdDivergence = detectGenericDivergence(candles, macd.histogramValues, 'MACD_HIST');
             const isSqueeze = bb.bandwidth < 10 && Math.abs(macd.histogram) < (currentPrice * 0.0005);
+
+            // NEW: EXPERT RSI (Cardwell)
+            const rsiExpertResults = analyzeRSIExpert(prices.slice(0, checkIndex + 1), rsiArray.slice(0, checkIndex + 1));
 
             // Calculate Confluence for resistances/supports
             const confluenceAnalysis = calculatePOIs(
@@ -767,6 +771,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 emaSlope, // NEW
                 macdDivergence, // NEW
                 isSqueeze, // NEW
+                rsiExpert: {
+                    range: rsiExpertResults.range.type,
+                    target: rsiExpertResults.reversalTarget?.active ? rsiExpertResults.reversalTarget.targetPrice : null,
+                    targetType: rsiExpertResults.reversalTarget?.type || null
+                },
                 macd: { line: macd.macdLine, signal: macd.signalLine, histogram: macd.histogram },
                 bollinger: { upper: bb.upper, lower: bb.lower, middle: bb.sma, bandwidth: bb.bandwidth },
                 pivots,
@@ -1088,8 +1097,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         vwapDist: format(vwapDist),
                         structure: structureNote,
                         specificTrigger: specificTrigger,
-                        zScore: format(zScore), // NEW
-                        emaSlope: format(emaSlope), // NEW
+                        zScore: techIndicators.zScore,
+                        emaSlope: techIndicators.emaSlope,
+                        rsiExpert: {
+                            range: techIndicators.rsiExpert?.range || 'NEUTRAL',
+                            target: techIndicators.rsiExpert?.target || null
+                        },
                         isSqueeze: isSqueeze, // NEW
                         macdDivergence: macdDivergence?.description // NEW
                     },

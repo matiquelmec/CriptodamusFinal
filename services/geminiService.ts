@@ -43,7 +43,12 @@ export const streamMarketAnalysis = async function* (
     }
 
     // 2. EXTRAER DATOS (YA NO SE PARSEA TEXTO, SE USAN OBJETOS)
-    const { price, rsi, stochRsi, vwap, adx, atr, rvol, ema20, ema50, ema100, ema200, zScore, emaSlope, macd, bollinger, pivots, fibonacci, trendStatus, volumeProfile, orderBlocks, fairValueGaps, confluenceAnalysis, fractalAnalysis, harmonicPatterns, macdDivergence, isSqueeze } = techData;
+    const {
+        price, rsi, stochRsi, vwap, adx, atr, rvol, ema20, ema50, ema100, ema200,
+        zScore, emaSlope, macd, bollinger, pivots, fibonacci, trendStatus,
+        volumeProfile, orderBlocks, fairValueGaps, confluenceAnalysis,
+        fractalAnalysis, harmonicPatterns, macdDivergence, isSqueeze, rsiExpert
+    } = techData;
 
     // --- LÓGICA DE COMANDO: DETECCIÓN AMPLIA ---
     const isAnalysisRequest =
@@ -504,6 +509,25 @@ export const streamMarketAnalysis = async function* (
                 const icon = macdDivergence.type?.includes('BULLISH') ? '🟢' : '🔴';
                 const typeName = macdDivergence.type?.replace('_', ' ');
                 response += `| **Divergencia** | ${icon} **${typeName}** | ${macdDivergence.description} |\n`;
+            }
+            response += `\n`;
+        }
+
+        // NEW: RSI EXPERT DIAGNOSIS (Cardwell/Brown)
+        if (rsiExpert && (rsiExpert.range.includes('SUPER') || rsiExpert.target)) {
+            response += `### 3.6. Diagnóstico RSI Experto (Estructura de Mercado)\n`;
+            response += `| Análisis | Estado | Detalle |\n`;
+            response += `|---|---|---|\n`;
+
+            // Range Analysis
+            const rangeIcon = rsiExpert.range.includes('BULL') ? '🐂' : rsiExpert.range.includes('BEAR') ? '🐻' : '⚖️';
+            response += `| **Régimen RSI** | ${rangeIcon} **${rsiExpert.range.replace('_', ' ')}** | Definido por reglas de rango (Brown/Cardwell). |\n`;
+
+            // Target Analysis
+            if (rsiExpert.target) {
+                const targetIcon = rsiExpert.targetType === 'POSITIVE' ? '🟢' : '🔴';
+                const targetDesc = rsiExpert.targetType === 'POSITIVE' ? 'Reversión Positiva (Continuación Alcista)' : 'Reversión Negativa (Continuación Bajista)';
+                response += `| **Proyección** | ${targetIcon} **$${rsiExpert.target.toLocaleString()}** | ${targetDesc} detectada. |\n`;
             }
             response += `\n`;
         }
