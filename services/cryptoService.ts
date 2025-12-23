@@ -157,7 +157,9 @@ export const subscribeToLivePrices = (marketData: MarketData[], callback: (data:
     const isBinance = sampleId === sampleId.toUpperCase() && sampleId.includes('USDT');
 
     if (isBinance) {
-        const validStreams = marketData.map(m => `${m.id.toLowerCase()}@miniTicker`);
+        // CAP streams to prevent "URI Too Long" 414 error or WS connection failure
+        const MAX_STREAMS = 40;
+        const validStreams = marketData.slice(0, MAX_STREAMS).map(m => `${m.id.toLowerCase()}@miniTicker`);
         const url = `${BINANCE_WS_BASE}${validStreams.join('/')}`;
         const ws = new WebSocket(url);
 
@@ -525,6 +527,11 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
             bearishFVG
         );
 
+        // NEW: Calculate Fundamental Tier for Expert Analysis
+        // We reuse the meme detector logic (basic check against list)
+        const isMeme = MEME_SYMBOLS.some(m => binanceSymbol.includes(m));
+        const tier = calculateFundamentalTier(binanceSymbol, isMeme);
+
         const result: TechnicalIndicators = {
             symbol: symbolDisplay,
             price: currentPrice,
@@ -583,6 +590,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
             },
             harmonicPatterns, // NEW
 
+            tier, // NEW: Tier for Risk Management (S/A/B/C)
             ichimokuData: ichimokuData || undefined, // NEW
             trendStatus: {
                 emaAlignment,
