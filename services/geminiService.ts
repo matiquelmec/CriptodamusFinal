@@ -1,9 +1,9 @@
-
 import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from "../types";
 import { MacroContext } from './macroService';
 import { analyzeIchimokuSignal } from './ichimokuStrategy'; // NEW: Expert Logic
 import { generateDCAExecutionPlan } from './dcaReportGenerator'; // NEW: DCA System
 import { detectBullishDivergence, calculateRSIArray, getMarketSession } from './mathUtils'; // NEW: Divergence Detection
+import { generateInvestmentThesis, generateExecutionPlanNarrative } from './narrativeService'; // Moved to top
 
 // --- MOTOR AUTÓNOMO (OFFLINE) ---
 // Este servicio reemplaza a la IA de Google.
@@ -315,45 +315,9 @@ export const streamMarketAnalysis = async function* (
                 bearishScore *= 1.5; // Boost shorts en alts
             }
         }
-        // --- NEW: FRACTAL & WEAKNESS PRE-CALCULATION (Lifted for Executive Summary) ---
-        let weakTrendWarning = false;
-        let trend_1w = techData.fractalAnalysis?.trend_1w;
-        let cycleText = "N/A";
-        let isAlignedCycle = true;
-
-        if (techData.fractalAnalysis && trend_1w) {
-            const rsi1w = techData.fractalAnalysis.rsi_1w || 50;
-            const tempSentiment = bullishScore > bearishScore ? 'ALCISTA' : 'BAJISTA';
-
-            isAlignedCycle = (tempSentiment === 'ALCISTA' && trend_1w === 'BULLISH') ||
-                (tempSentiment === 'BAJISTA' && trend_1w === 'BEARISH');
-
-            cycleText = trend_1w === 'BULLISH' ? '🐂 Bull Cycles' : '🐻 Bear Winter';
-
-            if (trend_1w === 'BEARISH' && rsi1w < 35) {
-                cycleText += " (Agotado/Oversold)";
-                weakTrendWarning = true;
-                isAlignedCycle = false;
-            }
-            if (trend_1w === 'BULLISH' && rsi1w > 75) {
-                cycleText += " (Euphoria/Overbought)";
-                weakTrendWarning = true;
-                isAlignedCycle = false;
-            }
-        }
 
         let sentiment = "NEUTRO";
         let mainIcon = "⚪";
-
-        // TIE BREAKER: If Technical Draw + Weak Trend Warning -> Penalize Confidence heavily
-        const scoreDiff = Math.abs(bullishScore - bearishScore);
-        if (scoreDiff < 2 && techData.fractalAnalysis?.trend_1w && !weakTrendWarning) {
-            if (techData.fractalAnalysis.trend_1w === 'BULLISH') {
-                bullishScore += 3;
-            } else {
-                bearishScore += 3;
-            }
-        }
 
         // Recalculate sentiment after Tie-Breaker
         const finalIsBullish = bullishScore > bearishScore;
@@ -366,11 +330,37 @@ export const streamMarketAnalysis = async function* (
         const winningScore = finalIsBullish ? bullishScore : bearishScore;
         let confidenceLevel = Math.min(Math.round(winningScore), 10);
 
-        // --- PHASE 2: GENERATE REPORT (INSTITUTIONAL FORMAT) ---
 
-        // 0. FLASH EXECUTIVE SUMMARY (NEW)
-        // Calculate God Mode for Summary
+
+        // Context for Narrative
+        const narrativeContext = {
+            symbol: techData.symbol,
+            price: price,
+            technicalIndicators: techData,
+            marketRegime: { regime: 'UNKNOWN', confidence: 0 } as any,
+            sentiment: sentiment.includes('ALCISTA') ? 'BULLISH' : sentiment.includes('BAJISTA') ? 'BEARISH' : 'NEUTRAL',
+            confidenceScore: confidenceLevel
+        };
+
+        if (techData.marketRegime) {
+            narrativeContext.marketRegime = techData.marketRegime;
+        }
+
+        // 1. GENERATE NARRATIVES (AI) - Parallel Execution
+        const [investmentThesis, executionPhilosophy] = await Promise.all([
+            generateInvestmentThesis(narrativeContext as any),
+            generateExecutionPlanNarrative(narrativeContext as any, finalPrimarySide)
+        ]);
+
+        // Calculate God Mode LOCALLY for Summary (it was used in legacy code below, we need it here)
         let isGodMode = false;
+        let weakTrendWarning = false;
+        let cycleText = "N/A";
+        let isAlignedCycle = true;
+
+        let trend_1w = techData.fractalAnalysis?.trend_1w;
+
+        // FRACTAL & GOD MODE CALCULATION (Restored)
         if (techData.fractalAnalysis) {
             const { trend_1h, trend_4h, trend_1d } = techData.fractalAnalysis;
             const isAligned1h = (sentiment.includes('ALCISTA') && trend_1h === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_1h === 'BEARISH');
@@ -378,33 +368,51 @@ export const streamMarketAnalysis = async function* (
             if (trend_4h) isAligned4h = (sentiment.includes('ALCISTA') && trend_4h === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_4h === 'BEARISH');
             let isAligned1d = true;
             if (trend_1d) isAligned1d = (sentiment.includes('ALCISTA') && trend_1d === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_1d === 'BEARISH');
+
+            // Cycle Logic
+            if (trend_1w) {
+                const rsi1w = techData.fractalAnalysis.rsi_1w || 50;
+                const tempSentiment = bullishScore > bearishScore ? 'ALCISTA' : 'BAJISTA';
+                isAlignedCycle = (tempSentiment === 'ALCISTA' && trend_1w === 'BULLISH') || (tempSentiment === 'BAJISTA' && trend_1w === 'BEARISH');
+
+                if (trend_1w === 'BEARISH' && rsi1w < 35) { weakTrendWarning = true; isAlignedCycle = false; }
+                if (trend_1w === 'BULLISH' && rsi1w > 75) { weakTrendWarning = true; isAlignedCycle = false; }
+            }
+
             isGodMode = isAligned1h && isAligned4h && isAligned1d && isAlignedCycle && !weakTrendWarning;
         }
 
-        // DOWNGRADE CONFIDENCE IF NOT ALIGNED
+        // TIE BREAKER: If Technical Draw + Weak Trend Warning -> Penalize Confidence heavily
+        const scoreDiff = Math.abs(bullishScore - bearishScore);
+        if (scoreDiff < 2 && techData.fractalAnalysis?.trend_1w && !weakTrendWarning) {
+            if (techData.fractalAnalysis.trend_1w === 'BULLISH') {
+                bullishScore += 3;
+            } else {
+                bearishScore += 3;
+            }
+        }
+
+        // DOWNGRADE CONFIDENCE IF NOT ALIGNED (Institutional Rule)
         if (!isGodMode && confidenceLevel >= 8) {
             confidenceLevel = 7;
         }
 
+        // 2. CONSTRUCT RESPONSE
         response += `> [!IMPORTANT]\n`;
         response += `> **SEÑAL INSTITUCIONAL: ${finalPrimarySide} (Confianza ${confidenceLevel}/10)**\n`;
 
+        // Add Summary Alerts
         if (weakTrendWarning) {
             response += `> ⚠️ **ALERTA CRÍTICA:** Tendencia Semanal Agotada (RSI Oversold/Overbought). Rebote inminente. Riesgo extremo.\n`;
         } else if (isSFP) {
             response += `> ⚡ **ALERTA SFP:** ${sfpType === 'BEARISH_SWEEP' ? 'Barrido Bajista' : 'Barrido Alcista'} confirmado. Entrada de alta precisión.\n`;
-        } else if (isPinballBuy) {
-            response += `> 🎱 **Efecto Pinball:** Precio comprimido en zona de alto valor (EMA50/200). Rebote técnico probable.\n`;
-        } else if (isPinballSell) {
-            response += `> 🎱 **Efecto Pinball:** Rechazo técnico en zona de resistencia dinámica (EMA50/200).\n`;
         } else if (isGodMode) {
             response += `> 💎 **MODO DIOS:** Alineación total de timeframes (15m-1W). Probabilidad Institucional.\n`;
-        } else if (confidenceLevel >= 7) {
-            response += `> 🔥 **ALTA CONVICCIÓN:** Estructura técnica sólida (sin alineación total).\n`;
-        } else if (confidenceLevel <= 5) {
-            response += `> 🟡 **CORRECCIÓN/RANGO:** Conflicto Técnico. Reducir tamaño de posición.\n`;
         }
-        response += `\n`;
+
+        response += `> *${investmentThesis}*\n\n`; // Insert AI Thesis here
+
+        // ... (Keep existing structured tables as they are deterministic and good) ...
 
         // HEADER
         response += `# Evaluación de Riesgo y Estrategia Táctica para ${techData.symbol}\n\n`;
@@ -444,43 +452,29 @@ export const streamMarketAnalysis = async function* (
 
         // NEW: FRACTAL ANALYSIS SECTION
         if (techData.fractalAnalysis) {
-            const { trend_1h, price_1h, trend_4h, trend_1d, price_4h, price_1d, price_1w } = techData.fractalAnalysis;
+            const { trend_1h, price_1h, price_1w } = techData.fractalAnalysis;
+            const { trend_4h, trend_1d } = techData.fractalAnalysis;
 
+            // Use the locally calculated GodMode
+            const localGodMode = isGodMode;
+
+            // Recalculate aligned flags just for the table icons display if needed, OR simplify
             const isAligned1h = (sentiment.includes('ALCISTA') && trend_1h === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_1h === 'BEARISH');
-            let isAligned4h = true;
-            if (trend_4h) isAligned4h = (sentiment.includes('ALCISTA') && trend_4h === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_4h === 'BEARISH');
-            let isAligned1d = true;
-            if (trend_1d) isAligned1d = (sentiment.includes('ALCISTA') && trend_1d === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_1d === 'BEARISH');
+            const isAligned4h = (!trend_4h) || (sentiment.includes('ALCISTA') && trend_4h === 'BULLISH') || (sentiment.includes('BAJISTA') && trend_4h === 'BEARISH');
 
-            // Re-affirm Cycle Alignment with FINAL sentiment
-            // Re-affirm Cycle Alignment with FINAL sentiment
-            if (trend_1w) {
-                isAlignedCycle = (sentiment.includes('ALCISTA') && trend_1w === 'BULLISH') ||
-                    (sentiment.includes('BAJISTA') && trend_1w === 'BEARISH');
-                if (weakTrendWarning) isAlignedCycle = false;
-            }
-
-            const isFullyAligned = isAligned1h && isAligned4h && isAligned1d;
-
-            // Recalculate God Mode locally to guarantee consistency
-            const localGodMode = isFullyAligned && isAlignedCycle && !weakTrendWarning;
-
-            const fractalIcon = localGodMode ? "🚀🚀" : isFullyAligned ? "💎" : (isAligned1h && isAligned4h) ? "✅" : "⚠️";
+            const fractalIcon = localGodMode ? "🚀🚀" : (confidenceLevel >= 7) ? "💎" : "⚠️";
             let fractalStatus = "Alineación Total (INSTITUCIONAL)";
 
             if (weakTrendWarning) fractalStatus = "Alerta: Tendencia Semanal perdiendo fuerza.";
-            else if (!isAlignedCycle && trend_1w) fractalStatus = "Contra-Ciclo Semanal (Riesgo Alto)";
-            else if (!isAligned1d) fractalStatus = "Conflicto Diario - Swing Peligroso";
-            else if (!isAligned1h) fractalStatus = "Divergencia Táctica (1H) - Ruido Local";
-
-            if (localGodMode) fractalStatus = "GOD MODE (Alineación 15m a 1W sin Agotamiento)";
+            else if (localGodMode) fractalStatus = "GOD MODE (Alineación 15m a 1W sin Agotamiento)";
+            else fractalStatus = "Estructura Mixta (Operar con precaución)";
 
             response += `### 3.3. Validación Fractal (Validación de Ciclo)\n`;
             response += `| Estructura | Estado | Análisis |\n|---|---|---|\n`;
             response += `| **Tendencia Táctica (1H)** | ${trend_1h === 'BULLISH' ? '🟢 Alcista' : '🔴 Bajista'} | Precio ($${price_1h}) vs EMA200. |\n`;
             if (trend_1w) {
                 const rsiWDisplay = techData.fractalAnalysis?.rsi_1w ? `RSI: ${techData.fractalAnalysis.rsi_1w.toFixed(1)}` : '';
-                response += `| **Ciclo de Mercado (1W)** | ${cycleText} | Precio $${price_1w} vs EMA50. ${rsiWDisplay} |\n`;
+                response += `| **Ciclo de Mercado (1W)** | ${trend_1w === 'BULLISH' ? '🐂 Bull' : '🐻 Bear'} | Precio $${price_1w} vs EMA50. ${rsiWDisplay} |\n`;
             }
             response += `| **Veredicto Final** | ${fractalIcon} ${fractalStatus} | ${localGodMode ? '🌊 **Tsunami Institucional:** Toda la liquidez empuja en la misma dirección.' : 'Operar con precaución.'} |\n\n`;
         }
@@ -503,12 +497,11 @@ export const streamMarketAnalysis = async function* (
             response += `|---|---|---|\n`;
 
             if (isSqueeze) {
-                response += `| **Volatilidad** | ⚡ **TTM SQUEEZE** | Compresión extrema (Bollinger dentro de Keltner implícito). Explosión inminente. |\n`;
+                response += `| **Volatilidad** | ⚡ **TTM SQUEEZE** | Compresión extrema. Explosión inminente. |\n`;
             }
             if (macdDivergence) {
                 const icon = macdDivergence.type?.includes('BULLISH') ? '🟢' : '🔴';
-                const typeName = macdDivergence.type?.replace('_', ' ');
-                response += `| **Divergencia** | ${icon} **${typeName}** | ${macdDivergence.description} |\n`;
+                response += `| **Divergencia** | ${icon} **${macdDivergence.type}** | ${macdDivergence.description} |\n`;
             }
             response += `\n`;
         }
@@ -521,18 +514,17 @@ export const streamMarketAnalysis = async function* (
 
             // Range Analysis
             const rangeIcon = rsiExpert.range.includes('BULL') ? '🐂' : rsiExpert.range.includes('BEAR') ? '🐻' : '⚖️';
-            response += `| **Régimen RSI** | ${rangeIcon} **${rsiExpert.range.replace('_', ' ')}** | Definido por reglas de rango (Brown/Cardwell). |\n`;
+            response += `| **Régimen RSI** | ${rangeIcon} **${rsiExpert.range.replace('_', ' ')}** | Definido por reglas de rango expertas. |\n`;
 
             // Target Analysis
             if (rsiExpert.target) {
                 const targetIcon = rsiExpert.targetType === 'POSITIVE' ? '🟢' : '🔴';
-                const targetDesc = rsiExpert.targetType === 'POSITIVE' ? 'Reversión Positiva (Continuación Alcista)' : 'Reversión Negativa (Continuación Bajista)';
-                response += `| **Proyección** | ${targetIcon} **$${rsiExpert.target.toLocaleString()}** | ${targetDesc} detectada. |\n`;
+                response += `| **Proyección** | ${targetIcon} **$${rsiExpert.target.toLocaleString()}** | Reversión detectada. |\n`;
             }
             response += `\n`;
         }
 
-        // IV. PLAN DE EJECUCIÓN DCA
+
         // IV. PLAN DE EJECUCIÓN DCA
         const scenarioA_Score = finalIsBullish ? bullishScore : bearishScore;
         const scenarioB_Score = finalIsBullish ? bearishScore : bullishScore;
@@ -540,12 +532,25 @@ export const streamMarketAnalysis = async function* (
         const scenarioB_Conf = Math.min(Math.round(scenarioB_Score), 10);
 
         const scenarioATitle = `## IV.A Escenario Principal: ${finalPrimarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${scenarioA_Conf}/10)`;
-        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, finalPrimarySide, scenarioATitle, rsiExpert, macroContext);
+
+        response += generateDCAExecutionPlan(
+            price, atr, fibonacci, confluenceAnalysis as any,
+            techData.marketRegime, finalPrimarySide,
+            scenarioATitle, rsiExpert, macroContext,
+            executionPhilosophy // Passed from AI
+        );
 
         // ESCENARIO B: ALTERNATIVO (HEDGING)
         const secondarySide = finalPrimarySide === 'LONG' ? 'SHORT' : 'LONG';
         const scenarioBTitle = `## IV.B Escenario Alternativo (Cobertura): ${secondarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${scenarioB_Conf}/10)`;
-        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, secondarySide, scenarioBTitle, rsiExpert, macroContext);
+
+        // Note: We don't generate AI philosophy for Scenario B to save tokens/time, or we could. 
+        // For now, let it fallback to default text by passing undefined.
+        response += generateDCAExecutionPlan(
+            price, atr, fibonacci, confluenceAnalysis as any,
+            techData.marketRegime, secondarySide,
+            scenarioBTitle, rsiExpert, macroContext
+        );
 
         yield response;
     }
