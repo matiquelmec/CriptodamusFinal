@@ -14,7 +14,8 @@ export function generateDCAExecutionPlan(
     marketRegime: import('../types-advanced').MarketRegime | undefined,
     side: 'LONG' | 'SHORT' = 'LONG',
     customHeader?: string,
-    rsiExpert?: { target: number | null; range: string; } // NEW
+    rsiExpert?: { target: number | null; range: string; },
+    macroContext?: import('../services/macroService').MacroContext // NEW: For educational narrative
 ): string {
     let response = '';
 
@@ -23,12 +24,16 @@ export function generateDCAExecutionPlan(
     const headerTitle = customHeader || `## IV. Plan de Ejecución Institucional: Ladder DCA (${planType})`;
     response += `${headerTitle}\n\n`;
 
+    // 1. EDUCATIONAL NARRATIVE (The "Why")
+    response += `### 4.1. Tesis de Inversión (El "Por qué" simple)\n`;
+    const narrative = generateEducationalNarrative(side, marketRegime, macroContext, rsiExpert);
+    response += `${narrative}\n\n`;
+
     if (marketRegime) {
-        response += `> **Régimen de Mercado:** ${marketRegime.regime} (Confianza: ${marketRegime.confidence}%)\n`;
-        response += `> **Ajuste:** Position Sizing y Take Profits adaptados a condiciones de mercado.\n\n`;
+        response += `> **Ajuste Técnico:** Régimen ${marketRegime.regime}. Position Sizing y Take Profits adaptados.\n\n`;
     }
 
-    response += `### 4.1. Filosofía: Promediación Inteligente\n\n`;
+    response += `### 4.2. Filosofía: Promediación Inteligente\n\n`;
     const philosophyText = side === 'LONG'
         ? "El mercado rara vez ofrece el fondo exacto en la primera oportunidad. Este plan utiliza **3 zonas de confluencia decreciente** para construir una posición robusta."
         : "El mercado rara vez ofrece el tope exacto en la primera oportunidad. Este plan utiliza **3 zonas de resistencia creciente** para construir una posición short robusta.";
@@ -99,8 +104,31 @@ export function generateDCAExecutionPlan(
         response += `| **TP2** | $${dcaPlan.takeProfits.tp2.price.toFixed(4)} | **${dcaPlan.takeProfits.tp2.exitSize}%** | Capturar impulso |\n`;
         response += `| **TP3** | $${dcaPlan.takeProfits.tp3.price.toFixed(4)} | **${dcaPlan.takeProfits.tp3.exitSize}%** | Moonbag |\n\n`;
 
-        // Protocol
-        response += `### 4.5. Protocolo\n\n`;
+        // SMART SCENARIOS (NEW)
+        response += `### 4.5. Escenarios Inteligentes ("What If")\n`;
+
+        // Scenario A: Breakout (FOMO Protection)
+        const breakoutLevel = side === 'LONG'
+            ? dcaPlan.entries[0].price * 1.02 // 2% above Entry 1
+            : dcaPlan.entries[0].price * 0.98; // 2% below Entry 1
+
+        const breakoutDesc = side === 'LONG' ? "Rompe Resistencia Clave" : "Rompe Soporte Clave";
+        const breakoutAction = side === 'LONG' ? "Entrar en Mercado (Buy Stop)" : "Entrar en Mercado (Sell Stop)";
+
+        response += `**A) Si el precio se escapa (No llena entradas):**\n`;
+        response += `- **Condición:** ${breakoutDesc} en **$${breakoutLevel.toFixed(4)}** con volumen fuerte.\n`;
+        response += `- **Acción:** ${breakoutAction} con 30% del tamaño habitual.\n\n`;
+
+        // Scenario B: Invalidation (Flip)
+        const invalidationLevel = dcaPlan.stopLoss;
+        const flipAction = side === 'LONG' ? "Buscar retest para Short" : "Buscar retest para Long";
+
+        response += `**B) Si el análisis falla (Invalidación):**\n`;
+        response += `- **Nivel Crítico:** Cierre de vela 1H por ${side === 'LONG' ? 'debajo' : 'encima'} de **$${invalidationLevel.toFixed(4)}**.\n`;
+        response += `- **Consecuencia:** La tesis ${side} muere. Cancelar órdenes.\n`;
+        response += `- **Plan B:** Esperar rebote y ${flipAction}.\n\n`;
+
+        response += `### 4.6. Protocolo de Ejecución\n\n`;
         response += `1. **Colocar 3 órdenes límite** en Entry 1, 2 y 3\n`;
         const chochText = side === 'LONG' ? "confirmación CHoCH (Breakout Alcista)" : "confirmación CHoCH (Breakdown Bajista)";
         response += `2. **Esperar ${chochText}** en 1m/3m\n`;
@@ -140,4 +168,56 @@ export function generateDCAExecutionPlan(
     response += `\n> *Máxima Operativa: Preservación de Capital.*`;
 
     return response;
+}
+
+// --- HELPER: EDUCATIONAL NARRATIVE GENERATOR ---
+function generateEducationalNarrative(
+    side: 'LONG' | 'SHORT',
+    marketRegime: import('../types-advanced').MarketRegime | undefined,
+    macro: import('../services/macroService').MacroContext | undefined,
+    rsiExpert?: { target: number | null; range: string; }
+): string {
+    let story = "";
+
+    // 1. Context (Macro Landscape)
+    if (macro) {
+        const isBearMarket = macro.btcRegime.regime === 'BEAR';
+        const isBullMarket = macro.btcRegime.regime === 'BULL';
+        const isAltSeason = macro.btcDominance.trend === 'FALLING' && macro.btcDominance.current < 55;
+
+        if (side === 'SHORT' && isBearMarket) {
+            story += "**Contexto Favorito:** Estamos nadando a favor de la corriente. El mercado general de Bitcoin es bajista, lo que facilita las caídas. ";
+        } else if (side === 'LONG' && isBearMarket) {
+            story += "⚠️ **Contra-Tendencia:** Estamos buscando un rebote puntual en un mercado que, en general, quiere caer. Es como buscar una moneda en la arena mientras sube la marea: hazlo rápido. ";
+        } else if (side === 'SHORT' && isBullMarket) {
+            story += "⚠️ **Contra-Tendencia:** Estamos buscando una corrección en un mercado eufórico. Cuidado, es como pararse frente a un tren. ";
+        } else if (side === 'LONG' && isAltSeason) {
+            story += "🔥 **Altseason Detectada:** Bitcoin está cediendo protagonismo y la liquidez fluye hacia las Altcoins. Es el escenario ideal para movimientos explosivos. ";
+        }
+    }
+
+    // 2. Technical Driver (The Engine)
+    if (rsiExpert) {
+        const isSuperRange = rsiExpert.range.includes('SUPER');
+        const rangeType = rsiExpert.range.includes('BULL') ? 'zona de compradores' : 'zona de vendedores';
+
+        if (isSuperRange) {
+            story += `Técnicamente, el activo entró en **Super Rango**, lo que significa que tiene un "motor turbo" encendido. No es momento de apostar en contra de la inercia (Momentum). `;
+        } else {
+            story += `El RSI nos indica que estamos operando en ${rangeType}, respetando la estructura de los grandes fondos. `;
+        }
+    }
+
+    // 3. The "Why" (Analogy)
+    if (marketRegime?.regime === 'RANGING') {
+        story += side === 'LONG'
+            ? "Imagina comprar barato en liquidación. El precio está en el suelo de un elevador; apostamos a que suba al piso de arriba."
+            : "Imagina vender caro. El precio tocó el techo del elevador; apostamos a que baje al sótano.";
+    } else if (marketRegime?.regime === 'TRENDING') {
+        story += "Es como subirte a un tren en movimiento. No corremos tras él; esperamos una pequeña parada (retroceso) en la estación para subirnos antes de que siga su camino.";
+    } else if (marketRegime?.regime === 'EXTREME') {
+        story += "El elástico se estiró demasiado. Apostamos a que, por física simple, debe volver a su posición normal (Mean Reversion).";
+    }
+
+    return story;
 }

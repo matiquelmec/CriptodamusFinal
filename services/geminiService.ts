@@ -533,13 +533,14 @@ export const streamMarketAnalysis = async function* (
         }
 
         // IV. PLAN DE EJECUCIÓN DCA
+        // IV. PLAN DE EJECUCIÓN DCA
         const scenarioATitle = `## IV.A Escenario Principal: ${finalPrimarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${finalIsBullish ? bullishScore.toFixed(0) : bearishScore.toFixed(0)})`;
-        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, finalPrimarySide, scenarioATitle, rsiExpert);
+        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, finalPrimarySide, scenarioATitle, rsiExpert, macroContext);
 
         // ESCENARIO B: ALTERNATIVO (HEDGING)
         const secondarySide = finalPrimarySide === 'LONG' ? 'SHORT' : 'LONG';
         const scenarioBTitle = `## IV.B Escenario Alternativo (Cobertura): ${secondarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${finalIsBullish ? bearishScore.toFixed(0) : bullishScore.toFixed(0)})`;
-        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, secondarySide, scenarioBTitle, rsiExpert);
+        response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, secondarySide, scenarioBTitle, rsiExpert, macroContext);
 
         yield response;
     }
