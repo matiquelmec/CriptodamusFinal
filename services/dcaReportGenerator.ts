@@ -94,7 +94,18 @@ export function generateDCAExecutionPlan(
         response += `| **Riesgo Total** | ${dcaPlan.totalRisk.toFixed(2)}% | Exposición máxima |\n`;
 
         const rr = Math.abs((dcaPlan.takeProfits.tp2.price - dcaPlan.averageEntry) / (dcaPlan.averageEntry - dcaPlan.stopLoss));
-        response += `| **R:R Promedio** | 1:${rr.toFixed(2)} | Basado en WAP vs TP2 |\n\n`;
+        let rrIcon = "✅";
+        let rrNote = "Plan Saludable";
+
+        if (rr < 1.0) {
+            rrIcon = "⛔";
+            rrNote = "CRÍTICO: Arriesgas más de lo que ganas.";
+        } else if (rr < 1.5) {
+            rrIcon = "⚠️";
+            rrNote = "Ratio pobre. Requiere alta tasa de acierto.";
+        }
+
+        response += `| **R:R Promedio** | ${rrIcon} 1:${rr.toFixed(2)} | ${rrNote} (WAP vs TP2) |\n\n`;
 
         // Take Profits
         response += `### 4.4. Salidas Escalonadas\n\n`;
@@ -186,13 +197,13 @@ function generateEducationalNarrative(
         const isAltSeason = macro.btcDominance.trend === 'FALLING' && macro.btcDominance.current < 55;
 
         if (side === 'SHORT' && isBearMarket) {
-            story += "**Contexto Favorito:** Estamos nadando a favor de la corriente. El mercado general de Bitcoin es bajista, lo que facilita las caídas. ";
+            story += "🌊 **Contexto Favorito (Correlación BTC):** Nadamos a favor de la corriente. La tendencia Macro de Bitcoin es bajista, lo que presiona a todo el mercado (incluido este activo) a la baja. ";
         } else if (side === 'LONG' && isBearMarket) {
-            story += "⚠️ **Contra-Tendencia:** Estamos buscando un rebote puntual en un mercado que, en general, quiere caer. Es como buscar una moneda en la arena mientras sube la marea: hazlo rápido. ";
+            story += "⚠️ **Contra-Tendencia (Riesgo Macro):** Buscamos un rebote puntual contra la marea. Aunque este activo luzca bien, Bitcoin (el índice del mercado) es bajista, lo que aumenta el riesgo de fallo. ";
         } else if (side === 'SHORT' && isBullMarket) {
-            story += "⚠️ **Contra-Tendencia:** Estamos buscando una corrección en un mercado eufórico. Cuidado, es como pararse frente a un tren. ";
+            story += "⚠️ **Contra-Tendencia (Riesgo Macro):** Buscamos una corrección en un mercado (BTC) que es alcista. Cuidado, es como pararse frente a un tren. ";
         } else if (side === 'LONG' && isAltSeason) {
-            story += "🔥 **Altseason Detectada:** Bitcoin está cediendo protagonismo y la liquidez fluye hacia las Altcoins. Es el escenario ideal para movimientos explosivos. ";
+            story += "🔥 **Altseason Detectada:** Bitcoin está cediendo protagonismo y la liquidez fluye hacia las Altcoins. Es el escenario ideal para movimientos explosivos en este par. ";
         }
     }
 
