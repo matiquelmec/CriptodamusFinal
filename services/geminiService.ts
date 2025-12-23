@@ -534,12 +534,17 @@ export const streamMarketAnalysis = async function* (
 
         // IV. PLAN DE EJECUCIÓN DCA
         // IV. PLAN DE EJECUCIÓN DCA
-        const scenarioATitle = `## IV.A Escenario Principal: ${finalPrimarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${finalIsBullish ? bullishScore.toFixed(0) : bearishScore.toFixed(0)})`;
+        const scenarioA_Score = finalIsBullish ? bullishScore : bearishScore;
+        const scenarioB_Score = finalIsBullish ? bearishScore : bullishScore;
+        const scenarioA_Conf = Math.min(Math.round(scenarioA_Score), 10);
+        const scenarioB_Conf = Math.min(Math.round(scenarioB_Score), 10);
+
+        const scenarioATitle = `## IV.A Escenario Principal: ${finalPrimarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${scenarioA_Conf}/10)`;
         response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, finalPrimarySide, scenarioATitle, rsiExpert, macroContext);
 
         // ESCENARIO B: ALTERNATIVO (HEDGING)
         const secondarySide = finalPrimarySide === 'LONG' ? 'SHORT' : 'LONG';
-        const scenarioBTitle = `## IV.B Escenario Alternativo (Cobertura): ${secondarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${finalIsBullish ? bearishScore.toFixed(0) : bullishScore.toFixed(0)})`;
+        const scenarioBTitle = `## IV.B Escenario Alternativo (Cobertura): ${secondarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${scenarioB_Conf}/10)`;
         response += generateDCAExecutionPlan(price, atr, fibonacci, confluenceAnalysis as any, techData.marketRegime, secondarySide, scenarioBTitle, rsiExpert, macroContext);
 
         yield response;
