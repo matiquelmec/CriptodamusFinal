@@ -981,6 +981,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const minimumThreshold = isHighRisk ? 80 : PREMIUM_THRESHOLD;
 
             // --- BUILD MATH OPPORTUNITY (AUTONOMOUS) ---
+
+            // [INTELLIGENT AUDIT] Log "Near Misses"
+            if (finalScore < minimumThreshold && finalScore > 40) {
+                console.log(`[Scanner Audit] 📉 ${coin.symbol} rechazado por Score (${Math.round(finalScore)}/${minimumThreshold}). Razón: ${detectionNote}`);
+            }
+
             if (finalScore >= minimumThreshold) {
                 // NEW: Usar precio de confirmación de señal (vela cerrada)
                 const signalPrice = prices[checkIndex]; // Precio donde se confirmó la señal
@@ -992,7 +998,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                 // Si el precio se movió mucho, la señal está obsoleta
                 if (Math.abs(priceMove) > maxPriceMove) {
-                    console.log(`[Scanner] Señal obsoleta para ${coin.symbol}: Precio movió ${priceMove.toFixed(2)}%`);
+                    console.log(`[Scanner Audit] ⚠️ ${coin.symbol} señal obsoleta (Movimiento: ${priceMove.toFixed(2)}%)`);
                     return; // Skip this opportunity
                 }
 
@@ -1037,7 +1043,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         }
 
                         if (fractalPenalty > 0) {
-                            console.log(`[Scanner] ${coin.symbol} descartado por Fractal Dragon: ${fractalNote}`);
+                            console.log(`[Scanner Audit] ❌ ${coin.symbol} rechazado por Fractal (${fractalNote})`);
                             return; // Descartar candidato
                         }
 
