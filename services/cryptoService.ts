@@ -1022,87 +1022,87 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                                 detectionNote += " | 🌊 Marea a favor (Elder Aligned)";
                             }
                         }
-
-                    } catch (err) {
-                        console.warn(`[Scanner] Falló validación 1H para ${coin.symbol}, procediendo con precaución.`);
                     }
-
-                    const atr = calculateATR(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), 14);
-
-                    // NEW: Regime-Aware DCA Calculation (Autonomous)
-                    const dcaPlan = calculateDCAPlan(
-                        signalPrice,
-                        { supportPOIs: [], resistancePOIs: [], topSupports: [], topResistances: [] }, // Fallback to Fibs/ATR for scanner
-                        atr,
-                        signalSide,
-                        marketRegime,
-                        fibs
-                    );
-
-                    const decimals = signalPrice > 1000 ? 2 : signalPrice > 1 ? 4 : 6;
-                    const format = (n: number) => parseFloat(n.toFixed(decimals));
-
-                    const finalNote = isHighRisk ? `[⚠️ RIESGO ALTO] ${detectionNote}` : detectionNote;
-
-                    // VWAP Dist % calculation (usando signalPrice)
-                    const vwapDist = ((signalPrice - vwap) / vwap) * 100;
-
-                    // Determine signal quality tier for UI badge
-                    const signalTier = finalScore >= GOD_MODE_THRESHOLD ? '🔥 GOD MODE' : '⭐ PREMIUM';
-
-                    // --- INSTITUTIONAL METADATA ---
-                    const session = getMarketSession();
-                    const rrRatio = dcaPlan.entries.length > 0 && dcaPlan.stopLoss > 0
-                        ? Math.abs((dcaPlan.takeProfits.tp3.price - dcaPlan.entries[0].price) / (dcaPlan.entries[0].price - dcaPlan.stopLoss))
-                        : 0;
-
-                    const mathOpp: AIOpportunity = {
-                        // Institutional Metadata
-                        timeframe: interval,
-                        session: session.session,
-                        riskRewardRatio: parseFloat(rrRatio.toFixed(2)),
-
-                        id: Date.now().toString() + Math.random(),
-                        symbol: coin.symbol,
-                        timestamp: Date.now(),
-                        signalTimestamp: candles[checkIndex].timestamp,
-                        strategy: `${signalTier} (${marketRegime.regime})`, // Show Quality + Regime
-                        side: signalSide,
-                        confidenceScore: Math.round(finalScore),
-                        entryZone: {
-                            min: format(dcaPlan.entries[2].price), // Entry 3 (Deepest)
-                            max: format(dcaPlan.entries[0].price), // Entry 1 (Closest)
-                            aggressive: format(dcaPlan.entries[0].price),
-                            signalPrice: format(signalPrice)
-                        },
-                        stopLoss: format(dcaPlan.stopLoss),
-                        takeProfits: {
-                            tp1: format(dcaPlan.takeProfits.tp1.price),
-                            tp2: format(dcaPlan.takeProfits.tp2.price),
-                            tp3: format(dcaPlan.takeProfits.tp3.price)
-                        },
-                        technicalReasoning: finalNote,
-                        metrics: {
-                            rvol: format(rvol),
-                            rsi: format(rsi),
-                            vwapDist: format(vwapDist),
-                            structure: structureNote,
-                            specificTrigger: specificTrigger,
-                            zScore: format(zScore), // NEW
-                            emaSlope: format(emaSlope), // NEW
-                            isSqueeze: isSqueeze, // NEW
-                            macdDivergence: macdDivergence?.description // NEW
-                        },
-                        dcaPlan: dcaPlan, // NEW: Pasar el plan completo
-                        harmonicPatterns: harmonicPatterns, // NEW: Pasar patrones armónicos
-                        invalidated: false
-                    };
-
-                    validMathCandidates.push(mathOpp);
+                } catch (err) {
+                    console.warn(`[Scanner] Falló validación 1H para ${coin.symbol}, procediendo con precaución.`);
                 }
 
+                const atr = calculateATR(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), 14);
+
+                // NEW: Regime-Aware DCA Calculation (Autonomous)
+                const dcaPlan = calculateDCAPlan(
+                    signalPrice,
+                    { supportPOIs: [], resistancePOIs: [], topSupports: [], topResistances: [] }, // Fallback to Fibs/ATR for scanner
+                    atr,
+                    signalSide,
+                    marketRegime,
+                    fibs
+                );
+
+                const decimals = signalPrice > 1000 ? 2 : signalPrice > 1 ? 4 : 6;
+                const format = (n: number) => parseFloat(n.toFixed(decimals));
+
+                const finalNote = isHighRisk ? `[⚠️ RIESGO ALTO] ${detectionNote}` : detectionNote;
+
+                // VWAP Dist % calculation (usando signalPrice)
+                const vwapDist = ((signalPrice - vwap) / vwap) * 100;
+
+                // Determine signal quality tier for UI badge
+                const signalTier = finalScore >= GOD_MODE_THRESHOLD ? '🔥 GOD MODE' : '⭐ PREMIUM';
+
+                // --- INSTITUTIONAL METADATA ---
+                const session = getMarketSession();
+                const rrRatio = dcaPlan.entries.length > 0 && dcaPlan.stopLoss > 0
+                    ? Math.abs((dcaPlan.takeProfits.tp3.price - dcaPlan.entries[0].price) / (dcaPlan.entries[0].price - dcaPlan.stopLoss))
+                    : 0;
+
+                const mathOpp: AIOpportunity = {
+                    // Institutional Metadata
+                    timeframe: interval,
+                    session: session.session,
+                    riskRewardRatio: parseFloat(rrRatio.toFixed(2)),
+
+                    id: Date.now().toString() + Math.random(),
+                    symbol: coin.symbol,
+                    timestamp: Date.now(),
+                    signalTimestamp: candles[checkIndex].timestamp,
+                    strategy: `${signalTier} (${marketRegime.regime})`, // Show Quality + Regime
+                    side: signalSide,
+                    confidenceScore: Math.round(finalScore),
+                    entryZone: {
+                        min: format(dcaPlan.entries[2].price), // Entry 3 (Deepest)
+                        max: format(dcaPlan.entries[0].price), // Entry 1 (Closest)
+                        aggressive: format(dcaPlan.entries[0].price),
+                        signalPrice: format(signalPrice)
+                    },
+                    stopLoss: format(dcaPlan.stopLoss),
+                    takeProfits: {
+                        tp1: format(dcaPlan.takeProfits.tp1.price),
+                        tp2: format(dcaPlan.takeProfits.tp2.price),
+                        tp3: format(dcaPlan.takeProfits.tp3.price)
+                    },
+                    technicalReasoning: finalNote,
+                    metrics: {
+                        rvol: format(rvol),
+                        rsi: format(rsi),
+                        vwapDist: format(vwapDist),
+                        structure: structureNote,
+                        specificTrigger: specificTrigger,
+                        zScore: format(zScore), // NEW
+                        emaSlope: format(emaSlope), // NEW
+                        isSqueeze: isSqueeze, // NEW
+                        macdDivergence: macdDivergence?.description // NEW
+                    },
+                    dcaPlan: dcaPlan, // NEW: Pasar el plan completo
+                    harmonicPatterns: harmonicPatterns, // NEW: Pasar patrones armónicos
+                    invalidated: false
+                };
+
+                validMathCandidates.push(mathOpp);
+            }
+
         } catch (e) { return null; }
-        }));
+    }));
 
     // Return top 10 best opportunities only (Quality over Quantity)
     return validMathCandidates
