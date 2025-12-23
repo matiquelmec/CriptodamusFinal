@@ -43,7 +43,7 @@ export const streamMarketAnalysis = async function* (
     }
 
     // 2. EXTRAER DATOS (YA NO SE PARSEA TEXTO, SE USAN OBJETOS)
-    const { price, rsi, stochRsi, vwap, adx, atr, rvol, ema20, ema50, ema100, ema200, macd, bollinger, pivots, fibonacci, trendStatus, volumeProfile, orderBlocks, fairValueGaps, confluenceAnalysis, fractalAnalysis, harmonicPatterns } = techData;
+    const { price, rsi, stochRsi, vwap, adx, atr, rvol, ema20, ema50, ema100, ema200, zScore, emaSlope, macd, bollinger, pivots, fibonacci, trendStatus, volumeProfile, orderBlocks, fairValueGaps, confluenceAnalysis, fractalAnalysis, harmonicPatterns } = techData;
 
     // --- LÓGICA DE COMANDO: DETECCIÓN AMPLIA ---
     const isAnalysisRequest =
@@ -74,8 +74,16 @@ export const streamMarketAnalysis = async function* (
         const isRangeMarket = adx < 25;
         const isHighVolatilityRange = isRangeMarket && bollinger.bandwidth > 8;
 
-        // Trend Alignment (Structure)
-        if (price > ema200) bullishScore += 2; else bearishScore += 2;
+        // Trend Alignment (Structure) with SLOPE FILTER
+        // Expert Rule: Only trust EMA200 if slope is significant (> 0.2 flat threshold example)
+        if (price > ema200) {
+            bullishScore += 2;
+            if (emaSlope > 5) bullishScore += 1; // Strong Upward Slope match
+        } else {
+            bearishScore += 2;
+            if (emaSlope < -5) bearishScore += 1; // Strong Downward Slope match
+        }
+
         if (ema20 > ema50) bullishScore += 1; else bearishScore += 1;
 
         // NEW: VWAP Logic (Institutional Consensus)
@@ -93,12 +101,30 @@ export const streamMarketAnalysis = async function* (
         const inUpperZone = price > bollinger.middle;
         if (inUpperZone) bullishScore += 1; else bearishScore += 1;
 
-        // NEW: Detect Market Extremes
-        const isCapitulation = rsi < 20 && rvol > 2; // Panic selling
-        const isEuphoria = rsi > 80 && rvol > 2; // FOMO buying
+        // NEW: Detect Market Extremes with Z-SCORE (Expert Veto)
+        const isCapitulation = (rsi < 20 && rvol > 2) || (zScore && zScore < -2.0); // Panic selling or Statistical Extension
+        const isEuphoria = (rsi > 80 && rvol > 2) || (zScore && zScore > 2.0); // FOMO buying or Statistical Extension
+
+        // Z-Score Mean Reversion Boost
+        if (zScore && zScore < -2.5) bullishScore += 4; // Extreme Oversold (Statistical) - Buy Value
+        if (zScore && zScore > 2.5) bearishScore += 4; // Extreme Overbought (Statistical) - Sell Value
 
         if (isCapitulation) bullishScore += 3; // Contrarian signal
         if (isEuphoria) bearishScore += 3; // Contrarian signal
+
+        // NEW: PINBALL STRATEGY DETECTION (Advisor Logic)
+        let isPinballBuy = false;
+        let isPinballSell = false;
+        // Bullish Pinball: Price drops into zone between EMA50 and EMA200 in an Uptrend
+        if (ema50 > ema200 && price < ema50 && price > ema200 && rsi < 45) {
+            isPinballBuy = true;
+            bullishScore += 3.5; // High Probability Swing
+        }
+        // Bearish Pinball: Price rallies into zone between EMA50 and EMA200 in a Downtrend
+        if (ema50 < ema200 && price > ema50 && price < ema200 && rsi > 55) {
+            isPinballSell = true;
+            bearishScore += 3.5; // High Probability Swing
+        }
 
         // NEW: LIQUIDATION CASCADE DETECTION (INSTITUCIONAL)
         const isLiquidationCascade = rvol > 3 && Math.abs(macd.histogram) > atr * 0.5;
@@ -221,7 +247,7 @@ export const streamMarketAnalysis = async function* (
         if (isHighVolatilityRange && !isSFP) {
             bullishScore *= 0.1;
             bearishScore *= 0.1;
-        } else if (isRangeMarket && !isSFP) {
+        } else if (isRangeMarket && !isSFP && !isPinballBuy && !isPinballSell) { // Pinball respected in range
             bullishScore *= 0.5;
             bearishScore *= 0.5;
         }
@@ -342,6 +368,10 @@ export const streamMarketAnalysis = async function* (
             response += `> ⚠️ **ALERTA CRÍTICA:** Tendencia Semanal Agotada (RSI Oversold/Overbought). Rebote inminente. Riesgo extremo.\n`;
         } else if (isSFP) {
             response += `> ⚡ **ALERTA SFP:** ${sfpType === 'BEARISH_SWEEP' ? 'Barrido Bajista' : 'Barrido Alcista'} confirmado. Entrada de alta precisión.\n`;
+        } else if (isPinballBuy) {
+            response += `> 🎱 **Efecto Pinball:** Precio comprimido en zona de alto valor (EMA50/200). Rebote técnico probable.\n`;
+        } else if (isPinballSell) {
+            response += `> 🎱 **Efecto Pinball:** Rechazo técnico en zona de resistencia dinámica (EMA50/200).\n`;
         } else if (isGodMode) {
             response += `> 💎 **MODO DIOS:** Alineación total de timeframes (15m-1W). Probabilidad Institucional.\n`;
         } else if (confidenceLevel >= 7) {
@@ -369,6 +399,10 @@ export const streamMarketAnalysis = async function* (
 
         response += `| **Diagnóstico Táctico (15m)** | ${mainIcon} ${sentiment} | ${trendNote} |\n`;
         response += `| **Score de Fuerza** | Bulls ${bullishScore.toFixed(1)} vs Bears ${bearishScore.toFixed(1)} | Confirma el bias direccional: **${finalPrimarySide}** |\n`;
+        if (zScore !== undefined) {
+            const zStatus = zScore > 2 ? 'SOBRECOMPRA (Extrema)' : zScore < -2 ? 'SOBREVENTA (Extrema)' : 'Normal (Mean Reversion)';
+            response += `| **Z-Score (Desviación)** | ${zScore.toFixed(2)}σ | ${zStatus} - ${Math.abs(zScore) > 2 ? '⚠️ Posible Reversión' : 'Tendencia Sostenible'} |\n`;
+        }
 
         if (macroContext) {
             const { btcRegime } = macroContext;

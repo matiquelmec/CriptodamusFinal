@@ -97,6 +97,8 @@ export interface RegimeMetrics {
     emaAlignment: TrendDirection;   // EMA ribbon alignment
     rsi: number;                    // RSI value
     rvol: number;                   // Relative Volume
+    zScore: number;                 // NEW: Distance from EMA200 (StdDevs)
+    emaSlope: number;               // NEW: Slope of EMA200 (Angle/Strength)
     extremeCondition?: ExtremeCondition;
 }
 

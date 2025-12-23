@@ -44,7 +44,7 @@ export function detectMarketRegime(indicators: TechnicalIndicators): MarketRegim
  * Build comprehensive metrics for regime detection
  */
 function buildRegimeMetrics(indicators: TechnicalIndicators): RegimeMetrics {
-    const { adx, atr, price, bollinger, rsi, rvol, ema20, ema50, ema100, ema200 } = indicators;
+    const { adx, atr, price, bollinger, rsi, rvol, ema20, ema50, ema100, ema200, zScore, emaSlope } = indicators;
 
     // Calculate ATR as percentage of price
     const atrPercent = (atr / price) * 100;
@@ -63,6 +63,8 @@ function buildRegimeMetrics(indicators: TechnicalIndicators): RegimeMetrics {
         emaAlignment,
         rsi,
         rvol,
+        zScore, // NEW
+        emaSlope, // NEW
         extremeCondition
     };
 }
@@ -132,16 +134,17 @@ function getEMAAlignment(ema20: number, ema50: number, ema100: number, ema200: n
 /**
  * Detect extreme market conditions
  */
+// Detect extreme market conditions
 function detectExtremeCondition(indicators: TechnicalIndicators): ExtremeCondition | undefined {
-    const { rsi, price, bollinger } = indicators;
+    const { rsi, price, bollinger, zScore } = indicators;
 
-    // Extreme oversold
-    if (rsi < 25 && price <= bollinger.lower) {
+    // Extreme oversold (RSI < 25 OR Z-Score < -2.0)
+    if ((rsi < 25 && price <= bollinger.lower) || zScore < -2.0) {
         return 'OVERSOLD';
     }
 
-    // Extreme overbought
-    if (rsi > 75 && price >= bollinger.upper) {
+    // Extreme overbought (RSI > 75 OR Z-Score > 2.0)
+    if ((rsi > 75 && price >= bollinger.upper) || zScore > 2.0) {
         return 'OVERBOUGHT';
     }
 

@@ -227,12 +227,12 @@ export function calculateFractals(highs: number[], lows: number[]) {
     for (let i = 2; i < highs.length - 2; i++) {
         // Bearish Fractal (High)
         const isHigh = highs[i] > highs[i - 1] && highs[i] > highs[i - 2] &&
-                       highs[i] > highs[i + 1] && highs[i] > highs[i + 2];
+            highs[i] > highs[i + 1] && highs[i] > highs[i + 2];
         if (isHigh) fractalHighs.push({ price: highs[i], index: i });
 
         // Bullish Fractal (Low)
         const isLow = lows[i] < lows[i - 1] && lows[i] < lows[i - 2] &&
-                      lows[i] < lows[i + 1] && lows[i] < lows[i + 2];
+            lows[i] < lows[i + 1] && lows[i] < lows[i + 2];
         if (isLow) fractalLows.push({ price: lows[i], index: i });
     }
     return { fractalHighs, fractalLows };
@@ -244,54 +244,54 @@ export function calculateAutoFibs(highs: number[], lows: number[], ema200: numbe
 
     // Use Fractals for precision anchoring
     const { fractalHighs, fractalLows } = calculateFractals(highs, lows);
-    
+
     // Fallback if no fractals found (rare but possible in very short arrays)
     if (fractalHighs.length === 0 || fractalLows.length === 0) {
         // Simple Min/Max fallback
-         const lookback = Math.min(highs.length, 300);
-         const subsetHighs = highs.slice(-lookback);
-         const subsetLows = lows.slice(-lookback);
-         const maxHigh = Math.max(...subsetHighs);
-         const minLow = Math.min(...subsetLows);
-         const diff = maxHigh - minLow;
-         
-         if (isUptrend) {
-             return {
-                 trend: 'UP' as const,
-                 level0: maxHigh,
-                 level0_236: maxHigh - (diff * 0.236),
-                 level0_382: maxHigh - (diff * 0.382),
-                 level0_5: maxHigh - (diff * 0.5),
-                 level0_618: maxHigh - (diff * 0.618),
-                 level0_65: maxHigh - (diff * 0.65), // Institutional Zone Start
-                 level0_786: maxHigh - (diff * 0.786),
-                 level0_886: maxHigh - (diff * 0.886), // Stop Hunt / Shark
-                 level1: minLow,
-                 tp1: maxHigh + (diff * 0.272),
-                 tp2: maxHigh + (diff * 0.618),
-                 tp3: maxHigh + (diff * 1.0),
-                 tp4: maxHigh + (diff * 1.618), // Golden Extension
-                 tp5: maxHigh + (diff * 2.618)  // Euphoria
-             };
-         } else {
-             return {
-                 trend: 'DOWN' as const,
-                 level0: minLow,
-                 level0_236: minLow + (diff * 0.236),
-                 level0_382: minLow + (diff * 0.382),
-                 level0_5: minLow + (diff * 0.5),
-                 level0_618: minLow + (diff * 0.618),
-                 level0_65: minLow + (diff * 0.65),
-                 level0_786: minLow + (diff * 0.786),
-                 level0_886: minLow + (diff * 0.886),
-                 level1: maxHigh,
-                 tp1: minLow - (diff * 0.272),
-                 tp2: minLow - (diff * 0.618),
-                 tp3: minLow - (diff * 1.0),
-                 tp4: minLow - (diff * 1.618),
-                 tp5: minLow - (diff * 2.618)
-             };
-         }
+        const lookback = Math.min(highs.length, 300);
+        const subsetHighs = highs.slice(-lookback);
+        const subsetLows = lows.slice(-lookback);
+        const maxHigh = Math.max(...subsetHighs);
+        const minLow = Math.min(...subsetLows);
+        const diff = maxHigh - minLow;
+
+        if (isUptrend) {
+            return {
+                trend: 'UP' as const,
+                level0: maxHigh,
+                level0_236: maxHigh - (diff * 0.236),
+                level0_382: maxHigh - (diff * 0.382),
+                level0_5: maxHigh - (diff * 0.5),
+                level0_618: maxHigh - (diff * 0.618),
+                level0_65: maxHigh - (diff * 0.65), // Institutional Zone Start
+                level0_786: maxHigh - (diff * 0.786),
+                level0_886: maxHigh - (diff * 0.886), // Stop Hunt / Shark
+                level1: minLow,
+                tp1: maxHigh + (diff * 0.272),
+                tp2: maxHigh + (diff * 0.618),
+                tp3: maxHigh + (diff * 1.0),
+                tp4: maxHigh + (diff * 1.618), // Golden Extension
+                tp5: maxHigh + (diff * 2.618)  // Euphoria
+            };
+        } else {
+            return {
+                trend: 'DOWN' as const,
+                level0: minLow,
+                level0_236: minLow + (diff * 0.236),
+                level0_382: minLow + (diff * 0.382),
+                level0_5: minLow + (diff * 0.5),
+                level0_618: minLow + (diff * 0.618),
+                level0_65: minLow + (diff * 0.65),
+                level0_786: minLow + (diff * 0.786),
+                level0_886: minLow + (diff * 0.886),
+                level1: maxHigh,
+                tp1: minLow - (diff * 0.272),
+                tp2: minLow - (diff * 0.618),
+                tp3: minLow - (diff * 1.0),
+                tp4: minLow - (diff * 1.618),
+                tp5: minLow - (diff * 2.618)
+            };
+        }
     }
 
     let anchorHigh = -Infinity;
@@ -301,7 +301,7 @@ export function calculateAutoFibs(highs: number[], lows: number[], ema200: numbe
         // En tendencia alcista:
         // 1. Encontrar el MAXIMO MAS ALTO RECIENTE (Swing High)
         // 2. Encontrar el MINIMO MAS BAJO ANTERIOR a ese máximo (Swing Low origen)
-        
+
         // Tomamos el fractal High más alto de los últimos X periodos relevantes
         const relevantHighs = fractalHighs.filter(f => f.index > highs.length - 300);
         if (relevantHighs.length > 0) {
@@ -312,32 +312,32 @@ export function calculateAutoFibs(highs: number[], lows: number[], ema200: numbe
             // Find the lowest fractal BEFORE that high (origin of the move)
             const relevantLows = fractalLows.filter(f => f.index < highestFractal.index && f.index > highestFractal.index - 300);
             if (relevantLows.length > 0) {
-                 const lowestFractal = relevantLows.reduce((prev, curr) => curr.price < prev.price ? curr : prev);
-                 anchorLow = lowestFractal.price;
+                const lowestFractal = relevantLows.reduce((prev, curr) => curr.price < prev.price ? curr : prev);
+                anchorLow = lowestFractal.price;
             } else {
-                 anchorLow = Math.min(...lows.slice(Math.max(0, highestFractal.index - 100), highestFractal.index));
+                anchorLow = Math.min(...lows.slice(Math.max(0, highestFractal.index - 100), highestFractal.index));
             }
         }
     } else {
         // En tendencia bajista:
         // 1. Encontrar el MINIMO MAS BAJO RECIENTE (Swing Low)
         // 2. Encontrar el MAXIMO MAS ALTO ANTERIOR a ese mínimo (Swing High origen)
-        
+
         const relevantLows = fractalLows.filter(f => f.index > lows.length - 300);
         if (relevantLows.length > 0) {
             const lowestFractal = relevantLows.reduce((prev, curr) => curr.price < prev.price ? curr : prev);
             anchorLow = lowestFractal.price;
 
-             const relevantHighs = fractalHighs.filter(f => f.index < lowestFractal.index && f.index > lowestFractal.index - 300);
-             if (relevantHighs.length > 0) {
-                 const highestFractal = relevantHighs.reduce((prev, curr) => curr.price > prev.price ? curr : prev);
-                 anchorHigh = highestFractal.price;
-             } else {
-                 anchorHigh = Math.max(...highs.slice(Math.max(0, lowestFractal.index - 100), lowestFractal.index));
-             }
+            const relevantHighs = fractalHighs.filter(f => f.index < lowestFractal.index && f.index > lowestFractal.index - 300);
+            if (relevantHighs.length > 0) {
+                const highestFractal = relevantHighs.reduce((prev, curr) => curr.price > prev.price ? curr : prev);
+                anchorHigh = highestFractal.price;
+            } else {
+                anchorHigh = Math.max(...highs.slice(Math.max(0, lowestFractal.index - 100), lowestFractal.index));
+            }
         }
     }
-    
+
     // Safety check
     if (anchorHigh === -Infinity) anchorHigh = Math.max(...highs);
     if (anchorLow === Infinity) anchorLow = Math.min(...lows);
@@ -490,4 +490,58 @@ export function getMarketSession(): { session: 'ASIA' | 'LONDON' | 'NEW_YORK' | 
     if (hour >= 7 && hour < 13) return { session: 'LONDON', note: "Definición de Tendencia / Breakouts Reales" };
     if (hour >= 0 && hour < 7) return { session: 'ASIA', note: "Rango / Manipulación (Liquidity Hunts)" };
     return { session: 'OTHER', note: "Baja Liquidez / Cierre Diario" };
+}
+
+// NEW: Z-Score for Mean Reversion (Distance from EMA200 in StdDevs)
+export function calculateZScore(prices: number[], ema200: number, period: number = 20): number {
+    if (prices.length < period) return 0;
+    const currentPrice = prices[prices.length - 1];
+    const recentPrices = prices.slice(-period);
+
+    // Calculate StdDev of the price series itself
+    const meanPrice = recentPrices.reduce((a, b) => a + b, 0) / period;
+    const squaredDiffs = recentPrices.map(p => Math.pow(p - meanPrice, 2));
+    const variance = squaredDiffs.reduce((a, b) => a + b, 0) / period;
+    const stdDev = Math.sqrt(variance);
+
+    if (stdDev === 0) return 0;
+    return (currentPrice - ema200) / stdDev;
+}
+
+// NEW: Linear Regression Slope to detect flat vs trending EMAs
+export function calculateSlope(series: number[], period: number = 5): number {
+    if (series.length < period) return 0;
+    const y = series.slice(-period);
+    const n = y.length;
+
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    for (let i = 0; i < n; i++) {
+        sumX += i;
+        sumY += y[i];
+        sumXY += i * y[i];
+        sumXX += i * i;
+    }
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const avgValue = sumY / n;
+    return avgValue !== 0 ? (slope / avgValue) * 100 : 0;
+}
+
+// NEW: Pinball State Detection
+export function detectPinballState(
+    currentPrice: number,
+    ema50: number,
+    ema200: number,
+    trend: 'BULLISH' | 'BEARISH'
+): 'PINBALL_BUY' | 'PINBALL_SELL' | null {
+    if (trend === 'BULLISH') {
+        if (currentPrice > ema200 && currentPrice < ema50) {
+            return 'PINBALL_BUY';
+        }
+    } else {
+        if (currentPrice < ema200 && currentPrice > ema50) {
+            return 'PINBALL_SELL';
+        }
+    }
+    return null;
 }

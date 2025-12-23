@@ -6,13 +6,15 @@ import { analyzeMemeSignal } from './strategies/MemeStrategy';
 import { analyzeSwingSignal } from './strategies/SwingStrategy';
 import { analyzeBreakoutSignal } from './strategies/BreakoutStrategy';
 import { analyzeScalpSignal } from './strategies/ScalpStrategy';
+import { analyzePinballSignal } from './strategies/PinballStrategy'; // NEW
 import { getMacroContext, formatMacroForAI, type MacroContext } from './macroService';
 import {
     detectBullishDivergence, calculateIchimokuLines, calculateIchimokuCloud,
     calculateBollingerStats, calculateSMA, calculateEMA, calculateMACD,
     calculateEMAArray, calculateStdDev, calculateRSI, calculateStochRSI,
     calculateRSIArray, calculateCumulativeVWAP, calculateAutoFibs, calculateFractals, // NEW
-    calculateATR, calculateADX, calculatePivotPoints, formatVolume, getMarketSession
+    calculateATR, calculateADX, calculatePivotPoints, formatVolume, getMarketSession,
+    calculateZScore, calculateSlope // NEW
 } from './mathUtils';
 import { calculateVolumeProfile } from './volumeProfile';
 import { detectOrderBlocks } from './orderBlocks';
@@ -469,6 +471,10 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         const { bullishOB, bearishOB } = detectOrderBlocks(candles, atr, currentPrice);
         const { bullishFVG, bearishFVG } = detectFVG(candles, atr, currentPrice);
 
+        // NEW: Expert EMA Metrics (Z-Score & Slope)
+        const zScore = calculateZScore(prices, ema200);
+        const emaSlope = calculateSlope(calculateEMAArray(prices, 200), 10); // Check slope of EMA200 over last 10 bars
+
         // Calculate Confluence Analysis
         const confluenceAnalysis = calculatePOIs(
             currentPrice,
@@ -503,6 +509,8 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
             ema50,
             ema100,
             ema200,
+            zScore, // NEW
+            emaSlope, // NEW
             macd: {
                 line: macd.macdLine,
                 signal: macd.signalLine,
@@ -723,6 +731,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const { bullishOB, bearishOB } = detectOrderBlocks(candles.slice(0, checkIndex + 1), atr, currentPrice);
             const { bullishFVG, bearishFVG } = detectFVG(candles.slice(0, checkIndex + 1), atr, currentPrice);
 
+            // NEW: Expert EMA Metrics (Z-Score & Slope)
+            const zScore = calculateZScore(prices.slice(0, checkIndex + 1), ema200);
+            const emaSlope = calculateSlope(calculateEMAArray(prices.slice(0, checkIndex + 1), 200), 10);
+
             // Calculate Confluence for resistances/supports
             const confluenceAnalysis = calculatePOIs(
                 currentPrice,
@@ -747,6 +759,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 price: currentPrice,
                 rsi, stochRsi, adx, atr, rvol, vwap,
                 ema20, ema50, ema100, ema200,
+                zScore, // NEW
+                emaSlope, // NEW
                 macd: { line: macd.macdLine, signal: macd.signalLine, histogram: macd.histogram },
                 bollinger: { upper: bb.upper, lower: bb.lower, middle: bb.sma, bandwidth: bb.bandwidth },
                 pivots,
@@ -802,8 +816,25 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     );
                     strategyName = "SMC Liquidity";
                 } else if (strategyId === 'quant_volatility') {
-                    result = analyzeScalpSignal(prices.slice(0, checkIndex + 1), vwap, rsi);
-                    strategyName = "Quant Volatility";
+                    // NEW: Pinball Strategy integration (Priority)
+                    const slope200 = calculateSlope(calculateEMAArray(prices.slice(0, checkIndex + 1), 200), 10);
+                    const pinballResult = analyzePinballSignal(
+                        prices.slice(0, checkIndex + 1),
+                        lows.slice(0, checkIndex + 1),
+                        highs.slice(0, checkIndex + 1),
+                        ema50,
+                        ema200,
+                        slope200,
+                        adx
+                    );
+
+                    if (pinballResult) {
+                        result = pinballResult;
+                        strategyName = "Institutional Pinball";
+                    } else {
+                        result = analyzeScalpSignal(prices.slice(0, checkIndex + 1), vwap, rsi);
+                        strategyName = "Quant Volatility";
+                    }
                 } else if (strategyId === 'meme_hunter') {
                     result = analyzeMemeSignal(prices.slice(0, checkIndex + 1), vwap, rvol, rsi, stochRsi);
                     strategyName = "Meme Hunter";
@@ -1022,7 +1053,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         rsi: format(rsi),
                         vwapDist: format(vwapDist),
                         structure: structureNote,
-                        specificTrigger: specificTrigger
+                        specificTrigger: specificTrigger,
+                        zScore: format(zScore), // NEW
+                        emaSlope: format(emaSlope) // NEW
                     },
                     dcaPlan: dcaPlan, // NEW: Pasar el plan completo
                     harmonicPatterns: harmonicPatterns, // NEW: Pasar patrones armónicos

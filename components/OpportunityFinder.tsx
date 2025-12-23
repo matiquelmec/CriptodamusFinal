@@ -282,6 +282,22 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                             <span className="text-secondary">Estructura:</span>
                                             <span className="text-primary">{selectedSignal.metrics.structure}</span>
                                         </div>
+                                        {selectedSignal.metrics.zScore !== undefined && (
+                                            <div className="flex justify-between border-b border-border/50 pb-1">
+                                                <span className="text-secondary">Z-Score (Desviación):</span>
+                                                <span className={Math.abs(selectedSignal.metrics.zScore) > 2 ? 'text-accent font-bold' : 'text-primary'}>
+                                                    {selectedSignal.metrics.zScore}σ
+                                                </span>
+                                            </div>
+                                        )}
+                                        {selectedSignal.metrics.emaSlope !== undefined && (
+                                            <div className="flex justify-between border-b border-border/50 pb-1">
+                                                <span className="text-secondary">Fuerza Tendencia (Slope):</span>
+                                                <span className={Math.abs(selectedSignal.metrics.emaSlope) > 0.5 ? 'text-success font-bold' : 'text-secondary'}>
+                                                    {selectedSignal.metrics.emaSlope}°
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
                                     <p className="text-xs text-secondary italic">Métricas detalladas no disponibles para este tick.</p>

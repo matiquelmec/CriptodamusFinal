@@ -109,6 +109,8 @@ export interface TechnicalIndicators {
   ema50: number;
   ema100: number;
   ema200: number;
+  zScore: number; // NEW: Reversion to Mean (StdDevs from EMA200)
+  emaSlope: number; // NEW: Trend Momentum
   macd: {
     line: number;
     signal: number;
@@ -278,6 +280,8 @@ export interface AIOpportunity {
     vwapDist: number;
     structure: string;
     specificTrigger: string;
+    zScore?: number; // NEW
+    emaSlope?: number; // NEW
   };
   dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI
   harmonicPatterns?: import('./types-advanced').HarmonicPattern[]; // NEW: Patrones para UI
