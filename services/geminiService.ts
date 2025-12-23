@@ -299,6 +299,14 @@ export const streamMarketAnalysis = async function* (
                 bearishScore *= 1.3; // Favorecer shorts
             }
 
+            // REGLA 4: BTC CRASH MODE (NUEVO - Dynamic Sensitivity)
+            // Si BTC está en caída libre (Alta volatilidad + Bear), bloquear longs
+            if (btcRegime.regime === 'BEAR' && btcRegime.volatilityStatus === 'HIGH' && isAlt) {
+                bullishScore = 0; // Hard Block
+                bearishScore *= 1.5; // Sniper Short Opportunity
+                techData.technicalReasoning += "\nCRITICAL: BTC CRASH MODE ACTIVO. Longs bloqueados por seguridad sistémica.";
+            }
+
             // REGLA 4: Sniper Shorts (Liquidez)
             if (isAlt && btcRegime.regime === 'BEAR' &&
                 (btcDominance.trend === 'RISING' || usdtDominance.trend === 'RISING')) {
@@ -432,6 +440,11 @@ export const streamMarketAnalysis = async function* (
         } else {
             // Fallback
             response += `| **Sesión de Mercado** | ⚠️ N/A | Datos insuficientes para análisis de ORB. |\n`;
+        }
+
+        // NEW: CRASH MODE FEEDBACK IN TABLE
+        if (techData.technicalReasoning.includes('BTC CRASH MODE')) {
+            response += `| **🚨 ALERTA SISTÉMICA** | 📉 **CRASH MODE** | **LONGS BLOQUEADOS.** BTC cayendo con violencia. |\n`;
         }
 
         const trendNote = isRangeMarket

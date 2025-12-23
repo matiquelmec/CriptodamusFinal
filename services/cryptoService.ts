@@ -675,7 +675,6 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     } catch (error) {
         console.warn('[Scanner] Macro context unavailable, proceeding without macro filters:', error);
     }
-
     if (!market || market.length === 0) throw new Error("No market data available");
 
     // Scan all candidates if Memes (usually < 40), or top 60 for general (Increased from 40 for better coverage)
@@ -1127,6 +1126,54 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     marketRegime,
                     fibs
                 );
+
+                // --- FINAL SCORE ADJUSTMENT (CORRELATION FILTER) ---
+                // Dynamic Sensitivity Analysis
+
+                let finalPrimarySide = signalSide; // Use signalSide as primarySide for this context
+                let currentFinalScore = finalScore; // Use a new variable to avoid conflict with outer finalScore
+                let filterNote = "";
+
+                // Assuming btcCrashMode, btcTrend, and strategyId are available in this scope or passed in
+                // For this example, let's assume they are available or derived.
+                // If not, they would need to be passed as arguments or calculated.
+                const btcCrashMode = macroContext?.btcRegime.regime === 'BEAR' && macroContext?.btcRegime.volatilityStatus === 'HIGH';
+                const btcRegime = macroContext?.btcRegime.regime || 'RANGE';
+                const strategyId = getStrategyId(style); // Fixed: Use 'style' argument
+
+                if (btcCrashMode && finalPrimarySide === 'LONG') {
+                    // SCENARIO 1: CRASH MODE -> BLOCK LONGS (Hard Filter)
+                    // Unless it's a massive discount / oversold bounce (Mean Reversion)
+                    if (strategyId !== 'quant_volatility') { // Allow scalps
+                        currentFinalScore = 0;
+                        filterNote = " (Blocked by BTC Crash)";
+                    }
+                } else if (btcRegime === 'BEAR' && finalPrimarySide === 'LONG') {
+                    // SCENARIO 2: BEAR TREND -> PENALTY ON LONGS
+                    // Require higher quality setup
+                    if (currentFinalScore < 85) {
+                        currentFinalScore *= 0.5; // Penalize weak longs
+                        filterNote = " (Penalized: Trend Mismatch)";
+                    } else {
+                        filterNote = " (Decoupled Runner)";
+                    }
+                } else if (btcRegime === 'BULL' && finalPrimarySide === 'SHORT') {
+                    // SCENARIO 3: BULL TREND -> PENALTY ON SHORTS
+                    if (currentFinalScore < 85) {
+                        currentFinalScore *= 0.5;
+                        filterNote = " (Penalized: Trend Mismatch)";
+                    }
+                }
+
+                // --- FILTER: MIN SCORE ---
+                // Institutional Grade Quality Control
+                const MIN_SCORE = 60; // Standard
+
+                if (currentFinalScore < MIN_SCORE) return;
+
+                // Update the main finalScore with the adjusted value
+                finalScore = currentFinalScore;
+                detectionNote += filterNote; // Add filter note to detectionNote
 
                 const decimals = signalPrice > 1000 ? 2 : signalPrice > 1 ? 4 : 6;
                 const format = (n: number) => parseFloat(n.toFixed(decimals));
