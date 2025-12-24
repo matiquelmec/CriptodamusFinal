@@ -77,9 +77,7 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
         // Parallel Fetch: Open Interest + Funding Rate (Premium Index)
         const [oiData, fundingData, ratioRes] = await Promise.all([
             safeFetch(`${BINANCE_FUTURES_API}/openInterest?symbol=${fSymbol}`),
-            safeFetch(`${BINANCE_FUTURES_API}/premiumIndex?symbol=${fSymbol}`),
-            // Global Long/Short Ratio (Accounts) - Optional but good
-            safeFetch(`${BINANCE_FUTURES_API}/globalLongShortAccountRatio?symbol=${fSymbol}&period=5m&limit=1`)
+            safeFetch(`${BINANCE_FUTURES_API}/premiumIndex?symbol=${fSymbol}`) // Removed blocked globalLongShort to prevent CORS error
         ]);
 
         // If primary data failed (likely geoblocked), return defaults immediately
