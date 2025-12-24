@@ -164,8 +164,8 @@ export const subscribeToLivePrices = (marketData: MarketData[], callback: (data:
     if (isBinance) {
         // "Safe Mode" WebSocket:
         // 1. Strict Filter: Only connect to Top liquid assets to prevent "Invalid Symbol" disconnects
-        // 2. Stream Cap: Max 15 streams to prevent URL overflow
-        const MAX_STREAMS = 15;
+        // 2. Stream Cap: Max 10 streams to prevent URL overflow (Binance Limit)
+        const MAX_STREAMS = 10;
         const SAFE_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOGEUSDT', 'DOTUSDT', 'LINKUSDT', 'TRXUSDT', 'MATICUSDT', 'LTCUSDT', 'UNIUSDT', 'ATOMUSDT', 'SUIUSDT', 'NEARUSDT', 'APTUSDT'];
 
         const validStreams = marketData
@@ -777,9 +777,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
 
             // --- FILTRO DE VOLUMEN MÍNIMO (Calidad Profesional) ---
-            // No operar activos sin liquidez suficiente (Ajustado a 0.5 para permitir Asia Session/Ranges)
-            if (rvol < 0.5) {
-                console.log(`[Scanner] ${coin.symbol} descartado por volumen bajo (RVOL: ${rvol.toFixed(2)}x)`);
+            // No operar activos sin liquidez suficiente (Ajustado a 0.3 para ser menos agresivo con Majors en fin de semana/Asia)
+            if (rvol < 0.3) {
+                // console.log(`[Scanner] ${coin.symbol} descartado por volumen bajo (RVOL: ${rvol.toFixed(2)}x)`);
                 return; // Skip this opportunity
             }
 

@@ -56,7 +56,19 @@ const setCache = <T>(key: string, data: T) => {
  */
 export async function getDerivativesData(symbol: string): Promise<DerivativesData> {
     // Normalize symbol for Futures (BTCUSDT mostly)
-    const fSymbol = symbol.replace('/', '').toUpperCase();
+    // HANDLE SPECIAL 1000-PREFIX COINS (PEPE, BONK, FLOKI, etc.)
+    const checkSpot = symbol.replace('/', '').toUpperCase();
+    const map1000 = ['PEPE', 'BONK', 'FLOKI', 'SATS', 'RATS', 'CAT', 'X']; // Common 1000-prefix coins
+
+    let fSymbol = checkSpot;
+    const base = checkSpot.replace('USDT', '');
+
+    if (map1000.includes(base)) {
+        fSymbol = `1000${base}USDT`;
+    } else if (base === 'LUNA') {
+        fSymbol = 'LUNA2USDT'; // LUNA 2.0 on futures
+    }
+
     const cacheKey = `derivatives-${fSymbol}`;
 
     const cached = getCached<DerivativesData>(cacheKey);
