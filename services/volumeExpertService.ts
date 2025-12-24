@@ -62,35 +62,47 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
     const cached = getCached<DerivativesData>(cacheKey);
     if (cached) return cached;
 
+    // Helper to safely fetch with a default fallback
+    const safeFetch = async (url: string, defaultVal: any = null) => {
+        try {
+            const res = await fetchWithTimeout(url, 3000);
+            if (res.status === 451 || !res.ok) return null; // Silent fail
+            return await res.json();
+        } catch (e) {
+            return null; // Silent fail (Network/CORS)
+        }
+    };
+
     try {
         // Parallel Fetch: Open Interest + Funding Rate (Premium Index)
-        const [oiRes, fundingRes, ratioRes] = await Promise.all([
-            fetchWithTimeout(`${BINANCE_FUTURES_API}/openInterest?symbol=${fSymbol}`),
-            fetchWithTimeout(`${BINANCE_FUTURES_API}/premiumIndex?symbol=${fSymbol}`),
+        const [oiData, fundingData, ratioRes] = await Promise.all([
+            safeFetch(`${BINANCE_FUTURES_API}/openInterest?symbol=${fSymbol}`),
+            safeFetch(`${BINANCE_FUTURES_API}/premiumIndex?symbol=${fSymbol}`),
             // Global Long/Short Ratio (Accounts) - Optional but good
-            fetchWithTimeout(`${BINANCE_FUTURES_API}/globalLongShortAccountRatio?symbol=${fSymbol}&period=5m&limit=1`)
+            safeFetch(`${BINANCE_FUTURES_API}/globalLongShortAccountRatio?symbol=${fSymbol}&period=5m&limit=1`)
         ]);
 
-        if (!oiRes.ok || !fundingRes.ok) throw new Error('Binance Futures API Error');
+        // If primary data failed (likely geoblocked), return defaults immediately
+        if (!oiData || !fundingData) {
+            return {
+                openInterest: 0,
+                openInterestValue: 0,
+                fundingRate: 0,
+                fundingRateDaily: 0,
+                buySellRatio: 1
+            };
+        }
 
-        const oiData = await oiRes.json(); // { openInterest: "...", symbol: "..." }
-        const fundingData = await fundingRes.json(); // { lastFundingRate: "...", ... }
-
-        // Ratio might fail for smaller coins
+        // Ratio might fail for smaller coins or be blocked
         let buySellRatio = 1.0;
-        if (ratioRes.ok) {
-            const ratioData = await ratioRes.json();
-            if (Array.isArray(ratioData) && ratioData.length > 0) {
-                buySellRatio = parseFloat(ratioData[0].longShortRatio);
-            }
+        if (ratioRes && Array.isArray(ratioRes) && ratioRes.length > 0) {
+            buySellRatio = parseFloat(ratioRes[0].longShortRatio);
         }
 
         const openInterest = parseFloat(oiData.openInterest); // En monedas
         const fundingRate = parseFloat(fundingData.lastFundingRate);
         const price = parseFloat(fundingData.markPrice); // Use Mark Price specifically
 
-        // Annualized calc (funding * 3 * 365 for basic 8h periods)
-        // Just keeping simple daily projection here
         const fundingRateDaily = fundingRate * 3;
 
         const result: DerivativesData = {
@@ -105,7 +117,7 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
         return result;
 
     } catch (error) {
-        console.warn(`[VolumeExpert] Error fetching derivatives for ${symbol}:`, error);
+        // Catch-all (Logic errors)
         return {
             openInterest: 0,
             openInterestValue: 0,
