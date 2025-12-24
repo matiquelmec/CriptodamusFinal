@@ -66,7 +66,7 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
     const safeFetch = async (url: string, defaultVal: any = null) => {
         try {
             const res = await fetchWithTimeout(url, 3000);
-            if (res.status === 451 || !res.ok) return null; // Silent fail
+            if (res.status === 400 || res.status === 451 || !res.ok) return null; // Silent fail for Bad Request (Invalid Symbol) or Geoblock
             return await res.json();
         } catch (e) {
             return null; // Silent fail (Network/CORS)
@@ -75,7 +75,7 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
 
     try {
         // Parallel Fetch: Open Interest + Funding Rate (Premium Index)
-        const [oiData, fundingData, ratioRes] = await Promise.all([
+        const [oiData, fundingData] = await Promise.all([
             safeFetch(`${BINANCE_FUTURES_API}/openInterest?symbol=${fSymbol}`),
             safeFetch(`${BINANCE_FUTURES_API}/premiumIndex?symbol=${fSymbol}`) // Removed blocked globalLongShort to prevent CORS error
         ]);
@@ -91,11 +91,11 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
             };
         }
 
-        // Ratio might fail for smaller coins or be blocked
+        // Ratio blocked by CORS, defaulting to Neutral (1.0)
         let buySellRatio = 1.0;
-        if (ratioRes && Array.isArray(ratioRes) && ratioRes.length > 0) {
-            buySellRatio = parseFloat(ratioRes[0].longShortRatio);
-        }
+        // if (ratioRes && Array.isArray(ratioRes) && ratioRes.length > 0) {
+        //     buySellRatio = parseFloat(ratioRes[0].longShortRatio);
+        // }
 
         const openInterest = parseFloat(oiData.openInterest); // En monedas
         const fundingRate = parseFloat(fundingData.lastFundingRate);

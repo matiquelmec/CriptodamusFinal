@@ -78,8 +78,12 @@ const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
 
         const data = await response.json();
 
-        // Ignored symbols
-        const ignoredPatterns = ['USDCUSDT', 'FDUSDUSDT', 'TUSDUSDT', 'USDPUSDT', 'EURUSDT', 'DAIUSDT', 'BUSDUSDT', 'UPUSDT', 'DOWNUSDT', 'BULLUSDT', 'BEARUSDT', 'USDT', 'PAXGUSDT'];
+        // Ignored symbols (Stablecoins, Leverage tokens, Non-tradable)
+        const ignoredPatterns = [
+            'USDCUSDT', 'FDUSDUSDT', 'TUSDUSDT', 'USDPUSDT', 'EURUSDT', 'DAIUSDT', 'BUSDUSDT',
+            'UPUSDT', 'DOWNUSDT', 'BULLUSDT', 'BEARUSDT', 'USDT', 'PAXGUSDT',
+            'USDEUSDT', 'USD1USDT', 'BFUSDUSDT', 'AEURUSDT' // Added problematic symbols causing 400
+        ];
 
         let filteredData = data.filter((ticker: any) => {
             const symbol = ticker.symbol;
