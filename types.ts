@@ -316,6 +316,7 @@ export interface AIOpportunity {
     };
     isSqueeze?: boolean; // NEW
     macdDivergence?: string; // NEW: Description or Type
+    rsiDivergence?: string; // NEW: Description or Type
     volumeExpert?: import('./types-advanced').VolumeExpertAnalysis; // NEW: Institutional Data for UI
   };
   dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI

@@ -812,6 +812,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             // NEW: EXPERT MACD & RSI ANALYSIS
             const macdDivergence = detectGenericDivergence(candles, macd.histogramValues, 'MACD_HIST');
+            const rsiDivergence = detectGenericDivergence(candles, rsiArray, 'RSI'); // FIXED: Added to Scanner
             const isSqueeze = bb.bandwidth < 10 && Math.abs(macd.histogram) < (currentPrice * 0.0005);
 
             // NEW: EXPERT VOLUME ANALYSIS (Scanner Level)
@@ -1299,6 +1300,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         },
                         isSqueeze: isSqueeze, // NEW
                         macdDivergence: macdDivergence?.description, // NEW
+                        rsiDivergence: rsiDivergence?.description, // NEW: Added to UI
                         volumeExpert: volumeExpert // NEW: Pass to UI
                     },
                     dcaPlan: dcaPlan, // NEW: Pasar el plan completo
