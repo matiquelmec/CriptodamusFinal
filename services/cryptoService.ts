@@ -158,10 +158,21 @@ export const subscribeToLivePrices = (marketData: MarketData[], callback: (data:
     const isBinance = sampleId === sampleId.toUpperCase() && sampleId.includes('USDT');
 
     if (isBinance) {
-        // CAP streams to prevent "URI Too Long" 414 error or WS connection failure
-        const MAX_STREAMS = 40;
-        const validStreams = marketData.slice(0, MAX_STREAMS).map(m => `${m.id.toLowerCase()}@miniTicker`);
-        const url = `${BINANCE_WS_BASE}${validStreams.join('/')}`;
+        // "Safe Mode" WebSocket:
+        // 1. Strict Filter: Only connect to Top liquid assets to prevent "Invalid Symbol" disconnects
+        // 2. Stream Cap: Max 15 streams to prevent URL overflow
+        const MAX_STREAMS = 15;
+        const SAFE_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOGEUSDT', 'DOTUSDT', 'LINKUSDT', 'TRXUSDT', 'MATICUSDT', 'LTCUSDT', 'UNIUSDT', 'ATOMUSDT', 'SUIUSDT', 'NEARUSDT', 'APTUSDT'];
+
+        const validStreams = marketData
+            .map(m => m.id)
+            .filter(id => SAFE_SYMBOLS.includes(id))
+            .slice(0, MAX_STREAMS)
+            .map(id => id.toLowerCase() + '@miniTicker');
+
+        // Use Binance Vision endpoint (more stable for browsers)
+        const VISION_WS = 'wss://data-stream.binance.vision/stream?streams=';
+        const url = `${VISION_WS}${validStreams.join('/')}`;
         const ws = new WebSocket(url);
 
         ws.onmessage = (event) => {
