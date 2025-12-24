@@ -575,76 +575,72 @@ export const streamMarketAnalysis = async function* (
             response += `\n`;
         }
 
+        // NEW: EXPERT VOLUME ANALYSIS (Institutional Flow)
+        if (techData.volumeExpert) {
+            const { derivatives, cvd, coinbasePremium } = techData.volumeExpert;
 
-        response += `\n`;
+            response += `### 3.7. Análisis de Flujo Institucional (Smart Money)\n`;
+            response += `| Métrica | Valor | Interpretación |\n`;
+            response += `|---|---|---|\n`;
+
+            // Coinbase Premium
+            const premiumIcon = coinbasePremium.signal === 'INSTITUTIONAL_BUY' ? '🟢' : coinbasePremium.signal === 'INSTITUTIONAL_SELL' ? '🔴' : '⚖️';
+            response += `| **Coinbase Premium** | ${premiumIcon} ${(coinbasePremium.gapPercent * 100).toFixed(4)}% | ${coinbasePremium.reasoning} |\n`;
+
+            // Funding Rate
+            const fundingIcon = Math.abs(derivatives.fundingRate) > 0.05 ? '⚠️' : 'ℹ️';
+            response += `| **Funding Rate** | ${fundingIcon} ${derivatives.fundingRate.toFixed(4)}% | Sentimiento de derivados: ${derivatives.fundingRate > 0.01 ? 'Bullish (Caro)' : derivatives.fundingRate < -0.01 ? 'Bearish (Descuento)' : 'Neutral'}. |\n`;
+
+            // CVD
+            const cvdIcon = cvd.trend === 'BULLISH' ? '🟢' : cvd.trend === 'BEARISH' ? '🔴' : '⚖️';
+            response += `| **CVD Sintético** | ${cvdIcon} ${cvd.trend} | Divergencia: ${cvd.divergence ? '⚠️ ' + cvd.divergence : 'Ninguna (Confirmado)'}. |\n`;
+
+            // Open Interest
+            response += `| **Interés Abierto** | 💰 $${(derivatives.openInterestValue / 1000000).toFixed(2)}M | Capital total activo en futuros. |\n`;
+
+            response += `\n`;
+        }
+
+        // IV. PLAN DE EJECUCIÓN DCA
+        const scenarioA_Score = finalIsBullish ? bullishScore : bearishScore;
+        const scenarioB_Score = finalIsBullish ? bearishScore : bullishScore;
+        const scenarioA_Conf = Math.min(Math.round(scenarioA_Score), 10);
+        const scenarioB_Conf = Math.min(Math.round(scenarioB_Score), 10);
+
+        const scenarioATitle = `## IV.A Escenario Principal: ${finalPrimarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${scenarioA_Conf}/10)`;
+
+        response += generateDCAExecutionPlan(
+            price, atr, fibonacci, confluenceAnalysis as any,
+            techData.marketRegime, finalPrimarySide,
+            scenarioATitle, rsiExpert, macroContext,
+            executionPhilosophy, // Passed from AI
+            techData.tier // NEW: Tier logic
+        );
+
+        // ESCENARIO B: ALTERNATIVO (HEDGING)
+        const secondarySide = finalPrimarySide === 'LONG' ? 'SHORT' : 'LONG';
+        const scenarioBTitle = `## IV.B Escenario Alternativo (Cobertura): ${secondarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${scenarioB_Conf}/10)`;
+
+        // Note: We don't generate AI philosophy for Scenario B to save tokens/time, or we could. 
+        // For now, let it fallback to default text by passing undefined.
+        response += generateDCAExecutionPlan(
+            price, atr, fibonacci, confluenceAnalysis as any,
+            techData.marketRegime, secondarySide,
+            scenarioBTitle, rsiExpert, macroContext,
+            undefined, // No philosophy for B
+            techData.tier // NEW: Tier logic
+        );
+
+        yield response;
     }
-
-    // NEW: EXPERT VOLUME ANALYSIS (Institutional Flow)
-    if (techData.volumeExpert) {
-        const { derivatives, cvd, coinbasePremium } = techData.volumeExpert;
-
-        response += `### 3.7. Análisis de Flujo Institucional (Smart Money)\n`;
-        response += `| Métrica | Valor | Interpretación |\n`;
-        response += `|---|---|---|\n`;
-
-        // Coinbase Premium
-        const premiumIcon = coinbasePremium.signal === 'INSTITUTIONAL_BUY' ? '🟢' : coinbasePremium.signal === 'INSTITUTIONAL_SELL' ? '🔴' : '⚖️';
-        response += `| **Coinbase Premium** | ${premiumIcon} ${(coinbasePremium.gapPercent * 100).toFixed(4)}% | ${coinbasePremium.reasoning} |\n`;
-
-        // Funding Rate
-        const fundingIcon = Math.abs(derivatives.fundingRate) > 0.05 ? '⚠️' : 'ℹ️';
-        response += `| **Funding Rate** | ${fundingIcon} ${derivatives.fundingRate.toFixed(4)}% | Sentimiento de derivados: ${derivatives.fundingRate > 0.01 ? 'Bullish (Caro)' : derivatives.fundingRate < -0.01 ? 'Bearish (Descuento)' : 'Neutral'}. |\n`;
-
-        // CVD
-        const cvdIcon = cvd.trend === 'BULLISH' ? '🟢' : cvd.trend === 'BEARISH' ? '🔴' : '⚖️';
-        response += `| **CVD Sintético** | ${cvdIcon} ${cvd.trend} | Divergencia: ${cvd.divergence ? '⚠️ ' + cvd.divergence : 'Ninguna (Confirmado)'}. |\n`;
-
-        // Open Interest
-        response += `| **Interés Abierto** | 💰 $${(derivatives.openInterestValue / 1000000).toFixed(2)}M | Capital total activo en futuros. |\n`;
-
-        response += `\n`;
-    }
-
-    // IV. PLAN DE EJECUCIÓN DCA
-    const scenarioA_Score = finalIsBullish ? bullishScore : bearishScore;
-    const scenarioB_Score = finalIsBullish ? bearishScore : bullishScore;
-    const scenarioA_Conf = Math.min(Math.round(scenarioA_Score), 10);
-    const scenarioB_Conf = Math.min(Math.round(scenarioB_Score), 10);
-
-    const scenarioATitle = `## IV.A Escenario Principal: ${finalPrimarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${scenarioA_Conf}/10)`;
-
-    response += generateDCAExecutionPlan(
-        price, atr, fibonacci, confluenceAnalysis as any,
-        techData.marketRegime, finalPrimarySide,
-        scenarioATitle, rsiExpert, macroContext,
-        executionPhilosophy, // Passed from AI
-        techData.tier // NEW: Tier logic
-    );
-
-    // ESCENARIO B: ALTERNATIVO (HEDGING)
-    const secondarySide = finalPrimarySide === 'LONG' ? 'SHORT' : 'LONG';
-    const scenarioBTitle = `## IV.B Escenario Alternativo (Cobertura): ${secondarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${scenarioB_Conf}/10)`;
-
-    // Note: We don't generate AI philosophy for Scenario B to save tokens/time, or we could. 
-    // For now, let it fallback to default text by passing undefined.
-    response += generateDCAExecutionPlan(
-        price, atr, fibonacci, confluenceAnalysis as any,
-        techData.marketRegime, secondarySide,
-        scenarioBTitle, rsiExpert, macroContext,
-        undefined, // No philosophy for B
-        techData.tier // NEW: Tier logic
-    );
-
-    yield response;
-}
     // ... Legacy conversational logic ...
     else if (msg.includes('riesgo') || msg.includes('stop') || msg.includes('sl')) {
-    yield`### 🛡️ Clase de Gestión de Riesgo (ATR)\nEl ATR (Average True Range) mide cuánto se mueve el precio en promedio por vela. Úsalo para colocar tu Stop Loss fuera del "ruido" normal.\n\n**Datos actuales:**\n- ATR: $${atr.toFixed(4)}\n\n**Cálculo de Stop Loss (LONG vs SHORT):**\n- **LONG (Compra):** Precio Entrada - (1.5 x ATR)\n- **SHORT (Venta):** Precio Entrada + (1.5 x ATR)\n\n**Ejemplo Práctico:**\n- Long: $${(price - (atr * 1.5)).toFixed(4)}\n- Short: $${(price + (atr * 1.5)).toFixed(4)}\n\n*Regla de Oro: Si tu SL está muy lejos, reduce el tamaño de tu posición para mantener el riesgo en dólares constante.*`;
-}
-else {
-    yield`**Sistema Autónomo:** Datos capturados para **${techData.symbol}**.\n\n`;
-    yield`📊 **Resumen Rápido:**\n• Precio: $${price}\n• Tendencia: ${price > ema200 ? '✅ Alcista' : '🔻 Bajista'}\n\nℹ️ _Mensaje recibido: "${msg}". Escribe "Analisis" para ver el reporte experto._`;
-}
+        yield `### 🛡️ Clase de Gestión de Riesgo (ATR)\nEl ATR (Average True Range) mide cuánto se mueve el precio en promedio por vela. Úsalo para colocar tu Stop Loss fuera del "ruido" normal.\n\n**Datos actuales:**\n- ATR: $${atr.toFixed(4)}\n\n**Cálculo de Stop Loss (LONG vs SHORT):**\n- **LONG (Compra):** Precio Entrada - (1.5 x ATR)\n- **SHORT (Venta):** Precio Entrada + (1.5 x ATR)\n\n**Ejemplo Práctico:**\n- Long: $${(price - (atr * 1.5)).toFixed(4)}\n- Short: $${(price + (atr * 1.5)).toFixed(4)}\n\n*Regla de Oro: Si tu SL está muy lejos, reduce el tamaño de tu posición para mantener el riesgo en dólares constante.*`;
+    }
+    else {
+        yield `**Sistema Autónomo:** Datos capturados para **${techData.symbol}**.\n\n`;
+        yield `📊 **Resumen Rápido:**\n• Precio: $${price}\n• Tendencia: ${price > ema200 ? '✅ Alcista' : '🔻 Bajista'}\n\nℹ️ _Mensaje recibido: "${msg}". Escribe "Analisis" para ver el reporte experto._`;
+    }
 };
 
 // Helper to format strategy name nicely
