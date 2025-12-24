@@ -6,7 +6,26 @@ import { MarketRegime } from "../types-advanced";
 // Initialize Gemini API
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 const genAI = new GoogleGenerativeAI(API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Fast & Efficient
+
+// Define models with fallback priority
+const modelPrimary = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const modelFallback = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+// Helper: Try primary, then fallback
+async function generateWithFallback(prompt: string): Promise<string> {
+    try {
+        const result = await modelPrimary.generateContent(prompt);
+        return result.response.text();
+    } catch (error: any) {
+        console.warn("Primary model failed, retrying with fallback...", error.message);
+        try {
+            const result = await modelFallback.generateContent(prompt);
+            return result.response.text();
+        } catch (fallbackError) {
+            throw error; // If both fail, throw original error
+        }
+    }
+}
 
 /**
  * NARRATIVE SERVICE
@@ -63,9 +82,8 @@ export const generateInvestmentThesis = async (context: NarrativeContext): Promi
         LANGUAGE: Spanish (Español Neutro).
         `;
 
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        return response.text();
+        const responseText = await generateWithFallback(prompt);
+        return responseText;
     } catch (error) {
         console.error("Gemini API Error:", error);
         return generateFallbackNarrative(context);
@@ -91,8 +109,7 @@ export const generateExecutionPlanNarrative = async (context: NarrativeContext, 
         LANGUAGE: Spanish.
         `;
 
-        const result = await model.generateContent(prompt);
-        return result.response.text();
+        return await generateWithFallback(prompt);
     } catch (error) {
         return generateFallbackExecutionNarrative(side);
     }
