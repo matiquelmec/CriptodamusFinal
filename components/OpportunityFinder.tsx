@@ -349,6 +349,41 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                 )}
                             </div>
 
+                            {/* 2.5. INSTITUTIONAL VOLUME & FLOW (NEW) */}
+                            {selectedSignal.metrics?.volumeExpert && (
+                                <div className="bg-surface rounded-xl p-5 border border-border col-span-2 md:col-span-1">
+                                    <h4 className="text-xs font-bold text-purple-400 uppercase mb-3 flex items-center gap-2">
+                                        <TrendingUp size={14} /> Flujo Institucional (Smart Money)
+                                    </h4>
+                                    <div className="space-y-3 font-mono text-xs">
+                                        <div className="flex justify-between border-b border-border/50 pb-1">
+                                            <span className="text-secondary">Coinbase Premium:</span>
+                                            <span className={selectedSignal.metrics.volumeExpert.coinbasePremium.signal === 'INSTITUTIONAL_BUY' ? 'text-success font-bold' : selectedSignal.metrics.volumeExpert.coinbasePremium.signal === 'INSTITUTIONAL_SELL' ? 'text-danger font-bold' : 'text-primary'}>
+                                                {selectedSignal.metrics.volumeExpert.coinbasePremium.gapPercent.toFixed(3)}%
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between border-b border-border/50 pb-1">
+                                            <span className="text-secondary">Funding Rate:</span>
+                                            <span className={Math.abs(selectedSignal.metrics.volumeExpert.derivatives.fundingRate) > 0.01 ? 'text-warning font-bold' : 'text-primary'}>
+                                                {selectedSignal.metrics.volumeExpert.derivatives.fundingRate.toFixed(4)}%
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between border-b border-border/50 pb-1">
+                                            <span className="text-secondary">CVD Sintético:</span>
+                                            <span className={selectedSignal.metrics.volumeExpert.cvd.trend === 'BULLISH' ? 'text-success font-bold' : selectedSignal.metrics.volumeExpert.cvd.trend === 'BEARISH' ? 'text-danger font-bold' : 'text-secondary'}>
+                                                {selectedSignal.metrics.volumeExpert.cvd.trend}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between border-b border-border/50 pb-1">
+                                            <span className="text-secondary">Open Interest:</span>
+                                            <span className="text-primary font-bold">
+                                                ${(selectedSignal.metrics.volumeExpert.derivatives.openInterestValue / 1000000).toFixed(1)}M
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* 3. INTERPRETATION */}
                             <div className="bg-blue-500/5 rounded-xl p-5 border border-blue-500/20 col-span-2 md:col-span-1 flex flex-col justify-center">
                                 <h4 className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center gap-2">

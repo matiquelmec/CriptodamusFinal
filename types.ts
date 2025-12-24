@@ -161,6 +161,9 @@ export interface TechnicalIndicators {
 
   harmonicPatterns?: import('./types-advanced').HarmonicPattern[];
 
+  // NEW: Expert Volume & Derivatives
+  volumeExpert?: import('./types-advanced').VolumeExpertAnalysis;
+
   technicalReasoning: string;
   invalidated: boolean; // Si el precio ya tocó SL o TP
 
@@ -312,6 +315,7 @@ export interface AIOpportunity {
     };
     isSqueeze?: boolean; // NEW
     macdDivergence?: string; // NEW: Description or Type
+    volumeExpert?: import('./types-advanced').VolumeExpertAnalysis; // NEW: Institutional Data for UI
   };
   dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI
   harmonicPatterns?: import('./types-advanced').HarmonicPattern[]; // NEW: Patrones para UI

@@ -299,6 +299,34 @@ export const streamMarketAnalysis = async function* (
                 bearishScore *= 1.3; // Favorecer shorts
             }
 
+            // NEW: EXPERT VOLUME ANALYSIS LOGIC (SMART MONEY)
+            if (techData.volumeExpert) {
+                const { derivatives, coinbasePremium, cvd } = techData.volumeExpert;
+
+                // 1. Funding Rate Extremes (Contrarian)
+                if (derivatives.fundingRate > 0.05) { // Extreme Greed
+                    bearishScore += 3; // Short Squeeze likely
+                } else if (derivatives.fundingRate < -0.05) { // Extreme Fear
+                    bullishScore += 3; // Long Squeeze likely
+                }
+
+                // 2. Coinbase Premium (Institutional Conviction)
+                if (coinbasePremium.signal === 'INSTITUTIONAL_BUY') {
+                    bullishScore += 4; // High Trust Signal
+                } else if (coinbasePremium.signal === 'INSTITUTIONAL_SELL') {
+                    bearishScore += 4;
+                }
+
+                // 3. CVD Divergences (Microstructure Verification)
+                if (cvd.trend === 'BEARISH') {
+                    // Aggressors Selling -> Penalize Longs
+                    bullishScore -= 1;
+                } else if (cvd.trend === 'BULLISH') {
+                    // Aggressors Buying -> Penalize Shorts
+                    bearishScore -= 1;
+                }
+            }
+
             // REGLA 4: BTC CRASH MODE (NUEVO - Dynamic Sensitivity)
             // Si BTC está en caída libre (Alta volatilidad + Bear), bloquear longs
             if (btcRegime.regime === 'BEAR' && btcRegime.volatilityStatus === 'HIGH' && isAlt) {

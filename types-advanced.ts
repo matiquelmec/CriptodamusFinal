@@ -143,3 +143,34 @@ export interface DivergenceSignal {
     expectedMove: number;            // Expected % move
     confidence: number;              // 0-100
 }
+
+// --- EXPERT VOLUME ANALYSIS (NEW) ---
+
+export interface DerivativesData {
+    openInterest: number;           // En Moneda (ej: BTC)
+    openInterestValue: number;      // En USD
+    fundingRate: number;            // Funding Rate actual (0.01% = 0.0001)
+    fundingRateDaily: number;       // Annualized approximation or Daily
+    buySellRatio: number;           // Long/Short Ratio accounts
+}
+
+export interface CVDData {
+    current: number;                // Cumulative Volume Delta actual
+    trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    divergence: 'BULLISH_ABSORPTION' | 'BEARISH_EXHAUSTION' | 'NONE';
+    candleDelta: number;            // Delta de la vela actual
+}
+
+export interface VolumeExpertAnalysis {
+    derivatives: DerivativesData;
+    cvd: CVDData;
+    coinbasePremium: {
+        index: number;              // Gap: (CoinbasePrice - BinancePrice)
+        gapPercent: number;         // Gap en %
+        signal: 'INSTITUTIONAL_BUY' | 'INSTITUTIONAL_SELL' | 'NEUTRAL';
+    };
+    liquidity: {
+        bidAskSpread: number;
+        marketDepthScore: number;   // 0-100 score de liquidez
+    };
+}

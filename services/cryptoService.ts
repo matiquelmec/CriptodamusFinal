@@ -27,6 +27,7 @@ import { detectMarketRegime } from './marketRegimeDetector';
 import { detectGenericDivergence } from './divergenceDetector'; // NEW
 import { selectStrategies } from './strategySelector';
 import { calculateDCAPlan } from './dcaCalculator';
+import { getExpertVolumeAnalysis } from './volumeExpertService'; // NEW: Expert Volume Service
 
 
 // PRIMARY: Binance Vision (CORS friendly for public data)
@@ -385,12 +386,14 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
 
     try {
         // PARALLEL FETCH: 15m (Main) + 1H (Fractal) + 4H (Supreme) + 1D (Bias) + 1W (Cycle)
-        const [candles, candles1h, candles4h, candles1d, candles1w] = await Promise.all([
+        // AND NEW: EXPERT VOLUME ANALYSIS (Parallelized)
+        const [candles, candles1h, candles4h, candles1d, candles1w, volumeExpert] = await Promise.all([
             fetchCandles(binanceSymbol, '15m'),
             fetchCandles(binanceSymbol, '1h').catch(() => []),
             fetchCandles(binanceSymbol, '4h').catch(() => []),
             fetchCandles(binanceSymbol, '1d').catch(() => []), // NEW: 1D Fetch
-            fetchCandles(binanceSymbol, '1w').catch(() => [])  // NEW: 1W Fetch
+            fetchCandles(binanceSymbol, '1w').catch(() => []),  // NEW: 1W Fetch
+            getExpertVolumeAnalysis(binanceSymbol).catch(e => undefined) // NEW: Expert Volume (Fail-safe)
         ]);
 
         if (candles.length < 50) return null;
@@ -589,6 +592,9 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
                 tp5: fibs.tp5
             },
             harmonicPatterns, // NEW
+
+            // NEW: Expert Volume Data Analysis
+            volumeExpert,
 
             tier, // NEW: Tier for Risk Management (S/A/B/C)
             ichimokuData: ichimokuData || undefined, // NEW
@@ -791,6 +797,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const macdDivergence = detectGenericDivergence(candles, macd.histogramValues, 'MACD_HIST');
             const isSqueeze = bb.bandwidth < 10 && Math.abs(macd.histogram) < (currentPrice * 0.0005);
 
+            // NEW: EXPERT VOLUME ANALYSIS (Scanner Level)
+            let volumeExpert = undefined;
+            try {
+                // Only fetch for coins that pass basic filters to save API calls
+                if (rvol > 0.3) {
+                    volumeExpert = await getExpertVolumeAnalysis(coin.symbol).catch(() => undefined);
+                }
+            } catch (e) { }
+
             // NEW: EXPERT RSI (Cardwell)
             const rsiExpertResults = analyzeRSIExpert(prices.slice(0, checkIndex + 1), rsiArray.slice(0, checkIndex + 1));
 
@@ -832,6 +847,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 pivots,
                 fibonacci: fibs,
                 harmonicPatterns: harmonicPatterns, // NEW: Include Harmonics
+                volumeExpert, // NEW: Include for Strategy Logic
                 technicalReasoning: "",
                 invalidated: false,
                 trendStatus: {
@@ -1265,7 +1281,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                             target: techIndicators.rsiExpert?.target || null
                         },
                         isSqueeze: isSqueeze, // NEW
-                        macdDivergence: macdDivergence?.description // NEW
+                        macdDivergence: macdDivergence?.description, // NEW
+                        volumeExpert: volumeExpert // NEW: Pass to UI
                     },
                     dcaPlan: dcaPlan, // NEW: Pasar el plan completo
                     harmonicPatterns: harmonicPatterns, // NEW: Pasar patrones armónicos

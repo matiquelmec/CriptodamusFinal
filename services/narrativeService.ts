@@ -43,7 +43,15 @@ export const generateInvestmentThesis = async (context: NarrativeContext): Promi
         - RSI: ${context.technicalIndicators.rsi.toFixed(2)}
         - EMA200 Structure: Price is ${context.price > context.technicalIndicators.ema200 ? "ABOVE" : "BELOW"} EMA200
         - ADX (Trend Strength): ${context.technicalIndicators.adx.toFixed(2)}
+        - ADX (Trend Strength): ${context.technicalIndicators.adx.toFixed(2)}
         - Volatility (ATR): $${context.technicalIndicators.atr.toFixed(4)}
+        ${context.technicalIndicators.volumeExpert ? `
+        EXPERT VOLUME METRICS (INSTITUTIONAL):
+        - Open Interest: ${(context.technicalIndicators.volumeExpert.derivatives.openInterestValue / 1000000).toFixed(1)}M USD
+        - Funding Rate: ${context.technicalIndicators.volumeExpert.derivatives.fundingRate.toFixed(4)}% (${context.technicalIndicators.volumeExpert.derivatives.fundingRate > 0.01 ? 'HIGH/GREED' : 'NORMAL'})
+        - CVD (Delta): ${context.technicalIndicators.volumeExpert.cvd.trend} (${context.technicalIndicators.volumeExpert.cvd.current.toFixed(0)})
+        - Coinbase Premium: ${context.technicalIndicators.volumeExpert.coinbasePremium.signal} (Gap: ${context.technicalIndicators.volumeExpert.coinbasePremium.gapPercent.toFixed(3)}%)
+        ` : ''}
         
         TASK:
         Write a SHORT "Investment Thesis" (max 3 sentences).
