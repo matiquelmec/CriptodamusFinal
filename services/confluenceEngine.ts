@@ -2,7 +2,7 @@ import { TechnicalIndicators } from '../types';
 import { VolumeProfile } from './volumeProfile';
 import { OrderBlock } from './orderBlocks';
 import { FairValueGap } from './fairValueGaps';
-import { AutoFibsResult } from '../types-advanced';
+import { AutoFibsResult, HarmonicPattern } from '../types-advanced';
 
 export interface POI {
     price: number;
@@ -33,7 +33,8 @@ export function calculatePOIs(
     bullishOBs: OrderBlock[],
     bearishOBs: OrderBlock[],
     bullishFVGs: FairValueGap[],
-    bearishFVGs: FairValueGap[]
+    bearishFVGs: FairValueGap[],
+    harmonicPatterns: HarmonicPattern[] = [] // NEW: Optional for backward compatibility
 ): ConfluenceAnalysis {
     const supportPOIs: POI[] = [];
     const resistancePOIs: POI[] = [];
@@ -139,6 +140,18 @@ export function calculatePOIs(
 
     bearishFVGs.filter(fvg => !fvg.filled && fvg.midpoint > currentPrice).forEach(fvg => {
         addOrUpdatePOI(resistancePOIs, fvg.midpoint, 3, 'Bearish FVG', 'RESISTANCE');
+    });
+
+    // 7. HARMONIC PATTERNS (Tier S - Structural)
+    harmonicPatterns.forEach(pattern => {
+        if (pattern.direction === 'BULLISH') {
+            // PRZ (Potential Reversal Zone) is Support
+            // HIGH SCORE: 4 (Almost max, harmonics are geometric laws)
+            addOrUpdatePOI(supportPOIs, pattern.prz, 4, `Bullish ${pattern.type} PRZ`, 'SUPPORT');
+        } else {
+            // PRZ is Resistance
+            addOrUpdatePOI(resistancePOIs, pattern.prz, 4, `Bearish ${pattern.type} PRZ`, 'RESISTANCE');
+        }
     });
 
     // SYNERGY BONUS: Fib + Order Block

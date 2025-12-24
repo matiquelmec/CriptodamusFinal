@@ -247,7 +247,7 @@ const calculateFundamentalTier = (symbol: string, isMeme: boolean): FundamentalT
     return 'B';
 };
 
-const fetchCandles = async (symbolId: string, interval: string): Promise<{ timestamp: number, close: number, volume: number, high: number, low: number, open: number }[]> => {
+export const fetchCandles = async (symbolId: string, interval: string): Promise<{ timestamp: number, close: number, volume: number, high: number, low: number, open: number }[]> => {
     const isBinance = symbolId === symbolId.toUpperCase() && symbolId.endsWith('USDT');
 
     try {
@@ -521,6 +521,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
 
         // NEW: EXPERT MACD & RSI ANALYSIS (Missing in previous version)
         const macdDivergence = detectGenericDivergence(candles, macd.histogramValues, 'MACD_HIST');
+        const rsiDivergence = detectGenericDivergence(candles, rsiArray, 'RSI'); // FIXED: Added missing variable
         const isSqueeze = bb.bandwidth < 10 && Math.abs(macd.histogram) < (currentPrice * 0.0005);
         const rsiExpertResults = analyzeRSIExpert(prices, rsiArray);
 
@@ -566,6 +567,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
             zScore,
             emaSlope,
             macdDivergence, // NEW
+            rsiDivergence,  // NEW request: Regular RSI Divergence
             isSqueeze,      // NEW
             rsiExpert: {    // NEW
                 range: rsiExpertResults.range.type,

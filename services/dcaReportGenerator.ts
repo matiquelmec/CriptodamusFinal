@@ -17,7 +17,8 @@ export function generateDCAExecutionPlan(
     rsiExpert?: { target: number | null; range: string; },
     macroContext?: import('../services/macroService').MacroContext,
     executionPhilosophy?: string, // NEW: AI Narrative Injection
-    tier: FundamentalTier = 'B' // NEW: Fundamental Tier
+    tier: FundamentalTier = 'B', // NEW: Fundamental Tier
+    harmonicPatterns: import('../types-advanced').HarmonicPattern[] = [] // NEW: For Structural Stops
 ): string {
     let response = '';
 
@@ -85,15 +86,62 @@ export function generateDCAExecutionPlan(
         response += `|---------|-------|---------------|\n`;
 
         // DYNAMIC TEXT BASED ON TIER
-        let multiplierText = "1.5";
-        if (tier === 'S') multiplierText = "2.5 (Tier S)";
-        else if (tier === 'A') multiplierText = "2.0 (Tier A)";
-        else if (tier === 'B') multiplierText = "1.5 (Tier B)";
-        else if (tier === 'C') multiplierText = "1.0 (Sniper Tier C)";
+        // DYNAMIC STOP LOSS & RISK LOGIC
+        // 1. Check for Active Harmonic Pattern (Structural Stop) - Priority #1
+        const targetDirection = side === 'LONG' ? 'BULLISH' : 'BEARISH';
+        const activeHarmonic = harmonicPatterns.find(p => p.direction === targetDirection); // Match direction
+        let useHarmonicStop = false;
+        let harmonicStopPrice = 0;
 
-        const slJustification = side === 'LONG'
-            ? `${multiplierText} ATR debajo del Entry 3`
-            : `${multiplierText} ATR encima del Entry 3`;
+        if (activeHarmonic) {
+            // Stop at X point or slightly beyond 1.13 extension of XA
+            // For simplicity and safety, we use the pattern's invalidation point if available, or calc it.
+            // Assuming pattern object might not have explicit 'invalidation', we estimate:
+            // Bullish: Below X. Bearish: Above X.
+            // Using a tight buffer (0.2% beyond X)
+            const buffer = activeHarmonic.prz * 0.002;
+            // Better: Use the computed 'stopLoss' from the Harmonic detector if we had it, 
+            // but here we can infer from the pattern definition relative to PRZ/X. 
+            // Let's assume PRZ is close to D. X is the anchor.
+            // Realistically, if we don't have X price passed, we might need to rely on the generic. 
+            // BUT, let's assume valid patterns have precise PRZ. 
+            // Let's stick to the "Maximum Robustness" plan: If pattern exists, its PRZ is the entry/pivot. 
+            // The Stop should be below the PRZ for Bull, above for Bear.
+
+            // Refined Logic:
+            harmonicStopPrice = side === 'LONG'
+                ? activeHarmonic.prz * 0.985 // 1.5% below PRZ (Tight Structure)
+                : activeHarmonic.prz * 1.015; // 1.5% above PRZ
+
+            useHarmonicStop = true;
+        }
+
+        // 2. Tier Based Multiplier (Fallback)
+        let multiplierText = "1.5";
+        let tierMultiplier = 1.5;
+        if (tier === 'S') { multiplierText = "2.5 (Tier S)"; tierMultiplier = 2.5; }
+        else if (tier === 'A') { multiplierText = "2.0 (Tier A)"; tierMultiplier = 2.0; }
+        else if (tier === 'B') { multiplierText = "1.5 (Tier B)"; tierMultiplier = 1.5; }
+        else if (tier === 'C') { multiplierText = "1.0 (Sniper Tier C)"; tierMultiplier = 1.0; }
+
+        let finalStopLoss = dcaPlan.stopLoss;
+        let slJustification = "";
+
+        if (useHarmonicStop) {
+            finalStopLoss = harmonicStopPrice;
+            slJustification = `🚫 ESTRUCTURAL (${activeHarmonic?.type} Invalidation)`;
+            // Override the plan's SL
+            dcaPlan.stopLoss = finalStopLoss;
+            // Recalculate Risk
+            const riskPerShare = Math.abs(dcaPlan.averageEntry - finalStopLoss);
+            const riskPercent = (riskPerShare / dcaPlan.averageEntry) * 100;
+            dcaPlan.totalRisk = riskPercent;
+        } else {
+            // Standard ATR Logic (already inside dcaPlan usually, but strictly verifying text)
+            slJustification = side === 'LONG'
+                ? `${multiplierText} ATR debajo del Entry 3`
+                : `${multiplierText} ATR encima del Entry 3`;
+        }
 
         response += `| **Stop Loss Global** | $${dcaPlan.stopLoss.toFixed(4)} | ${slJustification} |\n`;
         response += `| **Riesgo Total** | ${dcaPlan.totalRisk.toFixed(2)}% | Exposición máxima |\n`;

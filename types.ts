@@ -152,6 +152,7 @@ export interface TechnicalIndicators {
 
   // NEW: EXPERT METRICS
   macdDivergence?: import('./services/divergenceDetector').Divergence;
+  rsiDivergence?: import('./services/divergenceDetector').Divergence | null; // NEW
   isSqueeze?: boolean;
   rsiExpert?: {
     range: string;

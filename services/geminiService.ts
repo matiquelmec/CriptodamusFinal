@@ -585,7 +585,8 @@ export const streamMarketAnalysis = async function* (
 
             // Coinbase Premium
             const premiumIcon = coinbasePremium.signal === 'INSTITUTIONAL_BUY' ? '🟢' : coinbasePremium.signal === 'INSTITUTIONAL_SELL' ? '🔴' : '⚖️';
-            response += `| **Coinbase Premium** | ${premiumIcon} ${(coinbasePremium.gapPercent * 100).toFixed(4)}% | ${coinbasePremium.reasoning} |\n`;
+            const premiumReason = coinbasePremium.signal === 'INSTITUTIONAL_BUY' ? 'Compras Institucionales (Coinbase > Binance)' : coinbasePremium.signal === 'INSTITUTIONAL_SELL' ? 'Ventas Institucionales (Coinbase < Binance)' : 'Sin arbitraje significativo';
+            response += `| **Coinbase Premium** | ${premiumIcon} ${(coinbasePremium.gapPercent * 100).toFixed(4)}% | ${premiumReason} |\n`;
 
             // Funding Rate
             const fundingIcon = Math.abs(derivatives.fundingRate) > 0.05 ? '⚠️' : 'ℹ️';
@@ -614,7 +615,8 @@ export const streamMarketAnalysis = async function* (
             techData.marketRegime, finalPrimarySide,
             scenarioATitle, rsiExpert, macroContext,
             executionPhilosophy, // Passed from AI
-            techData.tier // NEW: Tier logic
+            techData.tier, // NEW: Tier logic
+            techData.harmonicPatterns || [] // NEW: Structural Stops
         );
 
         // ESCENARIO B: ALTERNATIVO (HEDGING)
@@ -628,7 +630,8 @@ export const streamMarketAnalysis = async function* (
             techData.marketRegime, secondarySide,
             scenarioBTitle, rsiExpert, macroContext,
             undefined, // No philosophy for B
-            techData.tier // NEW: Tier logic
+            techData.tier, // NEW: Tier logic
+            techData.harmonicPatterns || [] // NEW: Structural Stops
         );
 
         yield response;
