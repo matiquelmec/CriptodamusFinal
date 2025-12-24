@@ -206,7 +206,7 @@ async function getBTCDominance(): Promise<BTCDominanceData> {
         };
 
     } catch (error) {
-        console.warn('[MacroService] BTC Dominance fetch failed (CoinGecko):', error);
+        // console.warn('[MacroService] BTC Dominance fetch failed (CoinGecko):', error);
 
         // Fallback explícito para no engañar al usuario
         return {
@@ -238,7 +238,7 @@ async function getUSDTDominance(): Promise<USDTDominanceData> {
         return { current, trend };
 
     } catch (error) {
-        console.warn('[MacroService] USDT Dominance fetch failed:', error);
+        // console.warn('[MacroService] USDT Dominance fetch failed:', error);
         return { current: 5.0, trend: 'STABLE' };
     }
 }
