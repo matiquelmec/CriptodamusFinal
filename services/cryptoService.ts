@@ -174,9 +174,9 @@ export const subscribeToLivePrices = (marketData: MarketData[], callback: (data:
             .slice(0, MAX_STREAMS)
             .map(id => id.toLowerCase() + '@miniTicker');
 
-        // Use Binance Vision endpoint (more stable for browsers)
-        const VISION_WS = 'wss://data-stream.binance.vision/stream?streams=';
-        const url = `${VISION_WS}${validStreams.join('/')}`;
+        // Use Binance Mainnet endpoint (more robust)
+        const MAIN_WS = 'wss://stream.binance.com:9443/stream?streams=';
+        const url = `${MAIN_WS}${validStreams.join('/')}`;
         const ws = new WebSocket(url);
 
         ws.onmessage = (event) => {
