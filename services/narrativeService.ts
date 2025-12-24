@@ -1,48 +1,11 @@
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { TechnicalIndicators } from "../types";
 import { MarketRegime } from "../types-advanced";
 
-// Initialize Gemini API
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
-const genAI = new GoogleGenerativeAI(API_KEY);
-
-// Define models with fallback priority - More extensive list to avoid 404s
-const MODELS_TO_TRY = [
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-flash-001",
-    "gemini-1.5-flash-8b",
-    "gemini-1.0-pro",
-    "gemini-pro"
-];
-
-// Helper: Iterate through models until one works
-async function generateWithFallback(prompt: string): Promise<string> {
-    let lastError: any;
-
-    for (const modelName of MODELS_TO_TRY) {
-        try {
-            const model = genAI.getGenerativeModel({ model: modelName });
-            const result = await model.generateContent(prompt);
-            return result.response.text();
-        } catch (error: any) {
-            // Only log debug to keep console clean for user, unless it's the last one
-            console.debug(`Model ${modelName} failed:`, error.message);
-            lastError = error;
-            // Continue to next model
-        }
-    }
-
-    // If all fail, throw the last error (or handle graceful fallback in caller)
-    console.warn("All Gemini models failed. Check API Key or Region.");
-    throw lastError;
-}
-
 /**
- * NARRATIVE SERVICE
- * The "Creative Brain" that translates the "Logical Brain's" data into human text.
- * Strict Rule: DO NOT invent numbers. Use provided data.
+ * NARRATIVE SERVICE (Algorithmic Edition)
+ * Provides institutional-grade analysis using deterministic logic.
+ * 100% Robust. 0% Hallucinations. No API Key required.
  */
 
 export interface NarrativeContext {
@@ -54,92 +17,91 @@ export interface NarrativeContext {
     confidenceScore: number;
 }
 
+// ----------------------------------------------------------------------------
+// THESIS GENERATION ENGINE
+// ----------------------------------------------------------------------------
+
 export const generateInvestmentThesis = async (context: NarrativeContext): Promise<string> => {
-    if (!API_KEY) {
-        console.warn("⚠️ No API Key found for Gemini. Using fallback narrative.");
-        return generateFallbackNarrative(context);
+    // 1. Analyze Core Market Structure
+    const regime = context.marketRegime.regime; // 'TRENDING' | 'RANGING' | 'VOLATILE'
+    const sentiment = context.sentiment;
+    const rsi = context.technicalIndicators.rsi;
+    const adx = context.technicalIndicators.adx;
+
+    // 2. Analyze Institutional Footprint (if available)
+    let institutionalNote = "";
+    if (context.technicalIndicators.volumeExpert) {
+        const { fundingRate } = context.technicalIndicators.volumeExpert.derivatives;
+        const premiumSignal = context.technicalIndicators.volumeExpert.coinbasePremium.signal; // 'INSTITUTIONAL_BUY' | ...
+
+        if (premiumSignal === 'INSTITUTIONAL_BUY') {
+            institutionalNote = " Detectamos acumulación institucional agresiva via Coinbase Premium.";
+        } else if (premiumSignal === 'INSTITUTIONAL_SELL') {
+            institutionalNote = " Cuidado: Institucionales distribuyendo en Coinbase Spot.";
+        }
+
+        if (fundingRate > 0.015) {
+            institutionalNote += " El mercado de futuros está sobre-apalancado (Funding Alto). Riesgo de corrección.";
+        }
     }
 
-    try {
-        const prompt = `
-        Act as an Elite Hedge Fund Manager explaining a trade setup to a high-net-worth client.
-        
-        CONTEXT:
-        - Asset: ${context.symbol}
-        - Current Price: $${context.price}
-        - Market Regime: ${context.marketRegime.regime} (Confidence: ${context.marketRegime.confidence}%)
-        - Technical Bias: ${context.sentiment} (Score: ${context.confidenceScore}/10)
-        
-        KEY METRICS (DO NOT INVENT NUMBERS, USE THESE):
-        - RSI: ${context.technicalIndicators.rsi.toFixed(2)}
-        - EMA200 Structure: Price is ${context.price > context.technicalIndicators.ema200 ? "ABOVE" : "BELOW"} EMA200
-        - ADX (Trend Strength): ${context.technicalIndicators.adx.toFixed(2)}
-        - ADX (Trend Strength): ${context.technicalIndicators.adx.toFixed(2)}
-        - Volatility (ATR): $${context.technicalIndicators.atr.toFixed(4)}
-        ${context.technicalIndicators.volumeExpert ? `
-        EXPERT VOLUME METRICS (INSTITUTIONAL):
-        - Open Interest: ${(context.technicalIndicators.volumeExpert.derivatives.openInterestValue / 1000000).toFixed(1)}M USD
-        - Funding Rate: ${context.technicalIndicators.volumeExpert.derivatives.fundingRate.toFixed(4)}% (${context.technicalIndicators.volumeExpert.derivatives.fundingRate > 0.01 ? 'HIGH/GREED' : 'NORMAL'})
-        - CVD (Delta): ${context.technicalIndicators.volumeExpert.cvd.trend} (${context.technicalIndicators.volumeExpert.cvd.current.toFixed(0)})
-        - Coinbase Premium: ${context.technicalIndicators.volumeExpert.coinbasePremium.signal} (Gap: ${context.technicalIndicators.volumeExpert.coinbasePremium.gapPercent.toFixed(3)}%)
-        ` : ''}
-        
-        TASK:
-        Write a SHORT "Investment Thesis" (max 3 sentences).
-        - Sentence 1: The "Why" based on Market Regime (e.g. "We are buying the dip in a Bull Market").
-        - Sentence 2: The Technical Trigger (e.g. "Price reclaimed the Daily EMA200 with RSI divergence").
-        - Sentence 3: The Risk/Warning (e.g. "However, Bitcoin dominance suggests caution").
-        
-        TONE: Professional, confident, institutional. No "To the moon" slang.
-        LANGUAGE: Spanish (Español Neutro).
-        `;
+    // 3. Assemble Thesis based on Scenarios
 
-        const responseText = await generateWithFallback(prompt);
-        return responseText;
-    } catch (error) {
-        console.error("Gemini API Error:", error);
-        return generateFallbackNarrative(context);
+    // SCENARIO A: STRONG UPTREND (Bullish + High ADX)
+    if (sentiment === "BULLISH" && regime === "TRENDING") {
+        if (adx > 25) {
+            return `Estructura alcista sólida confirmada por momentum. El precio muestra fortaleza sobre medias móviles clave.${institutionalNote} Buscamos continuidad en la tendencia, priorizando entradas en retrocesos (buy the dip).`;
+        } else {
+            return `Tendencia alcista presente pero perdiendo fuerza momentum (ADX bajo).${institutionalNote} Precaución con falsos rompimientos; esperar confirmación de volumen antes de añadir posiciones.`;
+        }
     }
+
+    // SCENARIO B: STRONG DOWNTREND (Bearish + High ADX)
+    if (sentiment === "BEARISH" && regime === "TRENDING") {
+        if (rsi < 30) {
+            return `Tendencia bajista extendida, pero RSI en sobreventa sugiere un posible rebote técnico a corto plazo (Dead Cat Bounce).${institutionalNote} No es momento de shortear agresivamente, esperar pullbacks a resistencia.`;
+        }
+        return `Dominio total de la oferta. Estructura de máximos y mínimos decrecientes intacta.${institutionalNote} El camino de menor resistencia es a la baja; vender en rebotes a la EMA200.`;
+    }
+
+    // SCENARIO C: RANGE / CHOP (Ranging)
+    if (regime === "RANGING" || sentiment === "NEUTRAL") {
+        if (rsi > 70) {
+            return `El activo se encuentra en la parte alta de un rango lateral.${institutionalNote} Probabilidad alta de rechazo en resistencia. Estrategia de reversión a la media (Mean Reversion) favorecida.`;
+        } else if (rsi < 30) {
+            return `El precio testea el soporte inferior del rango actual.${institutionalNote} Oportunidad de compra de bajo riesgo con stop ajustado bajo el mínimo previo.`;
+        }
+        return `Fase de consolidación e indecisión. El precio oscila sin dirección clara entre zonas de liquidez.${institutionalNote} Mantenerse al margen o scalpear los extremos del rango.`;
+    }
+
+    // SCENARIO D: VOLATILE / UNCERTAIN
+    return `Condiciones de alta volatilidad detectadas. El mercado busca definir su próxima dirección macro.${institutionalNote} Se recomienda reducir el tamaño de posición y ampliar los stops para evitar ruido ("wicks").`;
 };
 
+// ----------------------------------------------------------------------------
+// EXECUTION PLAN ENGINE
+// ----------------------------------------------------------------------------
+
 export const generateExecutionPlanNarrative = async (context: NarrativeContext, side: 'LONG' | 'SHORT'): Promise<string> => {
-    if (!API_KEY) return generateFallbackExecutionNarrative(side);
+    const atr = context.technicalIndicators.atr;
+    const volatility = atr / context.price; // Percentage volatility roughly
 
-    try {
-        const prompt = `
-        Act as a Senior Quant Trader defining an execution strategy.
-        
-        CONTEXT:
-        - Side: ${side}
-        - Symbol: ${context.symbol}
-        - Volatility (ATR): $${context.technicalIndicators.atr}
-        
-        TASK:
-        Explain the execution philosophy for this specific trade in 1-2 sentences.
-        Focus on how we are entering (DCA? Breakout? Sniper?) based on the volatility.
-        
-        LANGUAGE: Spanish.
-        `;
-
-        return await generateWithFallback(prompt);
-    } catch (error) {
-        return generateFallbackExecutionNarrative(side);
+    // 1. High Volatility Strategy
+    if (volatility > 0.04) { // >4% daily ATR implies huge moves
+        return side === 'LONG'
+            ? "MERCADO VOLÁTIL: Evitar entradas a mercado. Usar órdenes limit en soportes profundos y aplicar DCA amplio (3-4 zonas) para promediar ante mechas violentas."
+            : "MERCADO VOLÁTIL: No perseguir el precio. Colocar órdenes de venta (Limit) escalonadas en resistencias clave. Stop loss holgado requerido.";
     }
-}
 
-// --- FALLBACKS (Old Logic for safety) ---
-function generateFallbackNarrative(ctx: NarrativeContext): string {
-    const isBullish = ctx.sentiment === "BULLISH";
-    if (ctx.marketRegime.regime === "TRENDING") {
-        return isBullish
-            ? "El activo muestra una fuerte tendencia alcista. Estamos buscando continuidad del momentum."
-            : "La estructura de mercado es claramente bajista. Buscamos ventas en los rebotes.";
+    // 2. Low Volatility / Trending Strategy (Sniper)
+    if (context.technicalIndicators.adx > 30) {
+        return side === 'LONG'
+            ? "MOMENTUM ACTIVADO: Entrada tipo 'Sniper' o Breakout. El mercado tiene fuerza; se puede entrar con stop loss ajustado bajo la EMA de corto plazo (EMA20)."
+            : "MOMENTUM BAJISTA: Entrada agresiva en ruptura de soportes o re-test inmediato. Mantener stop ajustado para proteger capital rápido.";
     }
-    return "El mercado se encuentra en una fase de consolidación. Operaremos los extremos del rango con precaución.";
-}
 
-function generateFallbackExecutionNarrative(side: string): string {
+    // 3. Default / Range Strategy (Standard DCA)
     return side === 'LONG'
-        ? "Utilizaremos una entrada escalonada (DCA) para mejorar nuestro precio promedio ante la volatilidad."
-        : "Buscaremos vender en zonas de resistencia clave para minimizar el riesgo de atrapamiento.";
+        ? "ESTRATEGIA ESTÁNDAR: Ejecución por zonas de liquidez. Dividir capital en 2 entradas: 40% al precio actual/soporte inmediato y 60% en el siguiente nivel estructural (DCA defensivo)."
+        : "ESTRATEGIA ESTÁNDAR: Venta táctica en resistencia. Si el precio rompe en contra con volumen, cortar pérdidas rápido. Tomar ganancias parciales en el soporte medio.";
 }
