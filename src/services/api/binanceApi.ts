@@ -284,6 +284,16 @@ export const fetchCandles = async (symbolId: string, interval: string): Promise<
     }
 };
 
+export const fetchOrderBook = async (symbol: string, limit: number = 50): Promise<{ bids: [string, string][], asks: [string, string][] } | null> => {
+    try {
+        const res = await fetchWithTimeout(`${BINANCE_API_BASE}/depth?symbol=${symbol}&limit=${limit}`, {}, 3000);
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (e) {
+        return null;
+    }
+};
+
 export const subscribeToSymbol = (symbol: string, onUpdate: (data: any) => void, onError: (error: any) => void) => {
     // Implementación básica de suscripción para un solo símbolo
     // Reutiliza la lógica de subscribeToLivePrices pero filtrando

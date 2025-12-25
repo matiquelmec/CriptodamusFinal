@@ -432,6 +432,47 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                     *El algoritmo detectó esta oportunidad porque la confluencia matemática supera el 70% de probabilidad.*
                                 </p>
                             </div>
+
+                            {/* 3.5 LIQUIDATION & DEPTH PROFILE (GOD TIER) */}
+                            {selectedSignal.metrics?.volumeExpert?.liquidity?.liquidationClusters && (
+                                <div className="bg-surface rounded-xl p-5 border border-border col-span-2">
+                                    <h4 className="text-xs font-bold text-pink-400 uppercase mb-3 flex items-center gap-2">
+                                        <Target size={14} /> Mapa de Liquidaciones (Imanes)
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <span className="text-[10px] text-secondary uppercase font-bold">Top Clústeres (Riesgo Alto)</span>
+                                            {selectedSignal.metrics.volumeExpert.liquidity.liquidationClusters.slice(0, 3).map((cluster, i) => (
+                                                <div key={i} className="flex justify-between items-center text-xs p-2 bg-background rounded border border-border/50">
+                                                    <span className={cluster.type === 'SHORT_LIQ' ? 'text-danger' : 'text-success'}>
+                                                        {cluster.type === 'SHORT_LIQ' ? 'Shorts' : 'Longs'} {cluster.strength}x
+                                                    </span>
+                                                    <span className="font-mono text-primary font-bold">
+                                                        ${formatPrice(cluster.priceMin)} - ${formatPrice(cluster.priceMax)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <span className="text-[10px] text-secondary uppercase font-bold">Muros Detectados (Orderbook)</span>
+                                            {selectedSignal.metrics.volumeExpert.liquidity.orderBook?.bidWall ? (
+                                                <div className="flex justify-between items-center text-xs p-2 bg-success/10 rounded border border-success/20">
+                                                    <span className="text-success font-bold">Muro Compra</span>
+                                                    <span className="font-mono text-primary">${formatPrice(selectedSignal.metrics.volumeExpert.liquidity.orderBook.bidWall.price)}</span>
+                                                </div>
+                                            ) : <div className="text-xs text-secondary italic p-2">Sin muros de compra relevantes</div>}
+
+                                            {selectedSignal.metrics.volumeExpert.liquidity.orderBook?.askWall ? (
+                                                <div className="flex justify-between items-center text-xs p-2 bg-danger/10 rounded border border-danger/20">
+                                                    <span className="text-danger font-bold">Muro Venta</span>
+                                                    <span className="font-mono text-primary">${formatPrice(selectedSignal.metrics.volumeExpert.liquidity.orderBook.askWall.price)}</span>
+                                                </div>
+                                            ) : <div className="text-xs text-secondary italic p-2">Sin muros de venta relevantes</div>}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                         </div>
 
                         {/* 4. RISK MANAGEMENT */}
@@ -629,6 +670,20 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-orange-400">
                         <Zap size={12} />
                         <span className="font-bold">RSI BREAK</span>
+                    </div>
+                )}
+                {/* NEW: Liquidation Magnet Badge */}
+                {data.metrics?.volumeExpert?.liquidity?.liquidationClusters && data.metrics.volumeExpert.liquidity.liquidationClusters.length > 0 && (
+                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-pink-500 animate-pulse">
+                        <Target size={12} />
+                        <span className="font-bold">MAGNET</span>
+                    </div>
+                )}
+                {/* NEW: Wall Badge */}
+                {data.metrics?.volumeExpert?.liquidity?.orderBook && (data.metrics.volumeExpert.liquidity.orderBook.bidWall || data.metrics.volumeExpert.liquidity.orderBook.askWall) && (
+                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-yellow-500">
+                        <Layers size={12} />
+                        <span className="font-bold">WALL</span>
                     </div>
                 )}
             </div>

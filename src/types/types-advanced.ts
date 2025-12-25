@@ -140,6 +140,35 @@ export interface DivergenceSignal {
     confidence: number;              // 0-100
 }
 
+// --- LIQUIDATION & ORDERBOOK ANALYSIS (NEW) ---
+export interface LiquidationLevel {
+    price: number;
+    volumev: number; // Volume Volatility? Or just Volume at level? Let's assume estimated volume
+    leverage: '100x' | '50x' | '25x' | '10x';
+    type: 'SHORT_LIQ' | 'LONG_LIQ';
+}
+
+export interface LiquidationCluster {
+    priceMin: number;
+    priceMax: number;
+    totalVolume: number;
+    strength: number; // 0-100
+    type: 'SHORT_LIQ' | 'LONG_LIQ';
+}
+
+export interface OrderBookLevel {
+    price: number;
+    quantity: number;
+    total: number; // Cumulative up to this level?
+}
+
+export interface OrderBookAnalysis {
+    bidWall: { price: number; volume: number; strength: number } | null;
+    askWall: { price: number; volume: number; strength: number } | null;
+    buyingPressure: number; // Bid/Ask Ratio
+    spoofing: boolean; // Detected spoofing
+}
+
 // --- EXPERT VOLUME ANALYSIS (NEW) ---
 
 export interface DerivativesData {
@@ -172,5 +201,7 @@ export interface VolumeExpertAnalysis {
     liquidity: {
         bidAskSpread: number;
         marketDepthScore: number;   // 0-100 score de liquidez
+        orderBook?: OrderBookAnalysis; // Optional (only fetched on demand)
+        liquidationClusters?: LiquidationCluster[]; // Optional
     };
 }

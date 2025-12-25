@@ -1,5 +1,6 @@
 import { VolumeExpertAnalysis, DerivativesData, CVDData } from '../types/types-advanced';
-import { fetchCandles } from './api/binanceApi';
+import { fetchCandles, fetchOrderBook } from './api/binanceApi';
+import { estimateLiquidationClusters, analyzeOrderBook } from './engine/liquidationEngine';
 
 // ============================================================================
 // CONSTANTS & ENDPOINTS
@@ -385,4 +386,30 @@ export async function getExpertVolumeAnalysis(symbol: string): Promise<VolumeExp
             marketDepthScore: liquidityScore
         }
     };
+}
+
+/**
+ * ENRICHMENT: Add Depth & Liquidation Analysis (Heavy, Call only on High Score)
+ */
+export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: VolumeExpertAnalysis, highs: number[], lows: number[], currentPrice: number): Promise<VolumeExpertAnalysis> {
+    const enriched = { ...currentAnalysis };
+
+    // 1. Calculate Liquidation Clusters (Pure Math, Cheap)
+    enriched.liquidity.liquidationClusters = estimateLiquidationClusters(highs, lows, currentPrice);
+
+    // 2. Fetch Orderbook (Heavy I/O)
+    // Map Symbol correctly (USDT only for now)
+    const normalizedSymbol = symbol.replace('/', '').toUpperCase();
+    const orderBook = await fetchOrderBook(normalizedSymbol);
+
+    if (orderBook) {
+        enriched.liquidity.orderBook = analyzeOrderBook(orderBook.bids, orderBook.asks, currentPrice);
+
+        // Adjust Market Depth Score based on Wall presence
+        if (enriched.liquidity.orderBook.bidWall && enriched.liquidity.orderBook.bidWall.strength > 50) {
+            enriched.liquidity.marketDepthScore = Math.min(100, enriched.liquidity.marketDepthScore + 10);
+        }
+    }
+
+    return enriched;
 }

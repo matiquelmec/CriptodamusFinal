@@ -26,7 +26,7 @@ import { detectMarketRegime } from '../marketRegimeDetector';
 import { detectGenericDivergence } from '../divergenceDetector';
 import { selectStrategies } from '../strategySelector';
 import { calculateDCAPlan } from '../dcaCalculator';
-import { getExpertVolumeAnalysis } from '../volumeExpertService';
+import { getExpertVolumeAnalysis, enrichWithDepthAndLiqs } from '../volumeExpertService';
 import {
     fetchCryptoData,
     fetchCandles,
@@ -430,6 +430,59 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
 
                 try {
+                    // --- GOD TIER ENRICHMENT (SNIPER MODE) ---
+                    // Only run for candidates that passed the threshold to save API calls
+                    if (volumeExpert && finalScore >= 60) {
+                        try {
+                            volumeExpert = await enrichWithDepthAndLiqs(coin.symbol, volumeExpert, highs, lows, currentPrice);
+
+                            // CONFLUENCE LOGIC: Smart Money Intent
+                            const liqs = volumeExpert.liquidity.liquidationClusters || [];
+                            const book = volumeExpert.liquidity.orderBook;
+
+                            // 1. LIQUIDATION MAGNETS
+                            if (liqs.length > 0) {
+                                const closestPool = liqs[0]; // Already sorted by proximity
+                                const distToLiq = Math.abs((closestPool.priceMin - currentPrice) / currentPrice) * 100;
+
+                                if (distToLiq < 2.0) { // Within 2%
+                                    if (signalSide === 'LONG' && closestPool.type === 'SHORT_LIQ') {
+                                        detectionNote += " | 🧲 Magnet: Short Liqs";
+                                        finalScore += 5;
+                                    } else if (signalSide === 'SHORT' && closestPool.type === 'LONG_LIQ') {
+                                        detectionNote += " | 🧲 Magnet: Long Liqs";
+                                        finalScore += 5;
+                                    }
+                                }
+                            }
+
+                            // 2. ORDERBOOK WALLS (Resistance/Support)
+                            if (book) {
+                                if (signalSide === 'LONG') {
+                                    if (book.bidWall && book.bidWall.strength > 0) {
+                                        const distToWall = ((currentPrice - book.bidWall.price) / currentPrice) * 100;
+                                        if (distToWall < 3 && distToWall > 0) { // Wall below us confirmed
+                                            detectionNote += " | 🧱 Buy Wall Support";
+                                            finalScore += 10;
+                                        }
+                                    }
+                                } else if (signalSide === 'SHORT') {
+                                    if (book.askWall && book.askWall.strength > 0) {
+                                        const distToWall = ((book.askWall.price - currentPrice) / currentPrice) * 100;
+                                        if (distToWall < 3 && distToWall > 0) { // Wall above us confirmed
+                                            detectionNote += " | 🧱 Sell Wall Resistance";
+                                            finalScore += 10;
+                                        }
+                                    }
+                                }
+                            }
+
+                        } catch (enrichErr) {
+                            // Fail silently, don't discard the opportunity just because depth failed
+                            // console.warn("Enrichment failed", enrichErr);
+                        }
+                    }
+
                     const candles1h = await fetchCandles(coin.id, '1h');
                     if (candles1h.length >= 200) {
                         const prices1h = candles1h.map(c => c.close);

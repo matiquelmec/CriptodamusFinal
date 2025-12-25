@@ -302,7 +302,32 @@ export const streamMarketAnalysis = async function* (
 
             // NEW: EXPERT VOLUME ANALYSIS LOGIC (SMART MONEY)
             if (techData.volumeExpert) {
-                const { derivatives, coinbasePremium, cvd } = techData.volumeExpert;
+                const { derivatives, coinbasePremium, cvd, liquidity } = techData.volumeExpert;
+
+                // 0. LIQUIDATION MAGNETS (GOD TIER)
+                if (liquidity?.liquidationClusters && liquidity.liquidationClusters.length > 0) {
+                    const closest = liquidity.liquidationClusters[0];
+                    const dist = Math.abs((closest.priceMin - price) / price);
+                    if (dist < 0.02) { // Within 2%
+                        if (closest.type === 'SHORT_LIQ') {
+                            bullishScore += 4; // Magnet Pull Up
+                        } else if (closest.type === 'LONG_LIQ') {
+                            bearishScore += 4; // Magnet Pull Down
+                        }
+                    }
+                }
+
+                // 0.5 ORDERBOOK WALLS (GOD TIER)
+                if (liquidity?.orderBook) {
+                    if (liquidity.orderBook.bidWall && liquidity.orderBook.bidWall.strength > 50) {
+                        const dist = Math.abs((price - liquidity.orderBook.bidWall.price) / price);
+                        if (dist < 0.03) bullishScore += 3; // Support Wall
+                    }
+                    if (liquidity.orderBook.askWall && liquidity.orderBook.askWall.strength > 50) {
+                        const dist = Math.abs((liquidity.orderBook.askWall.price - price) / price);
+                        if (dist < 0.03) bearishScore += 3; // Resistance Wall
+                    }
+                }
 
                 // 1. Funding Rate Extremes (Contrarian)
                 if (derivatives.fundingRate > 0.05) { // Extreme Greed
@@ -604,7 +629,7 @@ export const streamMarketAnalysis = async function* (
 
         // NEW: EXPERT VOLUME ANALYSIS (Institutional Flow)
         if (techData.volumeExpert) {
-            const { derivatives, cvd, coinbasePremium } = techData.volumeExpert;
+            const { derivatives, cvd, coinbasePremium, liquidity } = techData.volumeExpert;
 
             response += `### 3.7. Análisis de Flujo Institucional (Smart Money)\n`;
             response += `| Métrica | Valor | Interpretación |\n`;
@@ -627,6 +652,30 @@ export const streamMarketAnalysis = async function* (
 
             // Open Interest
             response += `| **Interés Abierto** | 💰 $${(derivatives.openInterestValue / 1000000).toFixed(2)}M | Capital total activo en futuros. |\n`;
+
+            // Orderbook & Liquidity (God Tier)
+            if (liquidity) {
+                response += `\n| **Liquidez (God Tier)** | **Estado** | **Detalle** |\n`;
+                response += `|---|---|---|\n`;
+
+                if (liquidity.liquidationClusters && liquidity.liquidationClusters.length > 0) {
+                    // Show top 2 clusters
+                    liquidity.liquidationClusters.slice(0, 2).forEach(c => {
+                        const typeIcon = c.type === 'SHORT_LIQ' ? '🧲🟢' : '🧲🔴';
+                        const typeName = c.type === 'SHORT_LIQ' ? 'Imán Alcista (Short Liqs)' : 'Imán Bajista (Long Liqs)';
+                        response += `| **${typeName}** | ${typeIcon} | Zona $${c.priceMin.toFixed(2)} - $${c.priceMax.toFixed(2)} (x${c.strength} leverage) |\n`;
+                    });
+                }
+
+                if (liquidity.orderBook) {
+                    if (liquidity.orderBook.bidWall) {
+                        response += `| **Muro de Compra** | 🧱🟢 Soporte | $${liquidity.orderBook.bidWall.price.toFixed(2)} (Fuerza: ${liquidity.orderBook.bidWall.strength}) |\n`;
+                    }
+                    if (liquidity.orderBook.askWall) {
+                        response += `| **Muro de Venta** | 🧱🔴 Resistencia | $${liquidity.orderBook.askWall.price.toFixed(2)} (Fuerza: ${liquidity.orderBook.askWall.strength}) |\n`;
+                    }
+                }
+            }
 
             response += `\n`;
         }
