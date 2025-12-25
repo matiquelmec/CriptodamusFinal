@@ -30,6 +30,7 @@ import { getExpertVolumeAnalysis } from '../volumeExpertService';
 import {
     fetchCryptoData,
     fetchCandles,
+    checkBinanceHealth,
     MEME_SYMBOLS
 } from '../api/binanceApi';
 import {
@@ -109,6 +110,13 @@ function applyMacroFilters(
 // --- MAIN LOGIC (Refactored from cryptoService.ts) ---
 
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {
+    // 0. HEALTH CHECK (Protect IP)
+    const isHealthy = await checkBinanceHealth();
+    if (!isHealthy) {
+        console.error("EXCHANGE_OFFLINE: Binance API is unreachable or high latency. Scanning aborted for safety.");
+        // Return empty array instead of throwing to prevent UI crash, but log error
+        return [];
+    }
     // 1. Get market data based on selected style
     const mode = style === 'MEME_SCALP' ? 'memes' : 'volume';
     const market = await fetchCryptoData(mode);
@@ -215,7 +223,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         cvdDivergence = detectGenericDivergence(mockCandles, cvdValues, 'CVD', 5); // Lookback 5 buckets
 
                         if (cvdDivergence) {
-                            volumeExpert.cvd.divergence = cvdDivergence.type as any;
+                            volumeExpert.cvd.divergence = cvdDivergence.type;
                         }
                     }
                 }

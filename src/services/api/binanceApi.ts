@@ -30,6 +30,15 @@ export const fetchWithTimeout = async (url: string, options: RequestInit = {}, t
     }
 };
 
+export const checkBinanceHealth = async (): Promise<boolean> => {
+    try {
+        const res = await fetchWithTimeout(`${BINANCE_API_BASE}/ping`, {}, 2000);
+        return res.ok;
+    } catch (e) {
+        return false;
+    }
+};
+
 const formatVolume = (vol: number): string => {
     if (vol >= 1_000_000_000) return `$${(vol / 1_000_000_000).toFixed(2)}B`;
     if (vol >= 1_000_000) return `$${(vol / 1_000_000).toFixed(2)}M`;

@@ -1,11 +1,7 @@
+import { Divergence } from '../types';
+
 // Detector de Divergencias RSI/Precio/CVD
 // Señal temprana de reversión de tendencia y análisis de flujo de órdenes
-
-export interface Divergence {
-    type: 'BULLISH' | 'BEARISH' | 'HIDDEN_BULLISH' | 'HIDDEN_BEARISH' | 'CVD_ABSORPTION_BUY' | 'CVD_ABSORPTION_SELL' | 'CVD_EXHAUSTION_BUY' | 'CVD_EXHAUSTION_SELL' | null;
-    strength: number; // 0-1
-    description: string;
-}
 
 /**
  * Generic Divergence Detector

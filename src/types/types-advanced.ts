@@ -128,13 +128,7 @@ export interface StrategySelection {
 
 // --- DIVERGENCE DETECTION ---
 
-export type DivergenceType =
-    | 'BULLISH'           // Price lower low, RSI higher low (reversal up)
-    | 'BEARISH'           // Price higher high, RSI lower high (reversal down)
-    | 'HIDDEN_BULLISH'    // Price higher low, RSI lower low (continuation up)
-    | 'HIDDEN_BEARISH'    // Price lower high, RSI higher high (continuation down)
-    | 'CVD_ABSORPTION_BUY'
-    | 'CVD_ABSORPTION_SELL';
+// DivergenceType is imported from index.ts
 
 export interface DivergenceSignal {
     type: DivergenceType | null;
@@ -156,10 +150,12 @@ export interface DerivativesData {
     buySellRatio: number;           // Long/Short Ratio accounts
 }
 
+import { DivergenceType } from './index';
+
 export interface CVDData {
     current: number;                // Cumulative Volume Delta actual
     trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-    divergence: string | null; // Allow string for flexibility with 'CVD_ABSORPTION_BUY' etc
+    divergence: DivergenceType | null;
     candleDelta: number;            // Delta de la vela actual
     cvdSeries?: number[];           // Array de deltas acumulados recientes
     priceSeries?: number[];         // Array de precios promedios recientes (para comparativa)

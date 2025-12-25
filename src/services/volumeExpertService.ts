@@ -1,4 +1,5 @@
 import { VolumeExpertAnalysis, DerivativesData, CVDData } from '../types/types-advanced';
+import { fetchCandles } from './api/binanceApi';
 
 // ============================================================================
 // CONSTANTS & ENDPOINTS
@@ -138,9 +139,21 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
     }
 }
 
+
+
 /**
- * 2. COINBASE PREMIUM (Institutional Flow)
- * Source: Compare Binance USDT Spot vs Coinbase USD Spot
+ * Helper to fetch Coinbase Candles (Public)
+ */
+async function fetchCoinbaseCandles(productIds: string, granularity: number = 3600): Promise<any[]> {
+    try {
+        const res = await fetchWithTimeout(`${COINBASE_API}/products/${productIds}/candles?granularity=${granularity}`, 4000);
+        if (!res.ok) return [];
+        return await res.json();
+    } catch (e) { return []; }
+}
+
+/**
+ * 2. COINBASE PREMIUM (Institutional Flow) - With SMA Smoothing
  */
 export async function getCoinbasePremium(symbol: string): Promise<VolumeExpertAnalysis['coinbasePremium']> {
     // Symbol mapping: BTC -> BTC-USD (Coinbase) vs BTCUSDT (Binance)
@@ -154,6 +167,64 @@ export async function getCoinbasePremium(symbol: string): Promise<VolumeExpertAn
     }
 
     try {
+        // FAST PATH: Snapshot (Current Price)
+        // SLOW PATH: SMA (History) - Only for BTC/ETH to save calls
+        const useSMA = ['BTC', 'ETH'].includes(base);
+
+        if (useSMA) {
+            // Fetch Last 24h (24 candles)
+            const [bnCandles, cbCandles] = await Promise.all([
+                fetchCandles(bnSymbol, '1h'),
+                fetchCoinbaseCandles(cbSymbol, 3600)
+            ]);
+
+            if (bnCandles.length < 24 || cbCandles.length < 24) {
+                throw new Error("Insufficient history for SMA");
+            }
+
+            // Calculate Gap % for last 20 hours
+            let gapSum = 0;
+            let count = 0;
+            const lookback = 20;
+
+            for (let i = 0; i < lookback; i++) {
+                // Coinbase candles: [time, low, high, open, close, vol] using UNIX seconds
+                // Binance candles: { timestamp (ms), close ... }
+                // Align roughly by index (both are 1h, recent first or last?)
+                // checkCoinbase returns [newest, ..., oldest]
+                // fetchCandles returns [oldest, ..., newest] usually? Check fetchCandles implementation.
+                // fetchCandles maps binance klines. limit=1000. 
+                // We need to match timestamps.
+
+                const bn = bnCandles[bnCandles.length - 1 - i]; // Newest going back
+                const cb = cbCandles[i]; // Newest is index 0 in Coinbase API
+
+                if (!bn || !cb) continue;
+
+                const bnClose = bn.close;
+                const cbClose = cb[4]; // close index
+
+                const gap = cbClose - bnClose;
+                const pct = (gap / bnClose) * 100;
+                gapSum += pct;
+                count++;
+            }
+
+            const smaGap = count > 0 ? (gapSum / count) : 0;
+
+            // Signal Logic based on SMA
+            let signal: 'INSTITUTIONAL_BUY' | 'INSTITUTIONAL_SELL' | 'NEUTRAL' = 'NEUTRAL';
+            if (smaGap > 0.02) signal = 'INSTITUTIONAL_BUY'; // Lower threshold for SMA (stable)
+            else if (smaGap < -0.02) signal = 'INSTITUTIONAL_SELL';
+
+            return {
+                index: smaGap * bnCandles[bnCandles.length - 1].close, // Approx index
+                gapPercent: smaGap,
+                signal
+            };
+        }
+
+        // Fallback: Snapshot Logic
         const [bnRes, cbRes] = await Promise.all([
             fetchWithTimeout(`${BINANCE_SPOT_API}/ticker/price?symbol=${bnSymbol}`),
             fetchWithTimeout(`${COINBASE_API}/prices/${cbSymbol}/spot`)
@@ -172,8 +243,8 @@ export async function getCoinbasePremium(symbol: string): Promise<VolumeExpertAn
 
         // Thresholds for signals
         let signal: 'INSTITUTIONAL_BUY' | 'INSTITUTIONAL_SELL' | 'NEUTRAL' = 'NEUTRAL';
-        if (gapPercent > 0.05) signal = 'INSTITUTIONAL_BUY'; // Significant Premium (>0.05%)
-        else if (gapPercent < -0.05) signal = 'INSTITUTIONAL_SELL'; // Significant Discount
+        if (gapPercent > 0.05) signal = 'INSTITUTIONAL_BUY';
+        else if (gapPercent < -0.05) signal = 'INSTITUTIONAL_SELL';
 
         return {
             index: gap,
@@ -268,7 +339,7 @@ export async function getInstantCVD(symbol: string): Promise<CVDData> {
         return {
             current: cvdDelta,
             trend,
-            divergence: 'NONE', // Calculated in CryptoService with price context
+            divergence: null, // Calculated in CryptoService with price context
             candleDelta: cvdDelta,
             cvdSeries,
             priceSeries
@@ -278,7 +349,7 @@ export async function getInstantCVD(symbol: string): Promise<CVDData> {
         return {
             current: 0,
             trend: 'NEUTRAL',
-            divergence: 'NONE',
+            divergence: null,
             candleDelta: 0,
             cvdSeries: [],
             priceSeries: []

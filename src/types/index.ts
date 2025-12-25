@@ -12,6 +12,23 @@ export interface MarketData {
 
 export type FundamentalTier = 'S' | 'A' | 'B' | 'C';
 
+// --- DIVERGENCE TYPES (Centralized) ---
+export type DivergenceType =
+  | 'BULLISH'
+  | 'BEARISH'
+  | 'HIDDEN_BULLISH'
+  | 'HIDDEN_BEARISH'
+  | 'CVD_ABSORPTION_BUY'
+  | 'CVD_ABSORPTION_SELL'
+  | 'CVD_EXHAUSTION_BUY'
+  | 'CVD_EXHAUSTION_SELL';
+
+export interface Divergence {
+  type: DivergenceType | null;
+  strength: number; // 0-1
+  description: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
@@ -151,8 +168,8 @@ export interface TechnicalIndicators {
   };
 
   // NEW: EXPERT METRICS
-  macdDivergence?: import('../services/divergenceDetector').Divergence;
-  rsiDivergence?: import('../services/divergenceDetector').Divergence | null; // NEW
+  macdDivergence?: Divergence;
+  rsiDivergence?: Divergence | null; // NEW
   isSqueeze?: boolean;
   rsiExpert?: {
     range: string;
