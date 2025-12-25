@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
 import { scanMarketOpportunities, getMarketRisk } from '../services/cryptoService';
 import { STRATEGIES } from '../services/strategyContext';
-import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database, Lightbulb, Clock, Globe, Hexagon } from 'lucide-react';
+import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database, Lightbulb, Clock, Globe, Hexagon, Triangle } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
 import { GLOSSARY } from '../constants/glossary';
 import { useOpportunityCache } from '../hooks/useOpportunityCache';
@@ -311,6 +311,12 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                             <span className="text-secondary">Estructura:</span>
                                             <span className="text-primary">{selectedSignal.metrics.structure}</span>
                                         </div>
+                                        {selectedSignal.chartPatterns && selectedSignal.chartPatterns.length > 0 && (
+                                            <div className="flex justify-between border-b border-border/50 pb-1">
+                                                <span className="text-secondary">Patrón Gráfico:</span>
+                                                <span className="text-pink-400 font-bold">{selectedSignal.chartPatterns[0].type}</span>
+                                            </div>
+                                        )}
                                         {selectedSignal.metrics.zScore !== undefined && (
                                             <div className="flex justify-between border-b border-border/50 pb-1">
                                                 <span className="text-secondary">Z-Score (Desviación):</span>
@@ -572,6 +578,13 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-cyan-400">
                         <Target size={12} />
                         <span className="font-bold">DIV MACD</span>
+                    </div>
+                )}
+                {/* NEW: Chart Pattern Badge */}
+                {data.chartPatterns && data.chartPatterns.length > 0 && (
+                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-pink-400 animate-pulse">
+                        <Triangle size={12} className="rotate-180" />
+                        <span className="font-bold">{data.chartPatterns[0].type.replace('_', ' ')}</span>
                     </div>
                 )}
             </div>
