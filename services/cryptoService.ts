@@ -19,7 +19,8 @@ import {
 } from './mathUtils';
 import { calculateVolumeProfile } from './volumeProfile';
 import { detectOrderBlocks } from './orderBlocks';
-import { detectHarmonicPatterns } from './harmonicPatterns'; // NEW
+import { HarmonicPattern, detectHarmonicPatterns } from './harmonicPatterns';
+import { detectChartPatterns } from './chartPatterns'; // NEW
 import { detectFVG } from './fairValueGaps';
 import { calculatePOIs } from './confluenceEngine';
 import { analyzeSessionContext, getCurrentSessionSimple } from './sessionExpert'; // NEW: Session Logic
@@ -1232,7 +1233,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     }
                 }
 
-                // --- FILTER: MIN SCORE ---
+                // NEW: CHART PATTERNS (Classical Geometry)
+                const chartPatterns = detectChartPatterns(highs, lows, prices, volumes);
+
+                // --- STRATEGY SELECTION & SCORING ---
                 // Institutional Grade Quality Control
                 const MIN_SCORE = 60; // Standard
 
@@ -1303,6 +1307,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         rsiDivergence: rsiDivergence?.description, // NEW: Added to UI
                         volumeExpert: volumeExpert // NEW: Pass to UI
                     },
+                    chartPatterns: chartPatterns, // NEW: Added Patterns
                     dcaPlan: dcaPlan, // NEW: Pasar el plan completo
                     harmonicPatterns: harmonicPatterns, // NEW: Pasar patrones armónicos
                     invalidated: false

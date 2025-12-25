@@ -61,7 +61,19 @@ function processResult(opportunities: any[]) {
         console.log(`   - Array existe? ${Array.isArray(bestOpp.harmonicPatterns) ? "SI" : "NO"}`);
     }
 
-    console.log("\n🧱 4. RISK MANAGEMENT (DCA Plan)");
+    console.log("\n📐 5. PATRONES CHARTISTAS (Clásicos)");
+    console.log("---------------------------------------");
+    if (bestOpp.chartPatterns && bestOpp.chartPatterns.length > 0) {
+        console.log(`✅ Patrones Detectados: ${bestOpp.chartPatterns.length}`);
+        bestOpp.chartPatterns.forEach((p: any) => {
+            console.log(`   - [${p.type}] ${p.signal} (${p.confidence * 100}% Conf)`);
+            console.log(`     "${p.description}"`);
+        });
+    } else {
+        console.log("⚠️ No tiene patrones chartistas clásicos (Normal en ventanas cortas)");
+    }
+
+    console.log("\n🧱 6. RISK MANAGEMENT (DCA Plan)");
     console.log("---------------------------------------");
     if (bestOpp.dcaPlan) {
         console.log("✅ DCA Plan Generado");

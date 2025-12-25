@@ -47,7 +47,8 @@ export const streamMarketAnalysis = async function* (
         price, rsi, stochRsi, vwap, adx, atr, rvol, ema20, ema50, ema100, ema200,
         zScore, emaSlope, macd, bollinger, pivots, fibonacci, trendStatus,
         volumeProfile, orderBlocks, fairValueGaps, confluenceAnalysis,
-        fractalAnalysis, harmonicPatterns, macdDivergence, isSqueeze, rsiExpert
+        fractalAnalysis, harmonicPatterns, macdDivergence, isSqueeze, rsiExpert,
+        chartPatterns // NEW: Smart Chart Patterns
     } = techData;
 
     // --- LÓGICA DE COMANDO: DETECCIÓN AMPLIA ---
@@ -600,6 +601,19 @@ export const streamMarketAnalysis = async function* (
             response += `| **Interés Abierto** | 💰 $${(derivatives.openInterestValue / 1000000).toFixed(2)}M | Capital total activo en futuros. |\n`;
 
             response += `\n`;
+        }
+
+        // NEW: SMART CHART PATTERNS (Classical Geometry)
+        if (chartPatterns && chartPatterns.length > 0) {
+            response += `### 3.8. Geometría Clásica Inteligente (Smart Patterns)\n`;
+            response += `| Patrón | Señal | Confianza | Detalle |\n`;
+            response += `|---|---|---|---|\n`;
+
+            chartPatterns.forEach(p => {
+                const icon = p.signal === 'BULLISH' ? '🟢' : '🔴';
+                response += `| **${p.type}** | ${icon} ${p.signal} | ${(p.confidence * 100).toFixed(0)}% | ${p.description} |\n`;
+            });
+            response += `> *Patrones filtrados por volumen y fractales (Anti-Retail Trap).*\n\n`;
         }
 
         // IV. PLAN DE EJECUCIÓN DCA

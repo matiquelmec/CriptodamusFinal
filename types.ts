@@ -161,6 +161,7 @@ export interface TechnicalIndicators {
   };
 
   harmonicPatterns?: import('./types-advanced').HarmonicPattern[];
+  chartPatterns?: ChartPattern[]; // NEW: For Advisor Analysis
 
   // NEW: Expert Volume & Derivatives
   volumeExpert?: import('./types-advanced').VolumeExpertAnalysis;
@@ -271,6 +272,16 @@ export interface DCAPlan {
   };
 }
 
+// NEW: Chart Patterns Integration
+export interface ChartPattern {
+  type: 'HEAD_SHOULDERS' | 'INV_HEAD_SHOULDERS' | 'DOUBLE_TOP' | 'DOUBLE_BOTTOM' | 'RISING_WEDGE' | 'FALLING_WEDGE' | 'BULL_FLAG' | 'BEAR_FLAG';
+  signal: 'BULLISH' | 'BEARISH';
+  confidence: number;
+  priceTarget?: number;
+  invalidationLevel?: number;
+  description: string;
+}
+
 export interface AIOpportunity {
   id: string;
   symbol: string;
@@ -319,6 +330,7 @@ export interface AIOpportunity {
     rsiDivergence?: string; // NEW: Description or Type
     volumeExpert?: import('./types-advanced').VolumeExpertAnalysis; // NEW: Institutional Data for UI
   };
+  chartPatterns?: ChartPattern[]; // NEW: Smart Geometric Patterns
   dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI
   harmonicPatterns?: import('./types-advanced').HarmonicPattern[]; // NEW: Patrones para UI
   tier?: FundamentalTier; // NEW: Tier Badge for UI
