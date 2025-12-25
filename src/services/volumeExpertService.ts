@@ -141,12 +141,16 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
 
 
 
+const COINBASE_EXCHANGE_API = 'https://api.exchange.coinbase.com';
+
 /**
  * Helper to fetch Coinbase Candles (Public)
+ * Note: Browser checks requiring CORS might fail here if Coinbase blocks them.
+ * Fallback is handled by the caller.
  */
 async function fetchCoinbaseCandles(productIds: string, granularity: number = 3600): Promise<any[]> {
     try {
-        const res = await fetchWithTimeout(`${COINBASE_API}/products/${productIds}/candles?granularity=${granularity}`, 4000);
+        const res = await fetchWithTimeout(`${COINBASE_EXCHANGE_API}/products/${productIds}/candles?granularity=${granularity}`, 4000);
         if (!res.ok) return [];
         return await res.json();
     } catch (e) { return []; }
