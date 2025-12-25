@@ -30,7 +30,44 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     const [isFromCache, setIsFromCache] = useState(false);
 
     // NEW: Hook Integration
-    const { scan: scanMarket } = useMarketScanner();
+    const { scan: scanMarket, opportunities: scannedOpportunities, isScanning, error: scanError } = useMarketScanner();
+
+    // Sync hook state to local state (or just use hook state directly)
+    // We keep local state for formatting/filtering if needed, but for now let's sync
+    useEffect(() => {
+        if (scannedOpportunities) {
+            setOpportunities(scannedOpportunities);
+        }
+    }, [scannedOpportunities]);
+
+    // Handle Side Effects of Scanning (Success)
+    useEffect(() => {
+        if (!isScanning && scannedOpportunities.length > 0) {
+            // Scan just finished successfully
+            const riskData = null; // Risk data is inside the hook but not exposed in the result payload directly in this pattern, we might need to fetch it separately or rely on hook
+
+            setScanProgress({ step: 'Procesando señales...', progress: 90 });
+
+            // Extract detected regime
+            if (scannedOpportunities[0].strategy) {
+                setDetectedRegime(scannedOpportunities[0].strategy);
+                saveCache(scannedOpportunities, scannedOpportunities[0].strategy);
+            }
+            setScanProgress({ step: 'Completado', progress: 100 });
+            setLoading(false);
+        } else if (isScanning) {
+            setLoading(true);
+            setScanProgress({ step: 'Analizando Mercado...', progress: 50 });
+        }
+    }, [isScanning, scannedOpportunities, saveCache]);
+
+    // Handle Errors
+    useEffect(() => {
+        if (scanError) {
+            setError(scanError);
+            setLoading(false);
+        }
+    }, [scanError]);
 
     const scan = async () => {
         if (cooldown > 0) return;
@@ -39,38 +76,15 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
         setError(null);
         setOpportunities([]); // Clear previous
         setIsFromCache(false);
-        clearCache(); // Clear old cache when doing fresh scan
+        clearCache();
 
         try {
-            // NEW: Progress tracking
-            setScanProgress({ step: 'Obteniendo datos de mercado...', progress: 10 });
-
-            // Use Hook
-            const result = await scanMarket('SCALP_AGRESSIVE');
-
-            if (result) {
-                const { opps, riskData } = result;
-                // Local state update handled by hook mostly, but we sync for cache logic
-                setOpportunities(opps);
-                setCurrentRisk(riskData);
-
-                setScanProgress({ step: 'Procesando señales...', progress: 90 });
-
-                // Extract detected regime from first opportunity
-                if (opps.length > 0 && opps[0].strategy) {
-                    setDetectedRegime(opps[0].strategy);
-                    // NEW: Save to cache
-                    saveCache(opps, opps[0].strategy);
-                }
-            }
-
-
-
-            setScanProgress({ step: 'Completado', progress: 100 });
+            setScanProgress({ step: 'Iniciando Escáner...', progress: 10 });
+            // Use Hook - No return value expected anymore
+            await scanMarket('SCALP_AGRESSIVE');
         } catch (e: any) {
             console.error(e);
-            setError("Error de conexión al obtener datos de mercado.");
-        } finally {
+            setError("Error de inicialización.");
             setLoading(false);
         }
     };
@@ -356,6 +370,15 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                                 </span>
                                             </div>
                                         )}
+                                        {/* NEW: RSI Break */}
+                                        {selectedSignal.metrics.rsiExpert?.trendlineBreak?.detected && (
+                                            <div className="flex justify-between border-b border-border/50 pb-1">
+                                                <span className="text-secondary">Ruptura RSI:</span>
+                                                <span className="text-success font-bold animate-pulse">
+                                                    {selectedSignal.metrics.rsiExpert.trendlineBreak.direction} BREAKOUT
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
                                     <p className="text-xs text-secondary italic">Métricas detalladas no disponibles para este tick.</p>
@@ -592,6 +615,20 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-pink-400 animate-pulse">
                         <Triangle size={12} className="rotate-180" />
                         <span className="font-bold">{data.chartPatterns[0].type.replace('_', ' ')}</span>
+                    </div>
+                )}
+                {/* NEW: Whale Alert Badge */}
+                {data.metrics?.volumeExpert?.cvd?.divergence?.includes('ABSORPTION') && (
+                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-cyan-400 animate-pulse">
+                        <Database size={12} />
+                        <span className="font-bold">WHALE ALERT</span>
+                    </div>
+                )}
+                {/* NEW: RSI Break Badge */}
+                {data.metrics?.rsiExpert?.trendlineBreak?.detected && (
+                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-orange-400">
+                        <Zap size={12} />
+                        <span className="font-bold">RSI BREAK</span>
                     </div>
                 )}
             </div>

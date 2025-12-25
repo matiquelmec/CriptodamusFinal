@@ -319,12 +319,30 @@ export const streamMarketAnalysis = async function* (
                 }
 
                 // 3. CVD Divergences (Microstructure Verification)
-                if (cvd.trend === 'BEARISH') {
+                if (cvd.divergence) {
+                    // NEW: ABSORPTION LOGIC (World Class)
+                    if (cvd.divergence === 'CVD_ABSORPTION_BUY') {
+                        bullishScore += 4; // Whale Absorption (Passive Buys)
+                    } else if (cvd.divergence === 'CVD_ABSORPTION_SELL') {
+                        bearishScore += 4; // Whale Absorption (Passive Sells)
+                    }
+                }
+
+                if (cvd.trend === 'BEARISH' && !cvd.divergence?.includes('ABSORPTION')) {
                     // Aggressors Selling -> Penalize Longs
                     bullishScore -= 1;
-                } else if (cvd.trend === 'BULLISH') {
+                } else if (cvd.trend === 'BULLISH' && !cvd.divergence?.includes('ABSORPTION')) {
                     // Aggressors Buying -> Penalize Shorts
                     bearishScore -= 1;
+                }
+            }
+
+            // NEW: RSI TRENDLINE BREAKS (Leading Indicator)
+            if (rsiExpert && rsiExpert.trendlineBreak && rsiExpert.trendlineBreak.detected) {
+                if (rsiExpert.trendlineBreak.direction === 'BULLISH') {
+                    bullishScore += 3; // Early Momentum Shift
+                } else if (rsiExpert.trendlineBreak.direction === 'BEARISH') {
+                    bearishScore += 3;
                 }
             }
 
@@ -435,6 +453,8 @@ export const streamMarketAnalysis = async function* (
             response += `> ⚡ **ALERTA SFP:** ${sfpType === 'BEARISH_SWEEP' ? 'Barrido Bajista' : 'Barrido Alcista'} confirmado. Entrada de alta precisión.\n`;
         } else if (isGodMode) {
             response += `> 💎 **MODO DIOS:** Alineación total de timeframes (15m-1W). Probabilidad Institucional.\n`;
+        } else if (techData.volumeExpert?.cvd?.divergence?.includes('ABSORPTION')) {
+            response += `> 🐋 **ALERTA BALLENAS:** Absorción Institucional Detectada. El "Smart Money" está posicionado.\n`;
         }
 
         response += `> *${investmentThesis}*\n\n`; // Insert AI Thesis here
@@ -568,6 +588,12 @@ export const streamMarketAnalysis = async function* (
             const rangeIcon = rsiExpert.range.includes('BULL') ? '🐂' : rsiExpert.range.includes('BEAR') ? '🐻' : '⚖️';
             response += `| **Régimen RSI** | ${rangeIcon} **${rsiExpert.range.replace('_', ' ')}** | Definido por reglas de rango expertas. |\n`;
 
+            // NEW: Trendline Break Display
+            if (rsiExpert.trendlineBreak && rsiExpert.trendlineBreak.detected) {
+                const direction = rsiExpert.trendlineBreak.direction;
+                response += `| **Ruptura Tendencial** | ${direction === 'BULLISH' ? '🟢' : '🔴'} **BREAKOUT** | El RSI ha roto su línea de tendencia geométrica. Señal adelantada. |\n`;
+            }
+
             // Target Analysis
             if (rsiExpert.target) {
                 const targetIcon = rsiExpert.targetType === 'POSITIVE' ? '🟢' : '🔴';
@@ -595,7 +621,9 @@ export const streamMarketAnalysis = async function* (
 
             // CVD
             const cvdIcon = cvd.trend === 'BULLISH' ? '🟢' : cvd.trend === 'BEARISH' ? '🔴' : '⚖️';
-            response += `| **CVD Sintético** | ${cvdIcon} ${cvd.trend} | Divergencia: ${cvd.divergence ? '⚠️ ' + cvd.divergence : 'Ninguna (Confirmado)'}. |\n`;
+            const cvdDivText = cvd.divergence ? `⚠️ **${cvd.divergence.replace(/_/g, ' ')}**` : 'Tendencia Confirmada';
+
+            response += `| **CVD Sintético** | ${cvdIcon} ${cvd.trend} | ${cvdDivText} |\n`;
 
             // Open Interest
             response += `| **Interés Abierto** | 💰 $${(derivatives.openInterestValue / 1000000).toFixed(2)}M | Capital total activo en futuros. |\n`;

@@ -1,21 +1,15 @@
-// Detector de Divergencias RSI/Precio
-// Señal temprana de reversión de tendencia
+// Detector de Divergencias RSI/Precio/CVD
+// Señal temprana de reversión de tendencia y análisis de flujo de órdenes
 
 export interface Divergence {
-    type: 'BULLISH' | 'BEARISH' | 'HIDDEN_BULLISH' | 'HIDDEN_BEARISH' | null;
+    type: 'BULLISH' | 'BEARISH' | 'HIDDEN_BULLISH' | 'HIDDEN_BEARISH' | 'CVD_ABSORPTION_BUY' | 'CVD_ABSORPTION_SELL' | 'CVD_EXHAUSTION_BUY' | 'CVD_EXHAUSTION_SELL' | null;
     strength: number; // 0-1
     description: string;
 }
 
 /**
- * Detecta divergencias entre precio y RSI
- * @param candles - Array de velas (mínimo 5)
- * @param rsiValues - Array de valores RSI correspondientes
- * @returns Divergencia detectada o null
- */
-/**
  * Generic Divergence Detector
- * Works for RSI, MACD Line, MACD Histogram, etc.
+ * Works for RSI, MACD Line, MACD Histogram, and CVD.
  */
 export function detectGenericDivergence(
     candles: any[],
@@ -34,12 +28,50 @@ export function detectGenericDivergence(
     const startIdx = 0;
     const endIdx = pivotLookback - 1;
 
+    // === CVD SPECIFIC LOGIC (Order Flow) ===
+    if (sourceName === 'CVD') {
+        const priceHigh = recentCandles[endIdx].high > recentCandles[startIdx].high;
+        const priceLow = recentCandles[endIdx].low < recentCandles[startIdx].low;
+        const oscHigh = recentOsc[endIdx] > recentOsc[startIdx];
+        const oscLow = recentOsc[endIdx] < recentOsc[startIdx];
+
+        // 1. CVD ABSORPTION BUY (Bullish Setup)
+        // Scenario: Price makes Lower Low (Liquidations/Sell pressure), but CVD makes Higher Low (Absorption by limit buys).
+        // Sellers are hitting the bid aggressiveley, but passive buyers are absorbing everything. Price refuses to drop further.
+        if (priceLow && oscHigh) {
+            return {
+                type: 'CVD_ABSORPTION_BUY',
+                strength: 0.95, // Institutional Signal
+                description: `Institutional Absorption (Buy): Price made Lower Low but CVD made Higher Low. Limit buyers are absorbing aggressive sellers.`
+            };
+        }
+
+        // 2. CVD ABSORPTION SELL (Bearish Setup)
+        // Scenario: Price makes Higher High, but CVD makes Lower High (Absorption by limit sells).
+        // Buyers are hitting the ask, but passive sellers are absorbing.
+        if (priceHigh && oscLow) {
+            return {
+                type: 'CVD_ABSORPTION_SELL',
+                strength: 0.95,
+                description: `Institutional Absorption (Sell): Price made Higher High but CVD made Lower High. Limit sellers are absorbing aggressive buyers.`
+            };
+        }
+
+        // 3. EXHAUSTION (Less common, but valid)
+        // Price flat or small move, massive CVD spike? No, that's effort vs result.
+        // Let's stick to the core Absorption divergences which are the reliable reversal signals.
+
+        return null;
+    }
+
+    // === STANDARD OSCILLATOR LOGIC (RSI, MACD) ===
+
     // === REGULAR BEARISH (Reversal Down) ===
     // Price: Higher High
     // Oscillator: Lower High
     if (recentCandles[endIdx].high > recentCandles[startIdx].high && recentOsc[endIdx] < recentOsc[startIdx]) {
-        // Filter: meaningful values (e.g. RSI > 60 for bearish div)
-        const isValidLevel = sourceName === 'RSI' ? recentOsc[startIdx] > 60 : recentOsc[startIdx] > 0; // MACD > 0 for bearish div
+        // Filter: meaningful values
+        const isValidLevel = sourceName === 'RSI' ? recentOsc[startIdx] > 60 : true; // MACD logic simplified
 
         if (isValidLevel) {
             return {
@@ -55,7 +87,7 @@ export function detectGenericDivergence(
     // Oscillator: Higher Low
     if (recentCandles[endIdx].low < recentCandles[startIdx].low && recentOsc[endIdx] > recentOsc[startIdx]) {
         // Filter
-        const isValidLevel = sourceName === 'RSI' ? recentOsc[startIdx] < 40 : recentOsc[startIdx] < 0; // MACD < 0 for bullish div
+        const isValidLevel = sourceName === 'RSI' ? recentOsc[startIdx] < 40 : true;
 
         if (isValidLevel) {
             return {
@@ -70,12 +102,12 @@ export function detectGenericDivergence(
     // Price: Higher Low
     // Oscillator: Lower Low
     if (recentCandles[endIdx].low > recentCandles[startIdx].low && recentOsc[endIdx] < recentOsc[startIdx]) {
-        const isValidLevel = sourceName === 'RSI' ? recentOsc[endIdx] > 40 : recentOsc[endIdx] > 0; // MACD usually stays positive in strong uptrend pullbacks
+        const isValidLevel = sourceName === 'RSI' ? recentOsc[endIdx] > 40 : true;
 
         if (isValidLevel) {
             return {
                 type: 'HIDDEN_BULLISH',
-                strength: 0.9, // Higher confidence for hidden divs in expert doc
+                strength: 0.9,
                 description: `Hidden Bullish Divergence (${sourceName}): Price Higher Low (Continuation) while ${sourceName} cooled off (Lower Low).`
             };
         }
@@ -85,7 +117,7 @@ export function detectGenericDivergence(
     // Price: Lower High
     // Oscillator: Higher High
     if (recentCandles[endIdx].high < recentCandles[startIdx].high && recentOsc[endIdx] > recentOsc[startIdx]) {
-        const isValidLevel = sourceName === 'RSI' ? recentOsc[endIdx] < 60 : recentOsc[endIdx] < 0;
+        const isValidLevel = sourceName === 'RSI' ? recentOsc[endIdx] < 60 : true;
 
         if (isValidLevel) {
             return {
@@ -100,7 +132,7 @@ export function detectGenericDivergence(
 }
 
 /**
- * Detecta divergencias (Legacy Wrapper or Specific Logic)
+ * Detecta divergencias (Legacy Wrapper)
  */
 export function detectDivergences(
     candles: any[],
@@ -117,46 +149,28 @@ export function formatDivergenceReport(divergence: Divergence | null): string {
 
     let report = `\n## 🔍 DIVERGENCIA DETECTADA\n\n`;
 
-    const icon = divergence.type.includes('BULLISH') ? '🟢' : '🔴';
-    const typeText = divergence.type.replace('_', ' ');
+    const isBullish = divergence.type.includes('BULLISH') || divergence.type.includes('BUY');
+    const icon = isBullish ? '🟢' : '🔴';
+    const typeText = divergence.type.replace(/_/g, ' ');
 
     report += `**Tipo**: ${icon} ${typeText}\n`;
     report += `**Fuerza**: ${(divergence.strength * 100).toFixed(0)}%\n\n`;
     report += `**Explicación**: ${divergence.description}\n\n`;
 
-    // Educación adicional según el tipo
-    if (divergence.type === 'BEARISH') {
+    // Educación adicional
+    if (divergence.type.includes('CVD')) {
+        report += `**🧠 ANÁLISIS INSTITUCIONAL (Order Flow)**\n`;
+        if (divergence.type.includes('BUY')) {
+            report += `Detectada **Absorción Pasiva**. Las "Ballenas" están poniendo órdenes Limit de compra y absorbiendo todas las ventas agresivas. El precio no baja aunque vendan mucho. Señal muy potente de suelo. 🐋\n`;
+        } else {
+            report += `Detectada **Absorción Pasiva**. Las "Ballenas" están poniendo órdenes Limit de venta y absorbiendo todas las compras agresivas. El precio no sube aunque compren mucho. Señal muy potente de techo. 🐋\n`;
+        }
+    } else if (divergence.type === 'BEARISH') {
         report += `**¿Qué significa?**\n`;
-        report += `El precio está subiendo pero el momentum (RSI) está bajando. `;
-        report += `Esto indica que los compradores están perdiendo fuerza. `;
-        report += `Históricamente, precede correcciones del 10-30%.\n\n`;
-        report += `**Acción Recomendada**:\n`;
-        report += `- ✅ Considerar tomar ganancias si estás en LONG\n`;
-        report += `- ✅ Preparar SHORT en resistencia clave\n`;
-        report += `- ⏰ Esperar confirmación (vela roja con volumen)\n\n`;
+        report += `El precio sube, momentum baja. Compradores agotados.\n`;
     } else if (divergence.type === 'BULLISH') {
         report += `**¿Qué significa?**\n`;
-        report += `El precio está cayendo pero el momentum (RSI) está subiendo. `;
-        report += `Esto indica que los vendedores están perdiendo fuerza. `;
-        report += `Históricamente, precede rebotes del 15-40%.\n\n`;
-        report += `**Acción Recomendada**:\n`;
-        report += `- ✅ Preparar compra en zona de soporte\n`;
-        report += `- ✅ Esperar confirmación (vela verde con volumen)\n`;
-        report += `- 🎯 Objetivo: Resistencia más cercana\n\n`;
-    } else if (divergence.type === 'HIDDEN_BULLISH') {
-        report += `**¿Qué significa?**\n`;
-        report += `La tendencia alcista sigue intacta. Esta divergencia oculta sugiere `;
-        report += `que después de una corrección saludable, la tendencia continuará.\n\n`;
-        report += `**Acción Recomendada**:\n`;
-        report += `- ✅ Mantener posiciones LONG\n`;
-        report += `- ✅ Agregar en pullbacks\n\n`;
-    } else if (divergence.type === 'HIDDEN_BEARISH') {
-        report += `**¿Qué significa?**\n`;
-        report += `La tendencia bajista sigue intacta. Esta divergencia oculta sugiere `;
-        report += `que después de un rebote técnico, la tendencia bajista continuará.\n\n`;
-        report += `**Acción Recomendada**:\n`;
-        report += `- ✅ Evitar LONGs\n`;
-        report += `- ✅ Considerar SHORTs en resistencias\n\n`;
+        report += `El precio baja, momentum sube. Vendedores agotados.\n`;
     }
 
     return report;

@@ -1,4 +1,4 @@
-import { VolumeExpertAnalysis, DerivativesData, CVDData } from '../types-advanced.ts';
+import { VolumeExpertAnalysis, DerivativesData, CVDData } from '../types/types-advanced';
 
 // ============================================================================
 // CONSTANTS & ENDPOINTS
@@ -205,21 +205,58 @@ export async function getInstantCVD(symbol: string): Promise<CVDData> {
         let buyVol = 0;
         let sellVol = 0;
 
-        // aggTrade structure: { m: true } -> Maker was Buyer (so Taker was SELLER) -> Sell Aggressor
-        // { m: false } -> Maker was Seller (so Taker was BUYER) -> Buy Aggressor
+        // --- NEW: History Series Generation (Buckets for Divergence) ---
+        // We have 500 trades. Let's create 10 data points (buckets of 50 trades)
+        // This simulates a "timeframe" for the Micro-structure divergence.
+        const bucketSize = 50;
+        const cvdSeries: number[] = [];
+        const priceSeries: number[] = [];
 
-        trades.forEach((t: any) => {
+        let currentBucketCVD = 0;
+        let currentBucketPriceSum = 0;
+        let currentBucketCount = 0;
+
+        // Trades come newest first or oldest first? Binance usually returns Oldest First if no specific sorting?
+        // Actually aggTrades by default is from startTime? or limit from latest?
+        // If we just use default, it's usually latest X trades.
+        // Important: Binance API usually returns Oldest to Newest in the array if startTime is used, 
+        // but with just limit, it's usually the latest X trades, but check order.
+        // Standard Binance array is [Oldest, ..., Newest].
+
+        trades.forEach((t: any, index: number) => {
             const qty = parseFloat(t.q);
+            const price = parseFloat(t.p);
             const isBuyerMaker = t.m;
 
+            let tradeDelta = 0;
+
             if (isBuyerMaker) {
-                // Seller Aggressed (Sold into Buy wall)
-                cvdDelta -= qty;
+                // Seller Aggressed
+                tradeDelta = -qty;
                 sellVol += qty;
             } else {
-                // Buyer Aggressed (Bought from Sell wall)
-                cvdDelta += qty;
+                // Buyer Aggressed
+                tradeDelta = qty;
                 buyVol += qty;
+            }
+
+            cvdDelta += tradeDelta;
+
+            // Series Building
+            currentBucketCVD += tradeDelta; // We want Cumulative? Or Delta per bucket? 
+            // For Divergence: Price vs Oscillator. oscillator is "CVD" (Cumulative Volume Delta) or checks "Delta" peaks?
+            // Usually CVD Divergence compares PRICE HIGH vs CVD HIGH. CVD is cumulative.
+            // So we should push the running total `cvdDelta` at the end of the bucket.
+            currentBucketPriceSum += price;
+            currentBucketCount++;
+
+            if (currentBucketCount >= bucketSize || index === trades.length - 1) {
+                cvdSeries.push(cvdDelta); // Push the RUNNING TOTAL (Cumulative)
+                priceSeries.push(currentBucketPriceSum / currentBucketCount); // Avg Price of bucket
+
+                // Reset bucket accumulators (but NOT the running cvdDelta)
+                currentBucketPriceSum = 0;
+                currentBucketCount = 0;
             }
         });
 
@@ -228,14 +265,13 @@ export async function getInstantCVD(symbol: string): Promise<CVDData> {
         if (buyVol > sellVol * 1.5) trend = 'BULLISH';
         else if (sellVol > buyVol * 1.5) trend = 'BEARISH';
 
-        // NOTE: Divergence requires price context which we perform at the service level, 
-        // here we just return the raw CVD data.
-
         return {
             current: cvdDelta,
             trend,
             divergence: 'NONE', // Calculated in CryptoService with price context
-            candleDelta: cvdDelta // Approx for this snapshot
+            candleDelta: cvdDelta,
+            cvdSeries,
+            priceSeries
         };
 
     } catch (error) {
@@ -243,7 +279,9 @@ export async function getInstantCVD(symbol: string): Promise<CVDData> {
             current: 0,
             trend: 'NEUTRAL',
             divergence: 'NONE',
-            candleDelta: 0
+            candleDelta: 0,
+            cvdSeries: [],
+            priceSeries: []
         };
     }
 }

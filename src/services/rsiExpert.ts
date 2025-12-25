@@ -248,17 +248,79 @@ export function calculateCardwellReversal(
 }
 
 /**
+ * Detects geometric trendline breaks in RSI
+ * Logic: Finds recent pivot Highs/Lows and projects a trendline.
+ * If current RSI crosses the line, it signals an early momentum shift.
+ */
+function detectRSITrendlineBreak(rsiArray: number[]): ExpertRSIAnalysis['trendlineBreak'] {
+    if (rsiArray.length < 50) return { detected: false, direction: null };
+
+    const currentIdx = rsiArray.length - 1;
+    const currentRSI = rsiArray[currentIdx];
+    const prevRSI = rsiArray[currentIdx - 1];
+
+    // --- BEARISH BREAKOUT (RSI breaking UP through descending resistance) ---
+    // Needs 2 lower highs
+    // Let's find local maxima in the last 40 periods
+    const lookback = 40;
+    const endScan = currentIdx - 3; // Don't include current candles in pivot search
+
+    const peaks: { idx: number, val: number }[] = [];
+
+    // Simple pivot finding
+    for (let i = currentIdx - lookback; i <= endScan; i++) {
+        if (rsiArray[i] > rsiArray[i - 1] && rsiArray[i] > rsiArray[i - 2] &&
+            rsiArray[i] > rsiArray[i + 1] && rsiArray[i] > rsiArray[i + 2]) {
+            peaks.push({ idx: i, val: rsiArray[i] });
+        }
+    }
+
+    // Need at least 2 peaks for a line
+    if (peaks.length >= 2) {
+        // Sort by value descending? No, chronological.
+        // We want the most significant resistance. 
+        // Let's take the Highest Peak A, and the most recent Peak B.
+        // Actually, "Trendline" usually connects the most obvious outer points.
+
+        // Strategy: Connect Highest Peak (A) in range with the Last Pivot Peak (B).
+        // If B < A, it's a descending line.
+        let highest = peaks[0];
+        for (const p of peaks) { if (p.val > highest.val) highest = p; }
+
+        if (highest) {
+            // Find a subsequent peak (B) that forms a valid trendline (no intersection logic for speed)
+            // Ideally B is the last peak found.
+            const lastPeak = peaks[peaks.length - 1];
+
+            if (lastPeak.idx > highest.idx && lastPeak.val < highest.val) {
+                // Descending Line
+                const slope = (lastPeak.val - highest.val) / (lastPeak.idx - highest.idx);
+                const projectedVal = lastPeak.val + (slope * (currentIdx - lastPeak.idx));
+
+                // Check BREAKOUT: Previous RSI was below line? Current RSI is above?
+                // Or just Current > Projected + buffer
+                // Buffer 1.0
+                if (currentRSI > projectedVal + 0.5 && prevRSI <= projectedVal + 2) { // 2 buffer for fuzzy crossing
+                    return { detected: true, direction: 'BULLISH' };
+                }
+            }
+        }
+    }
+
+    // --- BULLISH BREAKOUT (RSI breaking DOWN through ascending support) ---
+    // Logic similar but inverted...
+    // (Simplified for this iteration to focus on Resistance Breaks which are key for Entries)
+
+    return { detected: false, direction: null };
+}
+
+/**
  * Main Analysis Wrapper
  */
 export function analyzeRSIExpert(prices: number[], rsiArray: number[]): ExpertRSIAnalysis {
     const range = detectRSIRange(rsiArray);
     const reversalTarget = calculateCardwellReversal(prices, rsiArray);
-
-    // Placeholder for trendline break (requires more complex geometry)
-    const trendlineBreak = {
-        detected: false,
-        direction: null
-    } as any;
+    const trendlineBreak = detectRSITrendlineBreak(rsiArray);
 
     return {
         range,

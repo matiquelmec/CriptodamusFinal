@@ -196,9 +196,28 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const isSqueeze = bb.bandwidth < 10 && Math.abs(macd.histogram) < (currentPrice * 0.0005);
 
             let volumeExpert = undefined;
+            let cvdDivergence = undefined; // NEW: CVD Divergence
             try {
                 if (rvol > 0.3) {
                     volumeExpert = await getExpertVolumeAnalysis(coin.symbol).catch(() => undefined);
+
+                    // --- NEW: DETECT CVD DIVERGENCE (Micro-structure) ---
+                    if (volumeExpert && volumeExpert.cvd && volumeExpert.cvd.cvdSeries && volumeExpert.cvd.priceSeries) {
+                        // Construct a mock "candles" array for the detector because it expects {high, low} etc.
+                        // But our detector mainly needs arrays? 
+                        // Check detectGenericDivergence signature: (candles: any[], oscillatorValues: number[], sourceName...)
+                        // It uses candles[i].high / candles[i].low.
+                        // Our priceSeries from volumeExpert are just averages.
+                        // Let's create mock candles where high=low=price. It works for the logic (high > high check).
+                        const mockCandles = volumeExpert.cvd.priceSeries.map(p => ({ high: p, low: p, close: p }));
+                        const cvdValues = volumeExpert.cvd.cvdSeries;
+
+                        cvdDivergence = detectGenericDivergence(mockCandles, cvdValues, 'CVD', 5); // Lookback 5 buckets
+
+                        if (cvdDivergence) {
+                            volumeExpert.cvd.divergence = cvdDivergence.type as any;
+                        }
+                    }
                 }
             } catch (e) { }
 
@@ -302,6 +321,39 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             if (strategyDetails.length > 0) {
                 detectionNote = strategyDetails.join(" | ");
+            }
+
+            // --- INSTITUTIONAL SCORING BOOSTS (VOLUME) ---
+            if (volumeExpert) {
+                // 1. Coinbase Premium
+                if (volumeExpert.coinbasePremium.signal === 'INSTITUTIONAL_BUY' && signalSide === 'LONG') {
+                    totalScore += 15;
+                    detectionNote += " | 🏦 Inst. Buying (Premium +)";
+                } else if (volumeExpert.coinbasePremium.signal === 'INSTITUTIONAL_SELL' && signalSide === 'SHORT') {
+                    totalScore += 15;
+                    detectionNote += " | 🏦 Inst. Selling (Premium -)";
+                }
+
+                // 2. CVD Divergence (Absorption)
+                if (cvdDivergence) {
+                    const isBullAbs = cvdDivergence.type === 'CVD_ABSORPTION_BUY';
+                    const isBearAbs = cvdDivergence.type === 'CVD_ABSORPTION_SELL';
+
+                    if (signalSide === 'LONG' && isBullAbs) {
+                        totalScore += 20; // High Conviction
+                        detectionNote += " | 🐋 Whale Absorption (Bull)";
+                    } else if (signalSide === 'SHORT' && isBearAbs) {
+                        totalScore += 20;
+                        detectionNote += " | 🐋 Whale Absorption (Bear)";
+                    }
+                }
+
+                // 3. Open Interest (Trend Confirmation)
+                // If Long + OI Up = Strong Trend
+                if (volumeExpert.derivatives.openInterest > 0) {
+                    // Can't check trend of OI easily without history, but can check magnitude/value
+                    // Placeholder for now
+                }
             }
 
             if (isSqueeze) {
@@ -538,7 +590,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         isSqueeze: isSqueeze,
                         macdDivergence: macdDivergence?.description,
                         rsiDivergence: rsiDivergence?.description,
-                        volumeExpert: volumeExpert
+                        volumeExpert: volumeExpert // Updated in Place with divergence
                     },
                     chartPatterns: chartPatterns, dcaPlan: dcaPlan,
                     harmonicPatterns: harmonicPatterns, invalidated: false

@@ -132,7 +132,9 @@ export type DivergenceType =
     | 'BULLISH'           // Price lower low, RSI higher low (reversal up)
     | 'BEARISH'           // Price higher high, RSI lower high (reversal down)
     | 'HIDDEN_BULLISH'    // Price higher low, RSI lower low (continuation up)
-    | 'HIDDEN_BEARISH';   // Price lower high, RSI higher high (continuation down)
+    | 'HIDDEN_BEARISH'    // Price lower high, RSI higher high (continuation down)
+    | 'CVD_ABSORPTION_BUY'
+    | 'CVD_ABSORPTION_SELL';
 
 export interface DivergenceSignal {
     type: DivergenceType | null;
@@ -157,8 +159,10 @@ export interface DerivativesData {
 export interface CVDData {
     current: number;                // Cumulative Volume Delta actual
     trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-    divergence: 'BULLISH_ABSORPTION' | 'BEARISH_EXHAUSTION' | 'NONE';
+    divergence: string | null; // Allow string for flexibility with 'CVD_ABSORPTION_BUY' etc
     candleDelta: number;            // Delta de la vela actual
+    cvdSeries?: number[];           // Array de deltas acumulados recientes
+    priceSeries?: number[];         // Array de precios promedios recientes (para comparativa)
 }
 
 export interface VolumeExpertAnalysis {

@@ -158,6 +158,10 @@ export interface TechnicalIndicators {
     range: string;
     target: number | null;
     targetType: 'POSITIVE' | 'NEGATIVE' | null;
+    trendlineBreak?: {
+      detected: boolean;
+      direction: 'BULLISH' | 'BEARISH' | null;
+    };
   };
 
   harmonicPatterns?: import('./types-advanced').HarmonicPattern[];
@@ -324,6 +328,10 @@ export interface AIOpportunity {
     rsiExpert?: {
       range: string;
       target: number | null;
+      trendlineBreak?: {
+        detected: boolean;
+        direction: 'BULLISH' | 'BEARISH' | null;
+      };
     };
     isSqueeze?: boolean; // NEW
     macdDivergence?: string; // NEW: Description or Type
