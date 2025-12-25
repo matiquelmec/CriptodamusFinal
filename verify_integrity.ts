@@ -1,7 +1,7 @@
 
-import { getRawTechnicalIndicators } from './services/cryptoService';
-import { getExpertVolumeAnalysis } from './services/volumeExpertService';
-import { detectHarmonicPatterns } from './services/harmonicPatterns';
+import { getRawTechnicalIndicators } from './src/services/cryptoService';
+import { getExpertVolumeAnalysis } from './src/services/volumeExpertService';
+import { detectHarmonicPatterns } from './src/services/harmonicPatterns';
 
 async function runAudit() {
     console.log("🔍 INICIANDO AUDITORÍA DE INTEGRIDAD DEL SISTEMA...");

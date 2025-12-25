@@ -151,8 +151,8 @@ export interface TechnicalIndicators {
   };
 
   // NEW: EXPERT METRICS
-  macdDivergence?: import('./services/divergenceDetector').Divergence;
-  rsiDivergence?: import('./services/divergenceDetector').Divergence | null; // NEW
+  macdDivergence?: import('../services/divergenceDetector').Divergence;
+  rsiDivergence?: import('../services/divergenceDetector').Divergence | null; // NEW
   isSqueeze?: boolean;
   rsiExpert?: {
     range: string;
@@ -214,7 +214,7 @@ export interface TechnicalIndicators {
   ichimokuData?: IchimokuCloud;
 
   // NEW: Session Expert Analysis
-  sessionAnalysis?: import('./services/sessionExpert').SessionAnalysis;
+  sessionAnalysis?: import('../services/sessionExpert').SessionAnalysis;
 
   // Advanced Market Structure (Optional)
   volumeProfile?: import('./types-advanced').VolumeProfileData;
