@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
-import { scanMarketOpportunities, getMarketRisk } from '../services/cryptoService';
+import { useMarketScanner } from '../hooks/useMarketScanner';
 import { STRATEGIES } from '../services/strategyContext';
 import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database, Lightbulb, Clock, Globe, Hexagon, Triangle } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
@@ -29,6 +29,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     const { cachedData, saveCache, clearCache, cacheAge } = useOpportunityCache();
     const [isFromCache, setIsFromCache] = useState(false);
 
+    // NEW: Hook Integration
+    const { scan: scanMarket } = useMarketScanner();
+
     const scan = async () => {
         if (cooldown > 0) return;
 
@@ -42,22 +45,26 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
             // NEW: Progress tracking
             setScanProgress({ step: 'Obteniendo datos de mercado...', progress: 10 });
 
-            const [opps, riskData] = await Promise.all([
-                scanMarketOpportunities('SCALP_AGRESSIVE'),
-                getMarketRisk()
-            ]);
+            // Use Hook
+            const result = await scanMarket('SCALP_AGRESSIVE');
 
-            setScanProgress({ step: 'Procesando señales...', progress: 90 });
+            if (result) {
+                const { opps, riskData } = result;
+                // Local state update handled by hook mostly, but we sync for cache logic
+                setOpportunities(opps);
+                setCurrentRisk(riskData);
 
-            setOpportunities(opps);
-            setCurrentRisk(riskData);
+                setScanProgress({ step: 'Procesando señales...', progress: 90 });
 
-            // Extract detected regime from first opportunity
-            if (opps.length > 0 && opps[0].strategy) {
-                setDetectedRegime(opps[0].strategy);
-                // NEW: Save to cache
-                saveCache(opps, opps[0].strategy);
+                // Extract detected regime from first opportunity
+                if (opps.length > 0 && opps[0].strategy) {
+                    setDetectedRegime(opps[0].strategy);
+                    // NEW: Save to cache
+                    saveCache(opps, opps[0].strategy);
+                }
             }
+
+
 
             setScanProgress({ step: 'Completado', progress: 100 });
         } catch (e: any) {
