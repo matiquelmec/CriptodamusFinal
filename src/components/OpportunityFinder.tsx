@@ -30,36 +30,49 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     const [isFromCache, setIsFromCache] = useState(false);
 
     // NEW: Hook Integration
-    const { scan: scanMarket, opportunities: scannedOpportunities, isScanning, error: scanError } = useMarketScanner();
+    const { scan: scanMarket, opportunities: scannedOpportunities, isScanning, error: scanError, marketRisk: scannedRisk } = useMarketScanner();
 
-    // Sync hook state to local state (or just use hook state directly)
-    // We keep local state for formatting/filtering if needed, but for now let's sync
+    // Sync hook state to local state
     useEffect(() => {
         if (scannedOpportunities) {
             setOpportunities(scannedOpportunities);
         }
     }, [scannedOpportunities]);
 
-    // Handle Side Effects of Scanning (Success)
+    // Sync Risk Data
     useEffect(() => {
-        if (!isScanning && scannedOpportunities.length > 0) {
-            // Scan just finished successfully
-            const riskData = null; // Risk data is inside the hook but not exposed in the result payload directly in this pattern, we might need to fetch it separately or rely on hook
-
-            setScanProgress({ step: 'Procesando señales...', progress: 90 });
-
-            // Extract detected regime
-            if (scannedOpportunities[0].strategy) {
-                setDetectedRegime(scannedOpportunities[0].strategy);
-                saveCache(scannedOpportunities, scannedOpportunities[0].strategy);
-            }
-            setScanProgress({ step: 'Completado', progress: 100 });
-            setLoading(false);
-        } else if (isScanning) {
-            setLoading(true);
-            setScanProgress({ step: 'Analizando Mercado...', progress: 50 });
+        if (scannedRisk) {
+            setCurrentRisk(scannedRisk);
         }
-    }, [isScanning, scannedOpportunities, saveCache]);
+    }, [scannedRisk]);
+
+    // Handle Side Effects of Scanning (Success & Progress)
+    useEffect(() => {
+        if (isScanning) {
+            // State: Scanning in progress
+            if (!loading) setLoading(true); // Ensure loading is true
+            setScanProgress({ step: 'Analizando Mercado...', progress: 50 });
+        } else if (loading && !isScanning) {
+            // State: Just Finished (Loading was true, now scanning is false)
+
+            setScanProgress({ step: 'Completado', progress: 100 });
+
+            if (scannedOpportunities.length > 0) {
+                // CASE: Opportunities Found
+                if (scannedOpportunities[0].strategy) {
+                    setDetectedRegime(scannedOpportunities[0].strategy);
+                    saveCache(scannedOpportunities, scannedOpportunities[0].strategy);
+                }
+            } else {
+                // CASE: No Opportunities Found (Empty Array)
+                // We keep the "No results" state handled by the render logic
+                setDetectedRegime(null);
+            }
+
+            // CRITICAL FIX: Always turn off loading when scan finishes, even if empty
+            setLoading(false);
+        }
+    }, [isScanning, scannedOpportunities, saveCache, loading]);
 
     // Handle Errors
     useEffect(() => {
