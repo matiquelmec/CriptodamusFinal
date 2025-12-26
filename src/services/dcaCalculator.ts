@@ -273,20 +273,33 @@ export function calculateDCAPlan(
         ? confluenceAnalysis.topResistances
         : confluenceAnalysis.topSupports;
 
-    targetPOIs.sort((a, b) => Math.abs(a.price - averageEntry) - Math.abs(b.price - averageEntry));
+    // STRICT FILTER: Only accept TPs that are PROFITABLE
+    // LONG: TP > Average Entry (with tolerance 0.1%)
+    // SHORT: TP < Average Entry (with tolerance 0.1%)
+    const profitablePOIs = targetPOIs.filter(p => {
+        if (side === 'LONG') return p.price > averageEntry * 1.001;
+        return p.price < averageEntry * 0.999;
+    });
 
-    let tp1Price: number, tp2Price: number, tp3Price: number;
+    // Closest profitable targets first
+    profitablePOIs.sort((a, b) => Math.abs(a.price - averageEntry) - Math.abs(b.price - averageEntry));
 
-    if (targetPOIs.length >= 3) {
-        tp1Price = targetPOIs[0].price;
-        tp2Price = targetPOIs[1].price;
-        tp3Price = targetPOIs[2].price;
+    let tpsArray: number[] = [];
+
+    if (profitablePOIs.length >= 3) {
+        tpsArray = [profitablePOIs[0].price, profitablePOIs[1].price, profitablePOIs[2].price];
     } else {
-        // Fallback ATR
+        // Partial Fill or Full Fallback
+        tpsArray = profitablePOIs.map(p => p.price);
+        const needed = 3 - tpsArray.length;
         const dir = side === 'LONG' ? 1 : -1;
-        tp1Price = averageEntry + (atr * 2 * dir);
-        tp2Price = averageEntry + (atr * 4 * dir);
-        tp3Price = averageEntry + (atr * 8 * dir);
+
+        // Add ATR targets for missing slots
+        // Start multipliers from 2.0, increasing
+        for (let i = 0; i < needed; i++) {
+            const baseMult = 2 + (i * 2); // 2, 4, 6...
+            tpsArray.push(averageEntry + (atr * baseMult * dir));
+        }
     }
 
     // --- EXPERT OPTIMIZATION: RSI TARGET INJECTION ---
@@ -303,7 +316,7 @@ export function calculateDCAPlan(
        Real "Pro" move: The report generator will check RSI target and SWAP TP3 if valid.
     */
 
-    const tps = [tp1Price, tp2Price, tp3Price].sort((a, b) => side === 'LONG' ? a - b : b - a);
+    const tps = tpsArray.sort((a, b) => side === 'LONG' ? a - b : b - a);
 
     // Validate TPs are profitable (TP > Entry for Long)
     // If TP1 is invalid (below entry for long), shift it up.
