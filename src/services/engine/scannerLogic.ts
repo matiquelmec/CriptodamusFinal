@@ -428,7 +428,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const minimumThreshold = isHighRisk ? 80 : PREMIUM_THRESHOLD;
 
             if (finalScore < minimumThreshold && finalScore > 40) {
-                // console.log(`[Scanner Audit] 📉 ${coin.symbol} rechazado por Score (${Math.round(finalScore)}/${minimumThreshold}). Razón: ${detectionNote}`);
+                console.log(`[Scanner Audit] 📉 ${coin.symbol} rechazado por Score (${Math.round(finalScore)}/${minimumThreshold}). Razón: ${detectionNote}`);
             }
 
             if (finalScore >= minimumThreshold) {
@@ -439,7 +439,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const maxPriceMove = 5.0;
 
                 if (Math.abs(priceMove) > maxPriceMove) {
-                    // console.log(`[Scanner Audit] ⚠️ ${coin.symbol} señal obsoleta (Movimiento: ${priceMove.toFixed(2)}%)`);
+                    console.log(`[Scanner Audit] ⚠️ ${coin.symbol} señal obsoleta (Movimiento: ${priceMove.toFixed(2)}%)`);
                     return;
                 }
 
