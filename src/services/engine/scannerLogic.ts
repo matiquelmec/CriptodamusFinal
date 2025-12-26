@@ -21,7 +21,7 @@ import { detectHarmonicPatterns } from '../harmonicPatterns';
 import { detectChartPatterns } from '../chartPatterns';
 import { detectFVG } from '../fairValueGaps';
 import { calculatePOIs } from '../confluenceEngine';
-import { getCurrentSessionSimple } from '../sessionExpert';
+import { getCurrentSessionSimple, analyzeSessionContext } from '../sessionExpert';
 import { detectMarketRegime } from '../marketRegimeDetector';
 import { detectGenericDivergence } from '../divergenceDetector';
 import { selectStrategies } from '../strategySelector';
@@ -226,11 +226,6 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     // --- NEW: DETECT CVD DIVERGENCE (Micro-structure) ---
                     if (volumeExpert && volumeExpert.cvd && volumeExpert.cvd.cvdSeries && volumeExpert.cvd.priceSeries) {
                         // Construct a mock "candles" array for the detector because it expects {high, low} etc.
-                        // But our detector mainly needs arrays? 
-                        // Check detectGenericDivergence signature: (candles: any[], oscillatorValues: number[], sourceName...)
-                        // It uses candles[i].high / candles[i].low.
-                        // Our priceSeries from volumeExpert are just averages.
-                        // Let's create mock candles where high=low=price. It works for the logic (high > high check).
                         const mockCandles = volumeExpert.cvd.priceSeries.map(p => ({ high: p, low: p, close: p }));
                         const cvdValues = volumeExpert.cvd.cvdSeries;
 
@@ -339,6 +334,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
             }
 
+            if (totalScore > 99) totalScore = 99;
             score = totalWeight > 0 ? totalScore : 0;
 
             if (strategyDetails.length > 0) {
@@ -368,13 +364,6 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         totalScore += 20;
                         detectionNote += " | 🐋 Whale Absorption (Bear)";
                     }
-                }
-
-                // 3. Open Interest (Trend Confirmation)
-                // If Long + OI Up = Strong Trend
-                if (volumeExpert.derivatives.openInterest > 0) {
-                    // Can't check trend of OI easily without history, but can check magnitude/value
-                    // Placeholder for now
                 }
             }
 
@@ -416,22 +405,70 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             if (totalScore > 99) totalScore = 99;
             score = totalWeight > 0 ? totalScore : 0;
 
-            const threshold = isHighRisk ? 70 : 50;
-
             let finalScore = score;
             if (macroContext) {
                 finalScore = applyMacroFilters(score, coin.symbol, signalSide, macroContext);
             }
 
-            const PREMIUM_THRESHOLD = 60;
-            const GOD_MODE_THRESHOLD = 90;
-            const minimumThreshold = isHighRisk ? 80 : PREMIUM_THRESHOLD;
+            // --- GOLDEN TICKET: PATTERN OVERRIDE ---
+            // Detect patterns early to allow override of strict macro filters
+            // MOVED UP to prevent "isGoldenTicket used before declaration" error
+            let isGoldenTicket = false;
+            let detectedPatterns: any[] = [];
+            try {
+                // Use a standard variable name
+                detectedPatterns = detectChartPatterns(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), volumes.slice(0, checkIndex + 1));
 
-            if (finalScore < minimumThreshold && finalScore > 40) {
-                console.log(`[Scanner Audit] 📉 ${coin.symbol} rechazado por Score (${Math.round(finalScore)}/${minimumThreshold}). Razón: ${detectionNote}`);
+                const bullReversal = detectedPatterns.find((p: any) => (p.type === 'DOUBLE_BOTTOM' || p.type === 'INV_HEAD_SHOULDERS') && p.confidence > 0.75);
+
+                if (bullReversal && signalSide === 'LONG') {
+                    // VALIDATE WITH DIVERGENCE (Safety Check)
+                    if (rsiDivergence || macdDivergence || (volumeExpert && volumeExpert.cvd?.divergence?.includes('BULL'))) {
+                        isGoldenTicket = true;
+                        // Pre-emptively boost score for the threshold check
+                        finalScore = Math.max(finalScore, 85);
+                        detectionNote += ` | 🎫 TICKET DE ORO: ${bullReversal.type}`;
+                    }
+                }
+            } catch (pattErr) { }
+
+            // --- SESSION AWARENESS ---
+            // MOVED UP to ensure logic runs before threshold checks
+            try {
+                // Analyze context for Judas Swings & Initial Balance
+                // We need hourly candles for session levels
+                const candles1hForSession = await fetchCandles(coin.id, '1h');
+                if (candles1hForSession.length >= 24) {
+                    const sessionAnalysis = analyzeSessionContext(currentPrice, volumes[checkIndex], candles1hForSession);
+
+                    // 1. Session Bias Adjustment
+                    const isBiasAligned = (sessionAnalysis.bias === 'BULLISH' && signalSide === 'LONG') ||
+                        (sessionAnalysis.bias === 'BEARISH' && signalSide === 'SHORT');
+
+                    if (isBiasAligned) {
+                        finalScore += 10;
+                        detectionNote += ` | 🕒 Sesgo de Sesión ${sessionAnalysis.bias}`;
+                    }
+
+                    // 2. Judas Swing (Smart Money Reversal)
+                    if (signalSide === 'SHORT' && sessionAnalysis.judasSwing === 'BEARISH_REVERSAL') {
+                        finalScore += 20;
+                        detectionNote += " | 🐍 Judas Swing Short (Turtle Soup)";
+                    } else if (signalSide === 'LONG' && sessionAnalysis.judasSwing === 'BULLISH_REVERSAL') {
+                        finalScore += 20;
+                        detectionNote += " | 🐢 Judas Swing Long (Turtle Soup)";
+                    }
+                }
+            } catch (sessErr) { /* Ignore session error */ }
+
+            const PREMIUM_THRESHOLD = 60;
+            const minimumThreshold = (isHighRisk && !isGoldenTicket) ? 80 : PREMIUM_THRESHOLD;
+
+            if (finalScore < minimumThreshold && finalScore > 40 && !isGoldenTicket) {
+                // console.log(`[Scanner Audit] 📉 ${coin.symbol} rechazado por Score (${Math.round(finalScore)}/${minimumThreshold}). Razón: ${detectionNote}`);
             }
 
-            if (finalScore >= minimumThreshold) {
+            if (finalScore >= minimumThreshold || isGoldenTicket) {
                 const signalPrice = prices[checkIndex];
                 const livePrice = prices[prices.length - 1];
 
@@ -439,7 +476,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const maxPriceMove = 5.0;
 
                 if (Math.abs(priceMove) > maxPriceMove) {
-                    console.log(`[Scanner Audit] ⚠️ ${coin.symbol} señal obsoleta (Movimiento: ${priceMove.toFixed(2)}%)`);
+                    // console.log(`[Scanner Audit] ⚠️ ${coin.symbol} señal obsoleta (Movimiento: ${priceMove.toFixed(2)}%)`);
                     return;
                 }
 
@@ -628,6 +665,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const format = (n: number) => parseFloat(n.toFixed(decimals));
                 const finalNote = isHighRisk ? `[⚠️ RIESGO ALTO] ${detectionNote}` : detectionNote;
                 const vwapDist = ((signalPrice - vwap) / vwap) * 100;
+                const GOD_MODE_THRESHOLD = 90;
                 const signalTier = finalScore >= GOD_MODE_THRESHOLD ? '🔥 GOD MODE' : '⭐ PREMIUM';
                 const session = getCurrentSessionSimple();
                 const rrRatio = dcaPlan.entries.length > 0 && dcaPlan.stopLoss > 0
