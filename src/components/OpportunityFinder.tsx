@@ -241,7 +241,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                             </div>
                         </div>
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-secondary gap-4 px-6 max-w-2xl mx-auto">
+                        <div className="min-h-full flex flex-col items-center justify-center text-secondary gap-4 px-6 py-12 max-w-2xl mx-auto">
                             <div className="p-4 bg-blue-500/10 rounded-full">
                                 <Target size={48} className="text-blue-400" />
                             </div>
