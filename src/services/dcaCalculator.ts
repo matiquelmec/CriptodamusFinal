@@ -318,13 +318,27 @@ export function calculateDCAPlan(
 
     const tps = tpsArray.sort((a, b) => side === 'LONG' ? a - b : b - a);
 
-    // Validate TPs are profitable (TP > Entry for Long)
-    // If TP1 is invalid (below entry for long), shift it up.
-    if ((side === 'LONG' && tps[0] <= averageEntry) || (side === 'SHORT' && tps[0] >= averageEntry)) {
-        const dir = side === 'LONG' ? 1 : -1;
-        tps[0] = averageEntry + (atr * 1.5 * dir);
-        tps[1] = averageEntry + (atr * 3.5 * dir);
-        tps[2] = averageEntry + (atr * 7 * dir);
+    // Validate TPs are profitable relative to ENTRY 1 (Crucial for "Force Market" setups)
+    // Even if profitable vs WAP, they must be profitable vs the first execution to avoid losses on partial fills.
+    const entry1Price = entries[0].price;
+
+    if (side === 'LONG') {
+        // TP1 must be > Entry 1
+        if (tps[0] <= entry1Price) {
+            tps[0] = entry1Price + (atr * 1.5); // Force profitable TP1
+        }
+        // Ensure TP alignment (TP1 < TP2 < TP3)
+        if (tps[1] <= tps[0]) tps[1] = tps[0] + (atr * 2);
+        if (tps[2] <= tps[1]) tps[2] = tps[1] + (atr * 2);
+
+    } else { // SHORT
+        // TP1 must be < Entry 1
+        if (tps[0] >= entry1Price) {
+            tps[0] = entry1Price - (atr * 1.5); // Force profitable TP1
+        }
+        // Ensure TP alignment (TP1 > TP2 > TP3)
+        if (tps[1] >= tps[0]) tps[1] = tps[0] - (atr * 2);
+        if (tps[2] >= tps[1]) tps[2] = tps[1] - (atr * 2);
     }
 
 
