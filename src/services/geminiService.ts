@@ -1,4 +1,5 @@
 import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from "../types";
+import { getCurrentSessionSimple, analyzeSessionContext, getKillZoneStatus, getSessionProximityInfo } from '../sessionExpert';
 import { MacroContext } from './macroService';
 import { analyzeIchimokuSignal } from './ichimokuStrategy'; // NEW: Expert Logic
 import { generateDCAExecutionPlan } from './dcaReportGenerator'; // NEW: DCA System
@@ -495,6 +496,10 @@ export const streamMarketAnalysis = async function* (
         response += `|---|---|---|\n`;
 
         // NEW: Advanced Session Analysis
+        // NEW: Advanced Session Analysis & Kill Zones
+        const killZone = getKillZoneStatus();
+        const proximity = getSessionProximityInfo();
+
         if (techData.sessionAnalysis) {
             const { currentSession, activeNote, judasSwing, bias } = techData.sessionAnalysis;
             const sessionIcon = currentSession === 'ASIA' ? '🌏' : currentSession === 'LONDON' ? '🇪🇺' : currentSession === 'NEW_YORK' ? '🇺🇸' : '🌑';
@@ -514,6 +519,13 @@ export const streamMarketAnalysis = async function* (
         } else {
             // Fallback
             response += `| **Sesión de Mercado** | ⚠️ N/A | Datos insuficientes para análisis de ORB. |\n`;
+        }
+
+        // KILL ZONE DISPLAY
+        if (killZone.isActive) {
+            response += `| **🕐 KILL ZONE ACTIVA** | ⚡ **${killZone.zoneName.replace('_', ' ')}** | ${killZone.message} |\n`;
+        } else if (proximity.driftStatus !== 'ACTIVE_FLOW' && proximity.warningMessage) {
+            response += `| **🕐 Contexto Horario** | ⏳ **${proximity.driftStatus.replace('_', ' ')}** | ${proximity.warningMessage} |\n`;
         }
 
         // NEW: CRASH MODE FEEDBACK IN TABLE

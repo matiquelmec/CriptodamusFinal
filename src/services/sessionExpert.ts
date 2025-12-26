@@ -193,3 +193,98 @@ function detectSessionLevels(hourlyCandles: { timestamp: number, open: number, h
 
     return levels;
 }
+
+// --- INSTITUTIONAL KILL ZONES & PROXIMITY ---
+
+export interface KillZoneStatus {
+    isActive: boolean;
+    zoneName: 'LONDON_OPEN' | 'NY_OPEN' | 'LONDON_CLOSE' | 'ASIA_OPEN' | 'NONE';
+    message: string;
+}
+
+export interface SessionProximity {
+    nextSession: string;
+    minutesUntil: number;
+    driftStatus: 'PRE_SESSION_STALKING' | 'DEAD_ZONE' | 'ACTIVE_FLOW';
+    warningMessage: string | null;
+}
+
+/**
+ * Returns the current "Kill Zone" status (High Probability Time Windows).
+ * Times are based on EST (UTC-5/4) standard for ICT concepts.
+ */
+export function getKillZoneStatus(): KillZoneStatus {
+    // We use New York time as the anchor for Kill Zones
+    const now = new Date();
+    const nyHour = getHourInZone(now, 'America/New_York');
+    const nyMinute = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        minute: 'numeric'
+    }).format(now);
+    const min = parseInt(nyMinute, 10);
+
+    // LONDON OPEN KZ: 02:00 - 05:00 EST
+    if (nyHour >= 2 && nyHour < 5) {
+        return { isActive: true, zoneName: 'LONDON_OPEN', message: "⚡ LONDON KILL ZONE: Alta Probabilidad de 'Judas Swing'." };
+    }
+
+    // NEW YORK OPEN KZ: 07:00 - 10:00 EST
+    if (nyHour >= 7 && nyHour < 10) {
+        return { isActive: true, zoneName: 'NY_OPEN', message: "⚡ NY KILL ZONE: Volatilidad Extrema. Esperar manipulación inicial." };
+    }
+
+    // LONDON CLOSE KZ: 10:00 - 12:00 EST
+    if (nyHour >= 10 && nyHour < 12) {
+        return { isActive: true, zoneName: 'LONDON_CLOSE', message: "⚡ LONDON CLOSE KZ: Posible reversión de tendencia diaria." };
+    }
+
+    // ASIA OPEN: 18:00 - 22:00 EST ( approx 20:00 is standard open logic for ICT range)
+    if (nyHour >= 19 && nyHour < 23) {
+        return { isActive: true, zoneName: 'ASIA_OPEN', message: "🌏 ASIA RANGE BUILDING: Acumulación de liquidez." };
+    }
+
+    return { isActive: false, zoneName: 'NONE', message: "⏳ Fuera de Kill Zone." };
+}
+
+/**
+ * analyzes time relative to major session opens to assist "Stalking"
+ */
+export function getSessionProximityInfo(): SessionProximity {
+    const now = new Date();
+    const nyHour = getHourInZone(now, 'America/New_York');
+
+    // Simple logic: distance to 02:00 (London), 07:00 or 08:30 (NY), 18:00 (Asia)
+    let nextSession = "";
+    let minutesUntil = 999;
+
+    // Dist to NY (08:00 EST for simplistic math, or 09:30 for equity open)
+    // ICT often references 08:30 bracket. Let's use 07:00 as start of pre-market/KZ.
+
+    // ... Logic could be complex with circular time, simplified for immediate utility:
+
+    let driftStatus: SessionProximity['driftStatus'] = 'ACTIVE_FLOW';
+    let warningMessage = null;
+
+    // DEAD ZONE: Lunch (12:00 - 13:00 EST)
+    if (nyHour === 12) {
+        driftStatus = 'DEAD_ZONE';
+        warningMessage = "🍔 NY LUNCH: Algoritmos en pausa/baja probabilidad. Posible consolidación.";
+    }
+    // DEAD ZONE: Post market (16:00 - 18:00 EST)
+    else if (nyHour >= 16 && nyHour < 18) {
+        driftStatus = 'DEAD_ZONE';
+        warningMessage = "💤 POST-MARKET: Cierre de libros. Spreads altos.";
+    }
+    // STALKING: 1H before NY Open (06:00 - 07:00 EST)
+    else if (nyHour === 6) {
+        driftStatus = 'PRE_SESSION_STALKING';
+        warningMessage = "🦅 PRE-NY: 'Stalking Mode'. No operar antes del Open. Busca POIs.";
+    }
+    // STALKING: 1H before London (01:00 - 02:00 EST)
+    else if (nyHour === 1) {
+        driftStatus = 'PRE_SESSION_STALKING';
+        warningMessage = "🦅 PRE-LONDON: Preparando la trampa. Espera a las 02:00 EST.";
+    }
+
+    return { nextSession, minutesUntil, driftStatus, warningMessage };
+}
