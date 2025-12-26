@@ -419,7 +419,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // Use a standard variable name
                 detectedPatterns = detectChartPatterns(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), volumes.slice(0, checkIndex + 1));
 
-                const bullReversal = detectedPatterns.find((p: any) => (p.type === 'DOUBLE_BOTTOM' || p.type === 'INV_HEAD_SHOULDERS') && p.confidence > 0.75);
+                const bullReversal = detectedPatterns.find((p: any) => (p.type === 'DOUBLE_BOTTOM' || p.type === 'INV_HEAD_SHOULDERS') && p.confidence >= 0.75);
 
                 if (bullReversal && signalSide === 'LONG') {
                     // VALIDATE WITH DIVERGENCE (Safety Check)
