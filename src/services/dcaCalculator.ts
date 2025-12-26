@@ -1,5 +1,5 @@
 import { ConfluenceAnalysis, POI } from './confluenceEngine';
-import { MarketRegime } from '../types-advanced';
+import { MarketRegime } from '../types/types-advanced';
 import { FundamentalTier } from '../types'; // NEW Import
 
 export interface DCAEntry {
@@ -186,7 +186,25 @@ export function calculateDCAPlan(
     }
 
     // 3. Ordenar POIs (de menor a mayor para LONG, de mayor a menor para SHORT)
+    // CORRECTION: For LONG, we want HIGH P (Closest below price) to LOW P. Descending.
+    // For SHORT, we want LOW P (Closest above price) to HIGH P. Ascending.
     selectedPOIs.sort((a, b) => side === 'LONG' ? b.price - a.price : a.price - b.price);
+
+    // 3.5 FORCE MARKET ENTRY (UX FIX)
+    // If the first POI is too far (> 0.5%) from signalPrice, the user sees an "unreachable" entry.
+    // We force Entry 1 to be close to signalPrice (Market Execution) in that case.
+    const firstPOIDist = Math.abs((selectedPOIs[0].price - signalPrice) / signalPrice);
+    if (firstPOIDist > 0.005) { // 0.5% Gap
+        // Shift POIs and inject Market Price
+        const marketPOI: POI = {
+            price: signalPrice, // Market Entry
+            score: 5,
+            factors: ["📍 Ejecución Inmediata (Market)"],
+            type: side === 'LONG' ? 'SUPPORT' : 'RESISTANCE'
+        };
+        // Keep top 2 distant levels as DCA 2 and 3
+        selectedPOIs = [marketPOI, selectedPOIs[0], selectedPOIs[1]].filter(Boolean);
+    }
 
     // 4. Position sizing institucional
     const positionSizes = getRegimeAwarePositionSizing(marketRegime);
