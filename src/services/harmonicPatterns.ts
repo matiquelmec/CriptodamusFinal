@@ -150,6 +150,10 @@ function checkBearishRatios(X: number, A: number, B: number, C: number, D: numbe
     const bRetracement = (B - A) / (X - A);
     // D Retracement: (D - A) / (X - A)
     // Note: If D > X, this > 1.0 (Extension)
+    // CORRECTED LOGIC: For Bearish, D is High, A is Low. X is High.
+    // XA is the main leg (Top to Bottom). 
+    // AD is the retracement back up.
+    // Formula: (D - A) / (X - A)
     const dRetracement = (D - A) / (X - A);
 
     // 1. GARTLEY (Bearish)

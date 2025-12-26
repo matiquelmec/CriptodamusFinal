@@ -23,8 +23,9 @@ export const analyzePinballSignal = (
     // 1. FILTER: EMA200 Slope must be significant (trending market)
     // Expert Doc: "Un Golden Cross es mucho más potente si la EMA 200 ya se ha aplanado o está comenzando a subir."
     // For Pinball, we want to trade WITH the secular trend.
-    const isSecularBull = slope200 > 0.02; // Threshold for positive slope
-    const isSecularBear = slope200 < -0.02;
+    const validSlope = (slope200 !== undefined && !isNaN(slope200)) ? slope200 : 0;
+    const isSecularBull = validSlope > 0.02; // Threshold for positive slope
+    const isSecularBear = validSlope < -0.02;
 
     // 2. DETECT ZONE
     const trend = ema50 > ema200 ? 'BULLISH' : 'BEARISH';

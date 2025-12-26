@@ -110,16 +110,20 @@ function applyMacroFilters(
 // --- MAIN LOGIC (Refactored from cryptoService.ts) ---
 
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {
-    // 0. HEALTH CHECK (Protect IP)
-    const isHealthy = await checkBinanceHealth();
-    if (!isHealthy) {
-        console.error("EXCHANGE_OFFLINE: Binance API is unreachable or high latency. Scanning aborted for safety.");
-        // Return empty array instead of throwing to prevent UI crash, but log error
-        return [];
-    }
+    // 0. LOG START
+    console.log(`[Scanner] STARTING SCAN: ${style} mode...`);
+
     // 1. Get market data based on selected style
+    // REMOVED BLOCKING HEALTH CHECK: Let fetchCryptoData handle fallbacks internally.
     const mode = style === 'MEME_SCALP' ? 'memes' : 'volume';
-    const market = await fetchCryptoData(mode);
+    let market: any[] = [];
+    try {
+        market = await fetchCryptoData(mode);
+        console.log(`[Scanner] Market Data Parsed: ${market.length} tickers.`);
+    } catch (e) {
+        console.error("[Scanner] MARKET DATA CRITICAL ERROR:", e);
+        throw new Error("EXCHANGE_OFFLINE"); // Signal to UI
+    }
 
     // 2. CHECK MARKET RISK (News Filter)
     const risk = await getMarketRisk();
@@ -136,6 +140,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     if (!market || market.length === 0) throw new Error("No market data available");
 
     const topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 60);
+    console.log(`[Scanner] Analyzing Top ${topCandidates.length} candidates...`);
 
     const validMathCandidates: AIOpportunity[] = [];
 
@@ -192,9 +197,18 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const adx = calculateADX(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), 14);
             const atr = calculateATR(highs.slice(0, checkIndex + 1), lows.slice(0, checkIndex + 1), prices.slice(0, checkIndex + 1), 14);
 
-            const volumeProfile = calculateVolumeProfile(candles.slice(0, checkIndex + 1), atr);
-            const { bullishOB, bearishOB } = detectOrderBlocks(candles.slice(0, checkIndex + 1), atr, currentPrice);
-            const { bullishFVG, bearishFVG } = detectFVG(candles.slice(0, checkIndex + 1), atr, currentPrice);
+            // --- EXPERT MODULES (SAFE WRAPPED) ---
+            let volumeProfile, bullishOB, bearishOB, bullishFVG, bearishFVG;
+            try {
+                volumeProfile = calculateVolumeProfile(candles.slice(0, checkIndex + 1), atr);
+                const obs = detectOrderBlocks(candles.slice(0, checkIndex + 1), atr, currentPrice);
+                bullishOB = obs.bullishOB; bearishOB = obs.bearishOB;
+                const fvgs = detectFVG(candles.slice(0, checkIndex + 1), atr, currentPrice);
+                bullishFVG = fvgs.bullishFVG; bearishFVG = fvgs.bearishFVG;
+            } catch (err) {
+                volumeProfile = { poc: 0, valueAreaHigh: 0, valueAreaLow: 0, totalVolume: 0 };
+                bullishOB = []; bearishOB = []; bullishFVG = []; bearishFVG = [];
+            }
 
             const zScore = calculateZScore(prices.slice(0, checkIndex + 1), ema200);
             const emaSlope = calculateSlope(calculateEMAArray(prices.slice(0, checkIndex + 1), 200), 10);
@@ -663,5 +677,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
         } catch (e) { return null; }
     }));
 
-    return validMathCandidates.sort((a, b) => b.confidenceScore - a.confidenceScore).slice(0, 10);
+    const result = validMathCandidates.sort((a, b) => b.confidenceScore - a.confidenceScore).slice(0, 10);
+    console.log(`[Scanner] SCAN COMPLETE. Found ${result.length} opportunities.`);
+    return result;
 };
