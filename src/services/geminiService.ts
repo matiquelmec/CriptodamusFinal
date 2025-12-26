@@ -1,5 +1,5 @@
 import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from "../types";
-import { getCurrentSessionSimple, analyzeSessionContext, getKillZoneStatus, getSessionProximityInfo } from '../sessionExpert';
+import { getCurrentSessionSimple, analyzeSessionContext, getKillZoneStatus, getSessionProximityInfo } from './sessionExpert';
 import { MacroContext } from './macroService';
 import { analyzeIchimokuSignal } from './ichimokuStrategy'; // NEW: Expert Logic
 import { generateDCAExecutionPlan } from './dcaReportGenerator'; // NEW: DCA System
