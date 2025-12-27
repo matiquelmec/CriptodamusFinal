@@ -11,7 +11,7 @@ export function generateDCAExecutionPlan(
     atr: number,
     fibonacci: TechnicalIndicators['fibonacci'],
     confluenceAnalysis: ConfluenceAnalysis | undefined,
-    marketRegime: import('../types-advanced').MarketRegime | undefined,
+    marketRegime: import('../types/types-advanced').MarketRegime | undefined,
     side: 'LONG' | 'SHORT' = 'LONG',
     customHeader?: string,
     rsiExpert?: { target: number | null; range: string; },
@@ -20,7 +20,7 @@ export function generateDCAExecutionPlan(
     tier: FundamentalTier = 'B', // NEW: Fundamental Tier
     harmonicPatterns: import('./harmonicPatterns').HarmonicPattern[] = [], // NEW: For Structural Stops
     freezeSignal?: import('./strategies/FreezeStrategy').FreezeSignal, // NEW: Freeze Strategy Override
-    volumeExpert?: import('./types-advanced').VolumeExpertAnalysis // NEW: Predictive Data Injection
+    volumeExpert?: import('../types/types-advanced').VolumeExpertAnalysis // NEW: Predictive Data Injection
 ): string {
     let response = '';
 
