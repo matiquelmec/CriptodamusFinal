@@ -657,10 +657,37 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     }
                 } catch (err) { }
 
+                // --- PREDICTIVE DATA EXTRACTION (New Intelligence Layer) ---
+                const predictiveTargets = {
+                    rsiReversal: rsiExpertResults.reversalTarget?.active ? rsiExpertResults.reversalTarget.targetPrice : undefined,
+                    orderBookWall: undefined as number | undefined,
+                    liquidationCluster: undefined as number | undefined
+                };
+
+                if (volumeExpert) {
+                    // 1. OrderBook Walls (Smart Exit: Front-run the rejection)
+                    if (signalSide === 'LONG' && volumeExpert.liquidity.orderBook?.askWall) {
+                        predictiveTargets.orderBookWall = volumeExpert.liquidity.orderBook.askWall.price;
+                    } else if (signalSide === 'SHORT' && volumeExpert.liquidity.orderBook?.bidWall) {
+                        predictiveTargets.orderBookWall = volumeExpert.liquidity.orderBook.bidWall.price;
+                    }
+
+                    // 2. Liquidation Magnets (High Probability Target)
+                    const liqs = volumeExpert.liquidity.liquidationClusters || [];
+                    if (liqs.length > 0) {
+                        // If LONG, we target SHORT LIQS (Buying pressure pushes price UP to kill shorts)
+                        // If SHORT, we target LONG LIQS (Selling pressure pushes price DOWN to kill longs)
+                        const targetType = signalSide === 'LONG' ? 'SHORT_LIQ' : 'LONG_LIQ';
+                        const magnet = liqs.find(l => l.type === targetType);
+                        if (magnet) predictiveTargets.liquidationCluster = (magnet.priceMin + magnet.priceMax) / 2;
+                    }
+                }
+
                 const dcaPlan = calculateDCAPlan(
                     signalPrice,
                     { supportPOIs: [], resistancePOIs: [], topSupports: [], topResistances: [] },
-                    atr, signalSide, marketRegime, fibs, tier
+                    atr, signalSide, marketRegime, fibs, tier,
+                    predictiveTargets // PASSING THE BRAIN
                 );
 
                 // EXPERT: FREEZE DCA OVERRIDE

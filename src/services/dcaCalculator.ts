@@ -23,6 +23,14 @@ export interface DCAPlan {
     };
 }
 
+// NEW: Predictive Targets for Smart Exits
+export interface PredictiveTargets {
+    rsiReversal?: number; // Cardwell Objective
+    orderBookWall?: number; // Major Wall Price
+    liquidationCluster?: number; // Liquidity Magnet
+    projectedHigh?: number; // Pattern Measured Move
+}
+
 /**
  * Determina el tamaño de posición óptimo para cada entrada DCA según el régimen
  */
@@ -89,7 +97,8 @@ export function calculateDCAPlan(
         level0_886: number;  // NEW
         level0_5: number;
     },
-    tier: FundamentalTier = 'B' // NEW: Fundamental Tier (Default to average)
+    tier: FundamentalTier = 'B', // NEW: Fundamental Tier (Default to average)
+    predictiveTargets?: PredictiveTargets // NEW: Smart Exit Data
 ): DCAPlan {
     // 1. Seleccionar POIs según el lado del trade
     let relevantPOIs = side === 'LONG'
@@ -268,36 +277,85 @@ export function calculateDCAPlan(
     const riskPerShare = Math.abs(averageEntry - stopLoss) / averageEntry;
     const totalRisk = riskPerShare * 100;
 
-    // 9. Take Profits
+    // 9. Take Profits (SMART PREDICTIVE LOGIC)
     const targetPOIs = side === 'LONG'
         ? confluenceAnalysis.topResistances
         : confluenceAnalysis.topSupports;
 
     // STRICT FILTER: Only accept TPs that are PROFITABLE
-    // LONG: TP > Average Entry (with tolerance 0.1%)
-    // SHORT: TP < Average Entry (with tolerance 0.1%)
     const profitablePOIs = targetPOIs.filter(p => {
         if (side === 'LONG') return p.price > averageEntry * 1.001;
         return p.price < averageEntry * 0.999;
     });
 
-    // Closest profitable targets first
-    profitablePOIs.sort((a, b) => Math.abs(a.price - averageEntry) - Math.abs(b.price - averageEntry));
+    // INTELLIGENT MERGE: Combine Static POIs with Predictive Targets
+    let smartTargets: { price: number, score: number, label: string }[] = [];
 
+    // A. Add Structural POIs (Base Layer)
+    profitablePOIs.forEach(p => smartTargets.push({ price: p.price, score: p.score, label: 'Structure' }));
+
+    // B. Add Predictive Targets (God Tier Layer)
+    if (predictiveTargets) {
+        // 1. RSI Target (High Accuracy)
+        if (predictiveTargets.rsiReversal) {
+            const isProfitable = side === 'LONG' ? predictiveTargets.rsiReversal > averageEntry * 1.005 : predictiveTargets.rsiReversal < averageEntry * 0.995;
+            if (isProfitable) smartTargets.push({ price: predictiveTargets.rsiReversal, score: 20, label: '🎯 RSI Target' });
+        }
+        // 2. Liquidity Magnet (High Probability)
+        if (predictiveTargets.liquidationCluster) {
+            const isProfitable = side === 'LONG' ? predictiveTargets.liquidationCluster > averageEntry * 1.005 : predictiveTargets.liquidationCluster < averageEntry * 0.995;
+            if (isProfitable) smartTargets.push({ price: predictiveTargets.liquidationCluster, score: 18, label: '🧲 Liquidity' });
+        }
+        // 3. Sell Wall (Smart Exit)
+        if (predictiveTargets.orderBookWall) {
+            // Front-run wall by 0.2% to ensure fill before the rejection
+            const safePrice = side === 'LONG' ? predictiveTargets.orderBookWall * 0.998 : predictiveTargets.orderBookWall * 1.002;
+            const isProfitable = side === 'LONG' ? safePrice > averageEntry * 1.005 : safePrice < averageEntry * 0.995;
+            if (isProfitable) smartTargets.push({ price: safePrice, score: 15, label: '🧱 Wall Front-Run' });
+        }
+    }
+
+    // C. Deduplicate & Sort
+    const NOTE_THRESHOLD = 0.01; // 1% distance considered "same level"
+    let uniqueTargets: { price: number, score: number, label: string }[] = [];
+
+    // Sort by price for deduplication logic
+    smartTargets.sort((a, b) => a.price - b.price);
+
+    for (const t of smartTargets) {
+        const existing = uniqueTargets.find(u => Math.abs((u.price - t.price) / t.price) < NOTE_THRESHOLD);
+        if (existing) {
+            // Merge: Keep higher score, combine labels
+            if (t.score > existing.score) existing.score = t.score;
+            if (!existing.label.includes(t.label)) existing.label += ` + ${t.label}`;
+            // If the new one is more precise (Predictive), usually we prefer its price? 
+            // Let's bias towards the Predictive price if score is high
+            if (t.score >= 15) existing.price = t.price;
+        } else {
+            uniqueTargets.push(t);
+        }
+    }
+
+    // Sort for TPs: Closest to entry is TP1
+    uniqueTargets.sort((a, b) => Math.abs(a.price - averageEntry) - Math.abs(b.price - averageEntry));
+
+    // Fallback if empty (shouldn't happen often with confluence)
     let tpsArray: number[] = [];
 
-    if (profitablePOIs.length >= 3) {
-        tpsArray = [profitablePOIs[0].price, profitablePOIs[1].price, profitablePOIs[2].price];
+    if (uniqueTargets.length >= 3) {
+        tpsArray = [uniqueTargets[0].price, uniqueTargets[1].price, uniqueTargets[2].price];
     } else {
-        // Partial Fill or Full Fallback
-        tpsArray = profitablePOIs.map(p => p.price);
+        // Fill from unique
+        tpsArray = uniqueTargets.map(u => u.price);
+
+        // Fill remaining with Multipliers (ATR)
         const needed = 3 - tpsArray.length;
         const dir = side === 'LONG' ? 1 : -1;
-
-        // Add ATR targets for missing slots
-        // Start multipliers from 2.0, increasing
+        // Start multipliers higher than existing TPs if possible? 
+        // Simple fallback logic:
         for (let i = 0; i < needed; i++) {
-            const baseMult = 2 + (i * 2); // 2, 4, 6...
+            const baseMult = 2 + (i + tpsArray.length) * 2;
+
             tpsArray.push(averageEntry + (atr * baseMult * dir));
         }
     }
