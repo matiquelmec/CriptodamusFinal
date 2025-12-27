@@ -269,15 +269,13 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
             };
 
-            // NEW: FREEZE STRATEGY INTEGRATION
+            // NEW: FREEZE STRATEGY INTEGRATION (MOVED UP FOR SAFETY)
+            // We apply the boost BEFORE macro filters. This ensures that if the macro environment is bad (e.g., BTC Crash),
+            // this boost gets penalized proportionally by 'applyMacroFilters'.
             const freezeSignal = analyzeFreezeStrategy(techIndicators, risk);
             if (freezeSignal.active) {
                 // Boost Score for Valid Freeze Signal
-                // Logic: If Freeze is active, it's a high conviction continuation or reversal pattern.
-                // We add significant score to ensure it passes the threshold.
                 score += 25;
-                // Don't add to 'totalScore' yet effectively because selectStrategies runs next, 
-                // but we will incorporate it into the final score check.
             }
 
             const marketRegime = detectMarketRegime(techIndicators);
@@ -415,19 +413,32 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             }
 
             // NEW: FREEZE STRATEGY SCORE BOOST (Late Binding)
+            // NEW: FREEZE STRATEGY SCORE BOOST (Late Binding)
+
+            // MOVED DOWN: Freeze Strategy Detail Appending is handled above now.
+            // Removed redundant block to avoid double-counting or ordering issues.
+
+            // NEW: FREEZE STRATEGY DETAILS (Late Binding)
             if (freezeSignal.active) {
                 if ((signalSide === 'LONG' && freezeSignal.type === 'BULLISH') || (signalSide === 'SHORT' && freezeSignal.type === 'BEARISH')) {
-                    totalScore += 25; // High Confidence Boost
+                    // Score already boosted above
                     detectionNote += ` | ❄️ FREEZE ${freezeSignal.type}`;
-                    specificTrigger = `N-Pattern + Box Theory`; // Override trigger for clarity
+                    specificTrigger = `N-Pattern + Box Theory`;
                 }
             }
 
             if (totalScore > 99) totalScore = 99;
-            score = totalWeight > 0 ? totalScore : 0;
+            score = totalWeight > 0 ? totalScore : score; // Use 'score' (which includes Freeze boost) if totalWeight is 0? No, rely on accumulation.
+            // Actually, we must ensure 'score' carries the Freeze boost into finalScore.
+            // If we used 'totalScore', we might have lost the +25 if loop logic overrode it. 
+            // Better to rely on 'finalScore' derivation from 'score'.
+
+            // Re-apply score accumulation logic safely
+            score = Math.max(score, totalScore);
 
             let finalScore = score;
             if (macroContext) {
+                // CRITICAL FIX: Now applied AFTER the boost
                 finalScore = applyMacroFilters(score, coin.symbol, signalSide, macroContext);
             }
 
@@ -494,7 +505,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const livePrice = prices[prices.length - 1];
 
                 const priceMove = ((livePrice - signalPrice) / signalPrice) * 100;
-                const maxPriceMove = 5.0;
+
+                // NEW: SMART DYNAMIC THRESHOLD
+                // Scalp/Freeze/Meme = Tight (1.5%)
+                // Swing/Ichimoku = Loose (4.0%)
+                const isSwing = style === 'SWING_INSTITUTIONAL' || style === 'ICHIMOKU_CLOUD';
+                const maxPriceMove = isSwing ? 4.0 : 1.5;
 
                 if (Math.abs(priceMove) > maxPriceMove) {
                     // console.log(`[Scanner Audit] ⚠️ ${coin.symbol} señal obsoleta (Movimiento: ${priceMove.toFixed(2)}%)`);
@@ -745,7 +761,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         isSqueeze: isSqueeze,
                         macdDivergence: macdDivergence?.description,
                         rsiDivergence: rsiDivergence?.description,
-                        volumeExpert: volumeExpert // Updated in Place with divergence
+                        volumeExpert: volumeExpert, // Updated in Place with divergence
+                        sessionContext: session.session // Explicit field for UI
                     },
                     chartPatterns: chartPatterns, dcaPlan: dcaPlan,
                     harmonicPatterns: harmonicPatterns, invalidated: false,
