@@ -19,7 +19,8 @@ export function generateDCAExecutionPlan(
     executionPhilosophy?: string, // NEW: AI Narrative Injection
     tier: FundamentalTier = 'B', // NEW: Fundamental Tier
     harmonicPatterns: import('./harmonicPatterns').HarmonicPattern[] = [], // NEW: For Structural Stops
-    freezeSignal?: import('./strategies/FreezeStrategy').FreezeSignal // NEW: Freeze Strategy Override
+    freezeSignal?: import('./strategies/FreezeStrategy').FreezeSignal, // NEW: Freeze Strategy Override
+    volumeExpert?: import('./types-advanced').VolumeExpertAnalysis // NEW: Predictive Data Injection
 ): string {
     let response = '';
 
@@ -42,6 +43,30 @@ export function generateDCAExecutionPlan(
         response += `> **Ajuste Técnico:** Régimen ${marketRegime.regime}. Position Sizing y Take Profits adaptados.\n\n`;
     }
 
+    // --- PREDICTIVE TARGETS EXTRACTION (ADVISOR BRAIN) ---
+    const predictiveTargets: import('./dcaCalculator').PredictiveTargets = {
+        rsiReversal: rsiExpert?.target ? rsiExpert.target : undefined,
+        orderBookWall: undefined,
+        liquidationCluster: undefined
+    };
+
+    if (volumeExpert) {
+        // 1. OrderBook Walls (Front-run Logic)
+        if (side === 'LONG' && volumeExpert.liquidity.orderBook?.askWall) {
+            predictiveTargets.orderBookWall = volumeExpert.liquidity.orderBook.askWall.price;
+        } else if (side === 'SHORT' && volumeExpert.liquidity.orderBook?.bidWall) {
+            predictiveTargets.orderBookWall = volumeExpert.liquidity.orderBook.bidWall.price;
+        }
+
+        // 2. Liquidation Magnets
+        const liqs = volumeExpert.liquidity.liquidationClusters || [];
+        if (liqs.length > 0) {
+            const targetType = side === 'LONG' ? 'SHORT_LIQ' : 'LONG_LIQ';
+            const magnet = liqs.find(l => l.type === targetType);
+            if (magnet) predictiveTargets.liquidationCluster = (magnet.priceMin + magnet.priceMax) / 2;
+        }
+    }
+
     const dcaPlan = confluenceAnalysis
         ? calculateDCAPlan(price, confluenceAnalysis, atr, side, marketRegime, {
             level0_618: fibonacci.level0_618,
@@ -49,7 +74,7 @@ export function generateDCAExecutionPlan(
             level0_786: fibonacci.level0_786,
             level0_886: fibonacci.level0_886,
             level0_5: fibonacci.level0_5
-        }, tier) // Pass Tier
+        }, tier, predictiveTargets) // ✅ WIRED TO BRAIN
         : null;
 
     // EXPERT TUNING: FREEZE STRATEGY OVERRIDE (PRIORITY #1)

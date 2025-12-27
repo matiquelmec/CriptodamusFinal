@@ -735,7 +735,8 @@ export const streamMarketAnalysis = async function* (
             executionPhilosophy, // Passed from AI
             techData.tier, // NEW: Tier logic
             techData.harmonicPatterns || [], // NEW: Structural Stops
-            freezeSignal // NEW: Freeze Override
+            freezeSignal, // NEW: Freeze Override
+            techData.volumeExpert // ✅ NEW: Predictive Data Passed
         );
 
         // ESCENARIO B: ALTERNATIVO (HEDGING)
@@ -751,7 +752,8 @@ export const streamMarketAnalysis = async function* (
             undefined, // No philosophy for B
             techData.tier, // NEW: Tier logic
             techData.harmonicPatterns || [], // NEW: Structural Stops
-            undefined // No Freeze override for hedging scenario usually
+            undefined, // No Freeze override for hedging scenario usually
+            techData.volumeExpert // ✅ NEW: Predictive Data Passed
         );
 
         yield response;
