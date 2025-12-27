@@ -18,7 +18,8 @@ export function generateDCAExecutionPlan(
     macroContext?: import('../services/macroService').MacroContext,
     executionPhilosophy?: string, // NEW: AI Narrative Injection
     tier: FundamentalTier = 'B', // NEW: Fundamental Tier
-    harmonicPatterns: import('../types-advanced').HarmonicPattern[] = [] // NEW: For Structural Stops
+    harmonicPatterns: import('./harmonicPatterns').HarmonicPattern[] = [], // NEW: For Structural Stops
+    freezeSignal?: import('./strategies/FreezeStrategy').FreezeSignal // NEW: Freeze Strategy Override
 ): string {
     let response = '';
 
@@ -50,6 +51,37 @@ export function generateDCAExecutionPlan(
             level0_5: fibonacci.level0_5
         }, tier) // Pass Tier
         : null;
+
+    // EXPERT TUNING: FREEZE STRATEGY OVERRIDE (PRIORITY #1)
+    if (dcaPlan && freezeSignal && freezeSignal.active) {
+        // Freeze dictates a precise entry and tight stop.
+        // We override the Ladder to focus heavily on the Freeze Level.
+
+        // Entry 1 & 2 -> Freeze Entry Price (Sniper)
+        dcaPlan.entries[0].price = freezeSignal.entryPrice;
+        dcaPlan.entries[0].level = 1;
+        dcaPlan.entries[0].factors = ['❄️ FREEZE TRIGGER', ...freezeSignal.reason];
+        dcaPlan.entries[0].positionSize = 50; // High conviction on first hit
+
+        dcaPlan.entries[1].price = freezeSignal.entryPrice * (side === 'LONG' ? 0.995 : 1.005); // Tiny DCA
+        dcaPlan.entries[1].level = 2;
+        dcaPlan.entries[1].factors = ['❄️ FREEZE ZONE'];
+        dcaPlan.entries[1].positionSize = 30;
+
+        dcaPlan.entries[2].price = freezeSignal.entryPrice * (side === 'LONG' ? 0.99 : 1.01); // Standard safety
+        dcaPlan.entries[2].positionSize = 20;
+
+        // Recalculate Average
+        dcaPlan.averageEntry = freezeSignal.entryPrice * 0.997; // Approx
+
+        // Force Stop Loss
+        dcaPlan.stopLoss = freezeSignal.stopLoss;
+
+        // Force TP1 (1:1 Ratio usually)
+        if (freezeSignal.takeProfit) {
+            dcaPlan.takeProfits.tp2.price = freezeSignal.takeProfit;
+        }
+    }
 
     // EXPERT TUNING: RSI TARGET INJECTION
     if (dcaPlan && rsiExpert && rsiExpert.target) {

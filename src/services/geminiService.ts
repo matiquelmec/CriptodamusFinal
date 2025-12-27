@@ -2,6 +2,7 @@ import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from "..
 import { getCurrentSessionSimple, analyzeSessionContext, getKillZoneStatus, getSessionProximityInfo } from './sessionExpert';
 import { MacroContext } from './macroService';
 import { analyzeIchimokuSignal } from './ichimokuStrategy'; // NEW: Expert Logic
+import { analyzeFreezeStrategy } from './strategies/FreezeStrategy'; // NEW: Smart Freeze Logic
 import { generateDCAExecutionPlan } from './dcaReportGenerator'; // NEW: DCA System
 import { detectBullishDivergence, calculateRSIArray } from './mathUtils'; // NEW: Divergence Detection
 import { generateInvestmentThesis, generateExecutionPlanNarrative } from './narrativeService'; // Moved to top
@@ -468,9 +469,23 @@ export const streamMarketAnalysis = async function* (
             confidenceLevel = 7;
         }
 
+        // --- NEW: FREEZE STRATEGY CHECK ---
+        const freezeSignal = analyzeFreezeStrategy(techData, riskProfile);
+        const isFreezeActive = freezeSignal.active;
+
         // 2. CONSTRUCT RESPONSE
         response += `> [!IMPORTANT]\n`;
-        response += `> **SEÑAL INSTITUCIONAL: ${finalPrimarySide} (Confianza ${confidenceLevel}/10)**\n`;
+
+        if (isFreezeActive) {
+            const icon = freezeSignal.type === 'BULLISH' ? '❄️🟢' : '❄️🔴';
+            response += `> **${icon} ESTRATEGIA FREEZE ACTIVA: ${freezeSignal.type} (Confianza ${freezeSignal.confidence}/10)**\n`;
+            response += `> *Gatillo: ${freezeSignal.reason.join(' + ')}*\n`;
+            if (freezeSignal.confluenceFactors.length > 0) {
+                response += `> *Confluencia Institucional: ${freezeSignal.confluenceFactors.join(', ')}*\n`;
+            }
+        } else {
+            response += `> **SEÑAL INSTITUCIONAL: ${finalPrimarySide} (Confianza ${confidenceLevel}/10)**\n`;
+        }
 
         // Add Summary Alerts
         if (weakTrendWarning) {
@@ -719,7 +734,8 @@ export const streamMarketAnalysis = async function* (
             scenarioATitle, rsiExpert, macroContext,
             executionPhilosophy, // Passed from AI
             techData.tier, // NEW: Tier logic
-            techData.harmonicPatterns || [] // NEW: Structural Stops
+            techData.harmonicPatterns || [], // NEW: Structural Stops
+            freezeSignal // NEW: Freeze Override
         );
 
         // ESCENARIO B: ALTERNATIVO (HEDGING)
@@ -734,7 +750,8 @@ export const streamMarketAnalysis = async function* (
             scenarioBTitle, rsiExpert, macroContext,
             undefined, // No philosophy for B
             techData.tier, // NEW: Tier logic
-            techData.harmonicPatterns || [] // NEW: Structural Stops
+            techData.harmonicPatterns || [], // NEW: Structural Stops
+            undefined // No Freeze override for hedging scenario usually
         );
 
         yield response;

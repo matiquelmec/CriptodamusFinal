@@ -1,5 +1,6 @@
 import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from '../../types';
 import { analyzeIchimoku } from '../strategies/IchimokuAdapter';
+import { analyzeFreezeStrategy } from '../strategies/FreezeStrategy'; // NEW: Smart Freeze Logic
 import { analyzeMemeSignal } from '../strategies/MemeStrategy';
 import { analyzeSwingSignal } from '../strategies/SwingStrategy';
 import { analyzeBreakoutSignal } from '../strategies/BreakoutStrategy';
@@ -268,6 +269,17 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
             };
 
+            // NEW: FREEZE STRATEGY INTEGRATION
+            const freezeSignal = analyzeFreezeStrategy(techIndicators, risk);
+            if (freezeSignal.active) {
+                // Boost Score for Valid Freeze Signal
+                // Logic: If Freeze is active, it's a high conviction continuation or reversal pattern.
+                // We add significant score to ensure it passes the threshold.
+                score += 25;
+                // Don't add to 'totalScore' yet effectively because selectStrategies runs next, 
+                // but we will incorporate it into the final score check.
+            }
+
             const marketRegime = detectMarketRegime(techIndicators);
             const selection = selectStrategies(marketRegime);
 
@@ -399,6 +411,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 } else {
                     totalScore -= 10;
                     detectionNote += ` | ⛔ Div Opuesta (${macdDivergence.type})`;
+                }
+            }
+
+            // NEW: FREEZE STRATEGY SCORE BOOST (Late Binding)
+            if (freezeSignal.active) {
+                if ((signalSide === 'LONG' && freezeSignal.type === 'BULLISH') || (signalSide === 'SHORT' && freezeSignal.type === 'BEARISH')) {
+                    totalScore += 25; // High Confidence Boost
+                    detectionNote += ` | ❄️ FREEZE ${freezeSignal.type}`;
+                    specificTrigger = `N-Pattern + Box Theory`; // Override trigger for clarity
                 }
             }
 
@@ -626,6 +647,27 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     atr, signalSide, marketRegime, fibs, tier
                 );
 
+                // EXPERT: FREEZE DCA OVERRIDE
+                if (freezeSignal.active && ((signalSide === 'LONG' && freezeSignal.type === 'BULLISH') || (signalSide === 'SHORT' && freezeSignal.type === 'BEARISH'))) {
+                    // Force Entry 1 to Freeze Price
+                    if (dcaPlan.entries.length > 0) {
+                        dcaPlan.entries[0].price = freezeSignal.entryPrice;
+                        dcaPlan.entries[0].factors = ['❄️ FREEZE ENTRY', ...freezeSignal.reason];
+                        dcaPlan.entries[0].positionSize = 50;
+
+                        // Force Tight SL
+                        dcaPlan.stopLoss = freezeSignal.stopLoss;
+
+                        // Force TP1/TP2 if available
+                        if (freezeSignal.takeProfit) {
+                            dcaPlan.takeProfits.tp2.price = freezeSignal.takeProfit;
+                        }
+
+                        // Recalculate WAP (Simplified)
+                        dcaPlan.averageEntry = freezeSignal.entryPrice;
+                    }
+                }
+
                 let finalPrimarySide = signalSide;
                 let currentFinalScore = finalScore;
                 let filterNote = "";
@@ -706,7 +748,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         volumeExpert: volumeExpert // Updated in Place with divergence
                     },
                     chartPatterns: chartPatterns, dcaPlan: dcaPlan,
-                    harmonicPatterns: harmonicPatterns, invalidated: false
+                    harmonicPatterns: harmonicPatterns, invalidated: false,
+                    freezeSignal: freezeSignal // NEW: UI Data
                 };
 
                 validMathCandidates.push(mathOpp);

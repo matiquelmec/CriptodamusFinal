@@ -543,3 +543,170 @@ export function detectPinballState(
     }
     return null;
 }
+
+export interface BoxTheoryResult {
+    active: boolean;
+    high: number;
+    low: number;
+    level0_5: number;
+    signal: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+}
+
+export interface NPatternResult {
+    detected: boolean;
+    type: 'BULLISH' | 'BEARISH';
+    entryPrice: number;
+    stopLoss: number;
+}
+
+// NEW: Box Theory (0.5 Level Detection)
+export function calculateBoxTheory(highs: number[], lows: number[], closes: number[]): BoxTheoryResult {
+    // Need at least 10 candles to find a decent box
+    if (highs.length < 10) return { active: false, high: 0, low: 0, level0_5: 0, signal: 'NEUTRAL' };
+
+    // 1. Identify the most recent significant impulse
+    // Simplified Logic: Find the Highest High and Lowest Low of the last 20 periods
+    const lookback = Math.min(20, highs.length);
+    const recentHighs = highs.slice(-lookback);
+    const recentLows = lows.slice(-lookback);
+
+    const maxHigh = Math.max(...recentHighs);
+    const minLow = Math.min(...recentLows);
+    const currentPrice = closes[closes.length - 1];
+
+    // Determine direction of the impulse
+    // If current price is in the upper half, we might be bullish retesting.
+    // Ideally we want to know if the move was Up or Down.
+    // Let's use the index of the High vs Low.
+    const highIndex = recentHighs.indexOf(maxHigh);
+    const lowIndex = recentLows.indexOf(minLow);
+
+    const isImpulseUp = highIndex > lowIndex; // Low happened before High -> Up move
+
+    const level0_5 = (maxHigh + minLow) / 2;
+
+    // Signal Logic:
+    // If Impulse Up, and price is retesting 0.5 from above => Bullish Box
+    // If Impulse Down, and price is retesting 0.5 from below => Bearish Box
+
+    let signal: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
+
+    if (isImpulseUp) {
+        // We are looking for a retest of 0.5
+        // Price should be > 0.5 but close to it, or wick rejects it.
+        // Simple filter: Price is above 0.5
+        if (currentPrice > level0_5) signal = 'BULLISH';
+    } else {
+        // Down move
+        if (currentPrice < level0_5) signal = 'BEARISH';
+    }
+
+    return {
+        active: true,
+        high: maxHigh,
+        low: minLow,
+        level0_5,
+        signal
+    };
+}
+
+// NEW: N Pattern (Break & Retest)
+export function detectNPattern(highs: number[], lows: number[], closes: number[]): NPatternResult {
+    if (highs.length < 5) return { detected: false, type: 'BULLISH', entryPrice: 0, stopLoss: 0 };
+
+    // BEARISH N (Inverted N): Breakdown -> Rally (Retest) -> Rejection
+    // 1. Support Level (Local Low) established at T-3 or T-4
+    // 2. Breakdown at T-2 (Close < Support)
+    // 3. Retest at T-1 or T-0 (High > Support, Close < High)
+
+    const i = highs.length - 1;
+    const currentClose = closes[i];
+    const prevClose = closes[i - 1];
+    const prevHigh = highs[i - 1];
+
+    // Look for previous support (Swing Low) in T-3 to T-10
+    // Simplified: Find a local low that was broken
+    let brokenSupport = 0;
+    let supportIndex = -1;
+
+    const scanStart = i - 3;
+    const scanEnd = Math.max(0, i - 15);
+
+    for (let j = scanStart; j > scanEnd; j--) {
+        // A simple swing low
+        if (lows[j] < lows[j - 1] && lows[j] < lows[j + 1]) {
+            brokenSupport = lows[j];
+            supportIndex = j;
+            break;
+        }
+    }
+
+    if (brokenSupport > 0) {
+        // Check if it was broken recently (T-2 or T-3)
+        // We need a close below it between supportIndex and now
+        let breakIndex = -1;
+        for (let k = supportIndex + 1; k < i; k++) {
+            if (closes[k] < brokenSupport) {
+                breakIndex = k;
+                break;
+            }
+        }
+
+        if (breakIndex !== -1) {
+            // Check RETEST
+            // Current Candle or Prev Candle should tag the broken support
+            const retestIdx = i; // Checking current candle retest
+            // Bearish Retest: High >= BrokenSupport roughly
+            // And Close < High (Rejection)
+            if (highs[retestIdx] >= brokenSupport * 0.999 && closes[retestIdx] < highs[retestIdx]) {
+                return {
+                    detected: true,
+                    type: 'BEARISH',
+                    entryPrice: closes[retestIdx],
+                    stopLoss: highs[retestIdx] * 1.001 // Just above wick
+                };
+            }
+        }
+    }
+
+    // BULLISH N: Breakout -> Dip (Retest) -> Rejection
+    let brokenResistance = 0;
+    let resIndex = -1;
+
+    for (let j = scanStart; j > scanEnd; j--) {
+        // A simple swing high
+        if (highs[j] > highs[j - 1] && highs[j] > highs[j + 1]) {
+            brokenResistance = highs[j];
+            resIndex = j;
+            break;
+        }
+    }
+
+    if (brokenResistance > 0) {
+        // Check Breakout (Close > Resistance)
+        let breakIndex = -1;
+        for (let k = resIndex + 1; k < i; k++) {
+            if (closes[k] > brokenResistance) {
+                breakIndex = k;
+                break;
+            }
+        }
+
+        if (breakIndex !== -1) {
+            // Check RETEST
+            // Low <= Resistance roughly
+            // And Close > Low (Rejection from below)
+            const retestIdx = i;
+            if (lows[retestIdx] <= brokenResistance * 1.001 && closes[retestIdx] > lows[retestIdx]) {
+                return {
+                    detected: true,
+                    type: 'BULLISH',
+                    entryPrice: closes[retestIdx],
+                    stopLoss: lows[retestIdx] * 0.999 // Just below wick
+                };
+            }
+        }
+    }
+
+    return { detected: false, type: 'BULLISH', entryPrice: 0, stopLoss: 0 };
+}

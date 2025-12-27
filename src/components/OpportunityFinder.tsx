@@ -345,6 +345,13 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                             <span className="text-secondary">Estructura:</span>
                                             <span className="text-primary">{selectedSignal.metrics.structure}</span>
                                         </div>
+                                        {/* NEW: Freeze Details */}
+                                        {selectedSignal.freezeSignal?.active && (
+                                            <div className="flex justify-between border-b border-border/50 pb-1 bg-cyan-500/10 p-1 rounded">
+                                                <span className="text-cyan-400 font-bold">❄️ Config:</span>
+                                                <span className="text-cyan-100 text-[10px] text-right">{selectedSignal.freezeSignal.reason.join(' + ')}</span>
+                                            </div>
+                                        )}
                                         {selectedSignal.chartPatterns && selectedSignal.chartPatterns.length > 0 && (
                                             <div className="flex justify-between border-b border-border/50 pb-1">
                                                 <span className="text-secondary">Patrón Gráfico:</span>
@@ -643,6 +650,13 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                         R:R 1:{data.riskRewardRatio || 'N/A'}
                     </span>
                 </div>
+                {/* NEW: Freeze Badge */}
+                {data.freezeSignal?.active && (
+                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-cyan-400 animate-pulse">
+                        <span className="text-sm">❄️</span>
+                        <span className="font-bold">SMART FREEZE</span>
+                    </div>
+                )}
                 {/* NEW: Harmonic Badge */}
                 {data.harmonicPatterns && data.harmonicPatterns.length > 0 && (
                     <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-purple-400 animate-pulse">

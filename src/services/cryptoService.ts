@@ -15,7 +15,7 @@ import {
     calculateEMAArray, calculateStdDev, calculateRSI, calculateStochRSI,
     calculateRSIArray, calculateCumulativeVWAP, calculateAutoFibs, calculateFractals, // NEW
     calculateATR, calculateADX, calculatePivotPoints, formatVolume,
-    calculateZScore, calculateSlope // NEW
+    calculateZScore, calculateSlope, calculateBoxTheory, detectNPattern // NEW: Freeze Utils
 } from './mathUtils';
 import { calculateVolumeProfile } from './volumeProfile';
 import { detectOrderBlocks } from './orderBlocks';
@@ -182,6 +182,14 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
         const ema100 = calculateEMA(prices, 100);
         const ema200 = calculateEMA(prices, 200);
         const vwap = calculateCumulativeVWAP(highs, lows, prices, volumes);
+
+        // NEW: Freeze Strategy Indicators
+        const sma5 = calculateSMA(prices, 5);
+        const sma10 = calculateSMA(prices, 10);
+        const sma30 = calculateSMA(prices, 30);
+        const rsiFreeze = calculateRSI(prices, 9); // RSI 9 for Freeze
+        const boxTheory = calculateBoxTheory(highs, lows, prices);
+        const nPattern = detectNPattern(highs, lows, prices);
 
         const avgVol = calculateSMA(volumes, 20);
         const rvol = avgVol > 0 ? (volumes[volumes.length - 1] / avgVol) : 0;
@@ -350,7 +358,15 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
                 topResistances: confluenceAnalysis.topResistances
             },
             technicalReasoning: '',
-            invalidated: false
+            invalidated: false,
+
+            // NEW: FREEZE STRATEGY DATA
+            sma5,
+            sma10,
+            sma30,
+            rsiFreeze,
+            boxTheory,
+            nPattern
         };
 
         // NEW: Market Regime Detection (Autonomous Strategy Selection)

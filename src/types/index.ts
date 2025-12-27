@@ -167,6 +167,14 @@ export interface TechnicalIndicators {
 
   };
 
+  // NEW: FREEZE STRATEGY INDICATORS
+  sma5?: number;
+  sma10?: number;
+  sma30?: number;
+  rsiFreeze?: number; // 9 Periods
+  boxTheory?: import('../services/mathUtils').BoxTheoryResult;
+  nPattern?: import('../services/mathUtils').NPatternResult;
+
   // NEW: EXPERT METRICS
   macdDivergence?: Divergence;
   rsiDivergence?: Divergence | null; // NEW
@@ -358,5 +366,6 @@ export interface AIOpportunity {
   chartPatterns?: ChartPattern[]; // NEW: Smart Geometric Patterns
   dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI
   harmonicPatterns?: import('./types-advanced').HarmonicPattern[]; // NEW: Patrones para UI
+  freezeSignal?: import('../services/strategies/FreezeStrategy').FreezeSignal; // NEW: Freeze Strategy UI Badge
   tier?: FundamentalTier; // NEW: Tier Badge for UI
 }
