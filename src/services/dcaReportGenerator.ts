@@ -185,14 +185,28 @@ export function generateDCAExecutionPlan(
         let slJustification = "";
 
         if (useHarmonicStop) {
-            finalStopLoss = harmonicStopPrice;
-            slJustification = `🚫 ESTRUCTURAL (${activeHarmonic?.type} Invalidation)`;
-            // Override the plan's SL
-            dcaPlan.stopLoss = finalStopLoss;
-            // Recalculate Risk
-            const riskPerShare = Math.abs(dcaPlan.averageEntry - finalStopLoss);
-            const riskPercent = (riskPerShare / dcaPlan.averageEntry) * 100;
-            dcaPlan.totalRisk = riskPercent;
+            // VALIDATION: Ensure Stop Loss makes sense relative to Entry
+            // Short: SL > Entry. Long: SL < Entry.
+            const isValidSL = side === 'LONG'
+                ? harmonicStopPrice < dcaPlan.averageEntry
+                : harmonicStopPrice > dcaPlan.averageEntry;
+
+            if (isValidSL) {
+                finalStopLoss = harmonicStopPrice;
+                slJustification = `🚫 ESTRUCTURAL (${activeHarmonic?.type} Invalidation)`;
+                // Override the plan's SL
+                dcaPlan.stopLoss = finalStopLoss;
+                // Recalculate Risk
+                const riskPerShare = Math.abs(dcaPlan.averageEntry - finalStopLoss);
+                const riskPercent = (riskPerShare / dcaPlan.averageEntry) * 100;
+                dcaPlan.totalRisk = riskPercent;
+            } else {
+                // FALLBACK: Pattern level is "in the money" (invalid for SL)
+                // Use Standard ATR Logic
+                slJustification = side === 'LONG'
+                    ? `${multiplierText} ATR debajo del Entry 3 (Patrón Invalidado)`
+                    : `${multiplierText} ATR encima del Entry 3 (Patrón Invalidado)`;
+            }
         } else {
             // Standard ATR Logic (already inside dcaPlan usually, but strictly verifying text)
             slJustification = side === 'LONG'

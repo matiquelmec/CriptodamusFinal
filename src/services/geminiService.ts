@@ -729,7 +729,9 @@ export const streamMarketAnalysis = async function* (
         const scenarioA_Score = finalIsBullish ? bullishScore : bearishScore;
         const scenarioB_Score = finalIsBullish ? bearishScore : bullishScore;
         const scenarioA_Conf = Math.min(Math.round(scenarioA_Score), 10);
-        const scenarioB_Conf = Math.min(Math.round(scenarioB_Score), 10);
+        // FORCE HIERARCHY: Secondary scenario cannot be higher than 7/10 or Primary - 2
+        const rawB = Math.round(scenarioB_Score);
+        const scenarioB_Conf = Math.min(rawB, 8, Math.max(1, scenarioA_Conf - 2));
 
         const scenarioATitle = `## IV.A Escenario Principal: ${finalPrimarySide === 'LONG' ? 'COMPRA (LONG)' : 'VENTA (SHORT)'} (Confianza: ${scenarioA_Conf}/10)`;
 
