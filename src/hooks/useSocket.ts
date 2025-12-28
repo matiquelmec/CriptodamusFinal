@@ -33,6 +33,7 @@ export const useSocket = () => {
     const [aiOpportunities, setAIOpportunities] = useState<AIOpportunity[]>([]);
 
     const wsRef = useRef<WebSocket | null>(null);
+    const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Keep only last 50 liquidations to avoid memory leaks in frontend
     const addLiquidations = useCallback((newLiqs: RealTimeLiquidation | RealTimeLiquidation[]) => {
@@ -57,10 +58,19 @@ export const useSocket = () => {
             socket.onopen = () => {
                 console.log('[Frontend] Connected to Backend WS');
                 setIsConnected(true);
+
+                // Heartbeat to keep connection alive
+                if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+                pingIntervalRef.current = setInterval(() => {
+                    if (socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({ type: 'ping' }));
+                    }
+                }, 30000); // 30s Heartbeat
             };
 
             socket.onclose = () => {
                 console.log('[Frontend] Disconnected from Backend WS');
+                if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
                 setIsConnected(false);
                 // Reconnect strategy
                 setTimeout(connect, 3000);
@@ -119,6 +129,7 @@ export const useSocket = () => {
         connect();
 
         return () => {
+            if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
             wsRef.current?.close();
         };
     }, [addLiquidations, updateCvd]);
