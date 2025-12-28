@@ -37,7 +37,7 @@ export const TradingConfig = {
 
     // --- SCORING MATRIX ---
     scoring: {
-        min_score_entry: 65, // RAISED: Quality over Quantity (World Class Standard)
+        min_score_entry: 55, // ADJUSTED: Tuned down from 65 for ranging conditions
         god_mode_threshold: 90,
         weights: {
             // Trend Following
