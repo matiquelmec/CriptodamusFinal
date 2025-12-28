@@ -596,6 +596,11 @@ export const streamMarketAnalysis = async function* (
             response += `### 3.3. Validación Fractal (Validación de Ciclo)\n`;
             response += `| Estructura | Estado | Análisis |\n|---|---|---|\n`;
             response += `| **Tendencia Táctica (1H)** | ${trend_1h === 'BULLISH' ? '🟢 Alcista' : '🔴 Bajista'} | Precio ($${price_1h}) vs EMA200. |\n`;
+
+            // NEW: MACRO COMPASS INTEGRATION
+            const compassIcon = trend_4h === 'BULLISH' ? '🟢' : trend_4h === 'BEARISH' ? '🔴' : '⚖️';
+            response += `| **Macro Compass (4H)** | ${compassIcon} **${trend_4h || 'N/A'}** | Estructura H4 del "Arquitecto". ${isAligned4h ? '✅ Alineada' : '⚠️ Divergente'} |\n`;
+
             if (trend_1w) {
                 const rsiWDisplay = techData.fractalAnalysis?.rsi_1w ? `RSI: ${techData.fractalAnalysis.rsi_1w.toFixed(1)}` : '';
                 response += `| **Ciclo de Mercado (1W)** | ${trend_1w === 'BULLISH' ? '🐂 Bull' : '🐻 Bear'} | Precio $${price_1w} vs EMA50. ${rsiWDisplay} |\n`;
