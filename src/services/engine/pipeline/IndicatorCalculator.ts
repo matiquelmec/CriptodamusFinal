@@ -30,11 +30,16 @@ export class IndicatorCalculator {
 
         // 1. Basic Indicators (RSI, MACD, BB)
         const rsi = calculateRSI(closes, TradingConfig.indicators.rsi.period);
-        const macd = calculateMACD(closes,
+        const macdRaw = calculateMACD(closes,
             TradingConfig.indicators.macd.fast,
             TradingConfig.indicators.macd.slow,
             TradingConfig.indicators.macd.signal
         );
+        const macd = {
+            line: macdRaw.macdLine,
+            signal: macdRaw.signalLine,
+            histogram: macdRaw.histogram
+        };
         const bb = calculateBollingerStats(closes,
             TradingConfig.indicators.bollinger.period,
             TradingConfig.indicators.bollinger.std_dev
@@ -56,12 +61,7 @@ export class IndicatorCalculator {
         const fibLevels = calculateAutoFibs(highs, lows, bb.sma); // Passing SMA/EMA approximation 
 
         // 4. Pattern Detection
-        const patterns = {
-            doubleBottom: false, // Would require complex pattern matching function
-            inverseHeadAndShoulders: false,
-            bullishFlag: false,
-            wedge: false
-        };
+
         // Simple Chart Pattern logic (e.g. N-Pattern)
         const nPattern = detectNPattern(highs, lows, closes);
         const boxTheory = calculateBoxTheory(highs, lows, closes);
@@ -79,6 +79,16 @@ export class IndicatorCalculator {
         // Note: compute() should stay relatively fast.
 
         return {
+            symbol: symbol,
+            price: closes[closes.length - 1],
+            rvol: 0, // Calculated later or needs mathUtils support
+            technicalReasoning: "",
+            invalidated: false,
+            trendStatus: {
+                emaAlignment: 'CHAOTIC',
+                goldenCross: false,
+                deathCross: false
+            },
             rsi,
             macd,
             bollinger: { // Renamed from bollingerBands
@@ -100,18 +110,26 @@ export class IndicatorCalculator {
             stochRsi,
             zScore,
             emaSlope,
-            patterns,
+
             fibonacci: fibLevels, // Renamed to match interface
-            ichimoku: {
-                tenkan: ichimoku.senkouA, // Mapped mainly for structure compatibility, likely needs proper extraction
-                kijun: ichimoku.senkouA, // Placeholder, need mathUtils Update for full object
+            ichimokuData: {
+                tenkan: ichimoku.senkouA, // Placeholder if calc missing
+                kijun: ichimoku.senkouA, // Placeholder
                 senkouA: ichimoku.senkouA,
-                senkouB: ichimoku.senkouB
+                senkouB: ichimoku.senkouB,
+                chikou: closes[closes.length - 26] || closes[closes.length - 1], // Lagging span approx
+                currentPrice: closes[closes.length - 1],
+                chikouSpanFree: true, // Default
+                chikouDirection: 'NEUTRAL',
+                futureCloud: ichimoku.senkouA > ichimoku.senkouB ? 'BULLISH' : 'BEARISH',
+                cloudThickness: Math.abs((ichimoku.senkouA - ichimoku.senkouB) / ichimoku.senkouB) * 100,
+                priceVsKijun: 0,
+                tkSeparation: 0
             },
-            fractals: calculateFractals(highs, lows), // Returns {fractalHighs, fractalLows}
+
             // Custom additions for our pipeline
             nPattern,
             boxTheory
-        } as unknown as TechnicalIndicators; // Casting as we might be expanding the type
+        }; // Casting valid by structure now
     }
 }
