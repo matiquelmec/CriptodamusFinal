@@ -101,7 +101,7 @@ export class IndicatorCalculator {
             zScore,
             emaSlope,
             patterns,
-            fibLevels,
+            fibonacci: fibLevels, // Renamed to match interface
             ichimoku: {
                 tenkan: ichimoku.senkouA, // Mapped mainly for structure compatibility, likely needs proper extraction
                 kijun: ichimoku.senkouA, // Placeholder, need mathUtils Update for full object
