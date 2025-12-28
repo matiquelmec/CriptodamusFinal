@@ -683,31 +683,34 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     }
                 }
 
+                const effectiveSignalPrice = (freezeSignal.active && freezeSignal.entryPrice)
+                    ? freezeSignal.entryPrice
+                    : signalPrice;
+
                 const dcaPlan = calculateDCAPlan(
-                    signalPrice,
+                    effectiveSignalPrice,
                     { supportPOIs: [], resistancePOIs: [], topSupports: [], topResistances: [] },
                     atr, signalSide, marketRegime, fibs, tier,
                     predictiveTargets // PASSING THE BRAIN
                 );
 
-                // EXPERT: FREEZE DCA OVERRIDE
+                // EXPERT: FREEZE DCA ANNOTATION
                 if (freezeSignal.active && ((signalSide === 'LONG' && freezeSignal.type === 'BULLISH') || (signalSide === 'SHORT' && freezeSignal.type === 'BEARISH'))) {
-                    // Force Entry 1 to Freeze Price
+                    // Entry 1 is already aligned to Freeze Price by effectiveSignalPrice above.
+                    // Just annotate it.
                     if (dcaPlan.entries.length > 0) {
-                        dcaPlan.entries[0].price = freezeSignal.entryPrice;
                         dcaPlan.entries[0].factors = ['❄️ FREEZE ENTRY', ...freezeSignal.reason];
                         dcaPlan.entries[0].positionSize = 50;
 
-                        // Force Tight SL
-                        dcaPlan.stopLoss = freezeSignal.stopLoss;
+                        // Force Tight SL from Freeze Logic which might be tighter than generic ATR
+                        if (freezeSignal.stopLoss) {
+                            dcaPlan.stopLoss = freezeSignal.stopLoss;
+                        }
 
-                        // Force TP1/TP2 if available
+                        // Force TP2 if specified by Freeze (leave TP1 and TP3 to DCA Calculator)
                         if (freezeSignal.takeProfit) {
                             dcaPlan.takeProfits.tp2.price = freezeSignal.takeProfit;
                         }
-
-                        // Recalculate WAP (Simplified)
-                        dcaPlan.averageEntry = freezeSignal.entryPrice;
                     }
                 }
 
