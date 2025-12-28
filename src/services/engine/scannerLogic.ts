@@ -147,6 +147,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 strategy: strategyResult.primaryStrategy?.id || baseScoreResult.strategies[0] || 'hybrid_algo',
                 side: signalSide,
                 confidenceScore: Math.round(Math.min(100, totalScore)),
+                debugLog: `Base: ${baseScoreResult.score} + Strat: ${strategyResult.primaryStrategy?.score || 0} + Boost: ${strategyResult.scoreBoost}. Context: ${applyTechnicalContext(totalScore, indicators, strategyResult.primaryStrategy?.id) !== totalScore ? 'ADX Penalty Applied' : 'Normal'}`,
                 entryZone: {
                     min: indicators.price * 0.995,
                     max: indicators.price * 1.005,
@@ -206,8 +207,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const gate = FilterEngine.shouldDiscard(opportunity, risk, style);
             if (!gate.discarded) {
                 opportunities.push(opportunity);
+            } else {
+                // Debug Log for Rejected Candidates (Top 5 only to reduce spam)
+                if (opportunities.length < 5) {
+                    console.log(`[Filter] Rejected ${coin.symbol}: ${gate.reason} (Score: ${opportunity.confidenceScore}) | ${opportunity.debugLog}`);
+                }
             }
-
         } catch (err) {
             // Individual coin failure is acceptable, but we log it clearly
             // console.warn(`[Scanner] Skipped ${coin.symbol}:`, err); 
@@ -215,6 +220,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     }));
 
     console.log(`[Scanner] PIPELINE COMPLETE: Found ${opportunities.length} opportunities.`);
+
+    if (opportunities.length === 0) {
+        console.warn("[Scanner] 0 Opportunities found. Check console for [Filter] rejection reasons. Possible causes: Low Volatility (ADX<25), Risk Shield, or stricter scoring.");
+    }
+
     return opportunities.sort((a, b) => b.confidenceScore - a.confidenceScore);
 };
 

@@ -315,6 +315,7 @@ export interface AIOpportunity {
   id: string;
   symbol: string;
   timestamp: number;
+  debugLog?: string; // NEW: Debugging info for filtration logic
   signalTimestamp?: number; // NEW: Timestamp de la vela de confirmación
 
   // NEW: Institutional Metadata
