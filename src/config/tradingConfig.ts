@@ -69,6 +69,45 @@ export const TradingConfig = {
             pinball_setup: 3.5
         }
     },
+    // NEW: Strategy Dynamic Weights (Regime Matrix)
+    strategy_matrix: {
+        TRENDING: {
+            ichimoku_dragon: 0.40,
+            breakout_momentum: 0.30,
+            smc_liquidity: 0.20,
+            quant_volatility: 0.10,
+            mean_reversion: 0.00,
+            meme_hunter: 0.00,
+            divergence_hunter: 0.00
+        },
+        RANGING: {
+            mean_reversion: 0.50,
+            smc_liquidity: 0.30,
+            quant_volatility: 0.20,
+            ichimoku_dragon: 0.00,
+            breakout_momentum: 0.00,
+            meme_hunter: 0.00,
+            divergence_hunter: 0.00
+        },
+        VOLATILE: {
+            quant_volatility: 0.50,
+            breakout_momentum: 0.30,
+            meme_hunter: 0.20,
+            smc_liquidity: 0.00,
+            ichimoku_dragon: 0.00,
+            mean_reversion: 0.00,
+            divergence_hunter: 0.00
+        },
+        EXTREME: {
+            divergence_hunter: 0.50,
+            smc_liquidity: 0.30,
+            mean_reversion: 0.20,
+            ichimoku_dragon: 0.00,
+            breakout_momentum: 0.00,
+            quant_volatility: 0.00,
+            meme_hunter: 0.00
+        }
+    },
 
     // --- INDICATOR CONSTANTS ---
     indicators: {

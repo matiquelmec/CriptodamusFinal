@@ -14,6 +14,7 @@ import {
     MarketRegimeType
 } from '../types-advanced';
 import { STRATEGIES } from './strategyContext';
+import { TradingConfig } from '../config/tradingConfig';
 
 /**
  * Select and weight strategies based on market regime
@@ -36,68 +37,23 @@ export function selectStrategies(regime: MarketRegime): StrategySelection {
  * Define strategy weights for each regime
  */
 function getStrategyWeights(regime: MarketRegimeType, trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL'): Record<string, number> {
-    switch (regime) {
-        case 'TRENDING':
-            // Trend-following strategies dominate
-            return {
-                'ichimoku_dragon': 0.40,      // Best for clean trends
-                'breakout_momentum': 0.30,    // Catches trend accelerations
-                'smc_liquidity': 0.20,        // Institutional levels
-                'quant_volatility': 0.10,     // Backup for momentum
-                'mean_reversion': 0.00,       // Disabled (counter-trend)
-                'meme_hunter': 0.00,          // Disabled (too noisy)
-                'divergence_hunter': 0.00     // Disabled (reversal focused)
-            };
+    // 1. Try to get weights from Central Config
+    const configWeights = TradingConfig.strategy_matrix[regime];
 
-        case 'RANGING':
-            // Mean reversion strategies dominate
-            return {
-                'mean_reversion': 0.50,       // Perfect for ranges
-                'smc_liquidity': 0.30,        // Order blocks work well
-                'quant_volatility': 0.20,     // Squeeze detection
-                'ichimoku_dragon': 0.00,      // Disabled (needs trend)
-                'breakout_momentum': 0.00,    // Disabled (false breakouts)
-                'meme_hunter': 0.00,          // Disabled (needs volume)
-                'divergence_hunter': 0.00     // Disabled (not extreme yet)
-            };
-
-        case 'VOLATILE':
-            // Volatility expansion strategies
-            return {
-                'quant_volatility': 0.50,     // Designed for this
-                'breakout_momentum': 0.30,    // Captures expansions
-                'meme_hunter': 0.20,          // High volatility = meme pumps
-                'smc_liquidity': 0.00,        // Too chaotic
-                'ichimoku_dragon': 0.00,      // Needs stability
-                'mean_reversion': 0.00,       // Dangerous in volatility
-                'divergence_hunter': 0.00     // Not extreme yet
-            };
-
-        case 'EXTREME':
-            // Reversal and extreme condition strategies
-            const isOversold = regime === 'EXTREME'; // Simplified for now
-            return {
-                'divergence_hunter': 0.50,    // Best for extremes
-                'smc_liquidity': 0.30,        // Liquidity sweeps
-                'mean_reversion': 0.20,       // Bounce plays
-                'ichimoku_dragon': 0.00,      // Disabled (trend unclear)
-                'breakout_momentum': 0.00,    // Disabled (reversal expected)
-                'quant_volatility': 0.00,     // Disabled (not expansion)
-                'meme_hunter': 0.00           // Disabled (too risky)
-            };
-
-        default:
-            // Fallback: Balanced approach
-            return {
-                'smc_liquidity': 0.50,
-                'quant_volatility': 0.30,
-                'ichimoku_dragon': 0.20,
-                'mean_reversion': 0.00,
-                'breakout_momentum': 0.00,
-                'meme_hunter': 0.00,
-                'divergence_hunter': 0.00
-            };
+    if (configWeights) {
+        return configWeights;
     }
+
+    // 2. Fallback: Balanced approach (if regime is undefined/unknown)
+    return {
+        'smc_liquidity': 0.50,
+        'quant_volatility': 0.30,
+        'ichimoku_dragon': 0.20,
+        'mean_reversion': 0.00,
+        'breakout_momentum': 0.00,
+        'meme_hunter': 0.00,
+        'divergence_hunter': 0.00
+    };
 }
 
 /**
