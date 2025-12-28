@@ -81,13 +81,13 @@ export class IndicatorCalculator {
         return {
             rsi,
             macd,
-            bollingerBands: {
+            bollinger: { // Renamed from bollingerBands
                 upper: bb.upper,
                 lower: bb.lower,
                 middle: bb.sma,
                 bandwidth: bb.bandwidth // approx
             },
-            pivotPoints: {
+            pivots: { // Renamed from pivotPoints
                 p: 0, r1: 0, s1: 0, r2: 0, s2: 0 // Ideally calculated from Daily candles, might be missing here if only providing 4h/1h
             },
             adx: 0, // Expensive, enable if needed
