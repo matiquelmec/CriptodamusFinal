@@ -78,6 +78,12 @@ app.use((req, res) => {
   });
 });
 
+// Importar servicio de Binance
+import { binanceStream } from './services/binanceStream.js';
+
+// Iniciar conexión con Binance
+binanceStream.start();
+
 // Crear servidor HTTP
 const server = createServer(app);
 
@@ -87,25 +93,53 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 // Manejo de conexiones WebSocket
 const clients = new Map();
 
+// Suscribirse a eventos de Binance y retransmitir a todos los clientes conectados
+binanceStream.subscribe((event) => {
+  const msgStr = JSON.stringify({ type: event.type, data: event.data });
+
+  clients.forEach((client) => {
+    if (client.ws.readyState === 1) { // OPEN
+      // Lógica de filtrado:
+      // - Liquidaciones: Enviar a todos (Global)
+      // - CVD/AggTrade: Enviar solo si está suscrito al símbolo
+
+      if (event.type === 'liquidation') {
+        client.ws.send(msgStr);
+      } else if (event.type === 'cvd_update') {
+        // Verificar si el cliente está suscrito a este símbolo
+        const symbol = event.data.symbol; // e.g. BTCUSDT
+        // Normalizar para check
+        if (client.subscriptions.has(symbol) || client.subscriptions.has(symbol.toUpperCase())) {
+          client.ws.send(msgStr);
+        }
+      }
+    }
+  });
+});
+
 wss.on('connection', (ws, req) => {
   const clientId = crypto.randomUUID();
   clients.set(clientId, {
     ws,
-    subscriptions: new Set(),
+    subscriptions: new Set(['BTCUSDT']), // Default subscription
     ip: req.socket.remoteAddress
   });
 
   console.log(`WebSocket client connected: ${clientId}`);
+
+  // Enviar Snapshot Inicial (Liquidaciones recientes + Estado CVD)
+  const snapshot = binanceStream.getSnapshot();
+  ws.send(JSON.stringify({
+    type: 'snapshot',
+    data: snapshot
+  }));
 
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
       handleWebSocketMessage(clientId, data);
     } catch (error) {
-      ws.send(JSON.stringify({
-        type: 'error',
-        message: 'Invalid message format'
-      }));
+      // Ignore parse errors
     }
   });
 
@@ -117,16 +151,9 @@ wss.on('connection', (ws, req) => {
   ws.on('error', (error) => {
     console.error(`WebSocket error for client ${clientId}:`, error);
   });
-
-  // Enviar mensaje de bienvenida
-  ws.send(JSON.stringify({
-    type: 'connected',
-    clientId,
-    timestamp: Date.now()
-  }));
 });
 
-// Manejo de mensajes WebSocket
+// Manejo de mensajes WebSocket del Cliente
 function handleWebSocketMessage(clientId, data) {
   const client = clients.get(clientId);
   if (!client) return;
@@ -134,7 +161,14 @@ function handleWebSocketMessage(clientId, data) {
   switch (data.type) {
     case 'subscribe':
       if (data.symbols && Array.isArray(data.symbols)) {
-        data.symbols.forEach(symbol => client.subscriptions.add(symbol));
+        data.symbols.forEach(symbol => {
+          client.subscriptions.add(symbol);
+          // Pedir al servicio que escuche este símbolo si no lo hace aún
+          // Nota: aggTrade es costoso, usar con cuidado.
+          // Por eficiencia, binanceStream.js debería tener un método para añadir dinámicamente.
+          binanceStream.addStream(`${symbol.toLowerCase()}@aggTrade`);
+        });
+
         client.ws.send(JSON.stringify({
           type: 'subscribed',
           symbols: data.symbols
@@ -155,60 +189,15 @@ function handleWebSocketMessage(clientId, data) {
     case 'ping':
       client.ws.send(JSON.stringify({ type: 'pong' }));
       break;
-
-    default:
-      client.ws.send(JSON.stringify({
-        type: 'error',
-        message: 'Unknown message type'
-      }));
   }
 }
-
-// Broadcast de precios (simulado - en producción vendría de un feed real)
-setInterval(() => {
-  const priceUpdate = {
-    type: 'price_update',
-    data: {
-      BTC: Math.random() * 1000 + 40000,
-      ETH: Math.random() * 100 + 2800,
-      SOL: Math.random() * 10 + 100
-    },
-    timestamp: Date.now()
-  };
-
-  clients.forEach((client) => {
-    if (client.ws.readyState === 1) { // WebSocket.OPEN
-      // Filtrar solo los símbolos suscritos
-      const subscribedData = {};
-      client.subscriptions.forEach(symbol => {
-        if (priceUpdate.data[symbol]) {
-          subscribedData[symbol] = priceUpdate.data[symbol];
-        }
-      });
-
-      if (Object.keys(subscribedData).length > 0) {
-        client.ws.send(JSON.stringify({
-          ...priceUpdate,
-          data: subscribedData
-        }));
-      }
-    }
-  });
-}, 5000); // Actualizar cada 5 segundos
 
 // Iniciar servidor
 server.listen(PORT, () => {
   console.log(`
-    🚀 Criptodamus Backend Server
+    🚀 Criptodamus Backend Server (REAL DATA MODE)
     📍 Running on http://localhost:${PORT}
     🔌 WebSocket on ws://localhost:${PORT}/ws
-    🏥 Health check: http://localhost:${PORT}/health
-
-    Available endpoints:
-    - GET  /api/v1/market/prices
-    - GET  /api/v1/market/signals
-    - POST /api/donation/create-preference
-    - GET  /api/proxy/binance/*
-    - GET  /api/proxy/coincap/*
+    🌊 Connected to Binance Futures Stream
   `);
 });

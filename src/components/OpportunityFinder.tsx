@@ -8,6 +8,7 @@ import { Tooltip } from 'react-tooltip';
 import { GLOSSARY } from '../constants/glossary';
 import { useOpportunityCache } from '../hooks/useOpportunityCache';
 import ProgressIndicator from './ProgressIndicator';
+import { LiquidationFeed } from './LiquidationFeed';
 
 interface OpportunityFinderProps {
     onSelectOpportunity: (symbol: string) => void;
@@ -102,6 +103,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
         }
     };
 
+    // Import removed from here
+
+
     // Auto-scan on mount OR load from cache
     useEffect(() => {
         // Try to load from cache first
@@ -118,6 +122,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
 
     return (
         <div className="h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col overflow-hidden relative">
+            {/* Real-time Ticker */}
+            <LiquidationFeed />
+
             {/* Header / Controls */}
             <div className="p-4 border-b border-border bg-background/50 backdrop-blur-sm flex flex-col gap-4">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
