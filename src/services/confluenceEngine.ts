@@ -86,13 +86,13 @@ export function calculatePOIs(
     });
 
     // 2. PIVOT POINTS
-    const pivotLevels = [
+    const pivotLevels = pivots ? [
         { price: pivots.s2, name: 'Pivot S2', score: 1, type: 'SUPPORT' as const },
         { price: pivots.s1, name: 'Pivot S1', score: 2, type: 'SUPPORT' as const },
         { price: pivots.p, name: 'Pivot Central', score: 2, type: currentPrice > pivots.p ? 'SUPPORT' as const : 'RESISTANCE' as const },
         { price: pivots.r1, name: 'Pivot R1', score: 2, type: 'RESISTANCE' as const },
         { price: pivots.r2, name: 'Pivot R2', score: 1, type: 'RESISTANCE' as const }
-    ];
+    ] : [];
 
     pivotLevels.forEach(pivot => {
         if (pivot.type === 'SUPPORT' && pivot.price < currentPrice) {
