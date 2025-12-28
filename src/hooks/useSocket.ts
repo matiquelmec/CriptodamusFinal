@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { AIOpportunity } from '../types';
 
 // Types representing the Real-Time Data from Backend
 export interface RealTimeLiquidation {
@@ -19,7 +20,9 @@ export interface RealTimeCVD {
 export interface SocketState {
     isConnected: boolean;
     liquidations: RealTimeLiquidation[];
+    liquidations: RealTimeLiquidation[];
     cvd: Record<string, RealTimeCVD>;
+    aiOpportunities: AIOpportunity[];
 }
 
 const WS_URL = import.meta.env.VITE_BACKEND_URL || 'ws://localhost:3001/ws';
@@ -27,7 +30,9 @@ const WS_URL = import.meta.env.VITE_BACKEND_URL || 'ws://localhost:3001/ws';
 export const useSocket = () => {
     const [isConnected, setIsConnected] = useState(false);
     const [liquidations, setLiquidations] = useState<RealTimeLiquidation[]>([]);
+    const [liquidations, setLiquidations] = useState<RealTimeLiquidation[]>([]);
     const [cvd, setCvd] = useState<Record<string, RealTimeCVD>>({});
+    const [aiOpportunities, setAIOpportunities] = useState<AIOpportunity[]>([]);
 
     const wsRef = useRef<WebSocket | null>(null);
 
@@ -71,7 +76,9 @@ export const useSocket = () => {
                         case 'snapshot':
                             // Initial Load
                             if (msg.data.liquidations) addLiquidations(msg.data.liquidations);
+                            if (msg.data.liquidations) addLiquidations(msg.data.liquidations);
                             if (msg.data.cvd) setCvd(msg.data.cvd);
+                            if (msg.data.ai_opportunities) setAIOpportunities(msg.data.ai_opportunities);
                             break;
 
                         case 'liquidation':
@@ -84,6 +91,22 @@ export const useSocket = () => {
                                 volume: msg.data.volume,
                                 price: msg.data.price
                             });
+                            break;
+
+                        case 'ai_opportunities':
+                            setAIOpportunities(msg.data);
+                            break;
+
+                        case 'golden_ticket_alert':
+                            // For now, update list if these are included, or just handle alert
+                            // Assuming backend broadcasts full list on updates usually.
+                            // If this sends a subset, we might want to merge.
+                            // But usually scamner sends full result set on scan_complete.
+                            // Let's assume golden ticket is just an alert, not a state replacement, 
+                            // UNLESS backend logic sends opportunities.
+                            // Backend server.ts sends 'data: opportunities' for both.
+                            // So we can update state.
+                            setAIOpportunities(msg.data);
                             break;
 
                         case 'pong':
@@ -116,6 +139,7 @@ export const useSocket = () => {
         isConnected,
         liquidations,
         cvd,
+        aiOpportunities,
         subscribe
     };
 };

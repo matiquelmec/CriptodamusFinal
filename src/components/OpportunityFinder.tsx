@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
-import { useMarketScanner } from '../hooks/useMarketScanner';
+import { useSocket } from '../hooks/useSocket';
 import { STRATEGIES } from '../services/strategyContext';
 import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database, Lightbulb, Clock, Globe, Hexagon, Triangle } from 'lucide-react';
 import { Tooltip } from 'react-tooltip';
@@ -15,110 +15,56 @@ interface OpportunityFinderProps {
 }
 
 const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportunity }) => {
+    // State Definitions (Restored for UI compatibility)
     const [opportunities, setOpportunities] = useState<AIOpportunity[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [detectedRegime, setDetectedRegime] = useState<string | null>(null);
-    const [cooldown, setCooldown] = useState(0);
     const [currentRisk, setCurrentRisk] = useState<MarketRisk | null>(null);
     const [selectedSignal, setSelectedSignal] = useState<AIOpportunity | null>(null);
+    const [scanProgress, setScanProgress] = useState({ step: 'Esperando señal...', progress: 0 });
 
-    // NEW: Progress tracking
-    const [scanProgress, setScanProgress] = useState({ step: '', progress: 0 });
-
-    // NEW: Cache integration
-    const { cachedData, saveCache, clearCache, cacheAge } = useOpportunityCache();
+    // Cache visual states (Dummy for now to prevent crash, or derived)
     const [isFromCache, setIsFromCache] = useState(false);
+    const [cacheAge, setCacheAge] = useState<string | null>(null);
 
-    // NEW: Hook Integration
-    const { scan: scanMarket, opportunities: scannedOpportunities, isScanning, error: scanError, marketRisk: scannedRisk } = useMarketScanner();
+    // NEW: Socket Integration (Replaces local scanner)
+    const { aiOpportunities, isConnected } = useSocket();
 
-    // Sync hook state to local state
+    // Sync socket data to local state for display
     useEffect(() => {
-        if (scannedOpportunities) {
-            setOpportunities(scannedOpportunities);
-        }
-    }, [scannedOpportunities]);
+        if (aiOpportunities && aiOpportunities.length > 0) {
+            setOpportunities(aiOpportunities);
 
-    // Sync Risk Data
-    useEffect(() => {
-        if (scannedRisk) {
-            setCurrentRisk(scannedRisk);
-        }
-    }, [scannedRisk]);
-
-    // Handle Side Effects of Scanning (Success & Progress)
-    useEffect(() => {
-        if (isScanning) {
-            // State: Scanning in progress
-            if (!loading) setLoading(true); // Ensure loading is true
-            setScanProgress({ step: 'Analizando Mercado...', progress: 50 });
-        } else if (loading && !isScanning) {
-            // State: Just Finished (Loading was true, now scanning is false)
-
-            setScanProgress({ step: 'Completado', progress: 100 });
-
-            if (scannedOpportunities.length > 0) {
-                // CASE: Opportunities Found
-                if (scannedOpportunities[0].strategy) {
-                    setDetectedRegime(scannedOpportunities[0].strategy);
-                    saveCache(scannedOpportunities, scannedOpportunities[0].strategy);
-                }
-            } else {
-                // CASE: No Opportunities Found (Empty Array)
-                // We keep the "No results" state handled by the render logic
-                setDetectedRegime(null);
+            // Auto-detect regime from first opp if available
+            if (aiOpportunities[0].strategy) {
+                setDetectedRegime(aiOpportunities[0].strategy);
             }
-
-            // CRITICAL FIX: Always turn off loading when scan finishes, even if empty
-            setLoading(false);
+            // Reset risk if valid data comes in (or we need risk event from socket)
+            // For now, assume good data = low risk or risk included in opps
         }
-    }, [isScanning, scannedOpportunities, saveCache, loading]);
+    }, [aiOpportunities]);
 
-    // Handle Errors
+    // Cleanup local loading/error states since we are now passive listeners
     useEffect(() => {
-        if (scanError) {
-            setError(scanError);
+        if (isConnected) {
             setLoading(false);
+            setError(null);
+        } else {
+            // Optional: Show connecting state
+            // setLoading(true); 
         }
-    }, [scanError]);
+    }, [isConnected]);
 
-    const scan = async () => {
-        if (cooldown > 0) return;
-
-        setLoading(true);
-        setError(null);
-        setOpportunities([]); // Clear previous
-        setIsFromCache(false);
-        clearCache();
-
-        try {
-            setScanProgress({ step: 'Iniciando Escáner...', progress: 10 });
-            // Use Hook - No return value expected anymore
-            await scanMarket('SCALP_AGRESSIVE');
-        } catch (e: any) {
-            console.error(e);
-            setError("Error de inicialización.");
-            setLoading(false);
-        }
+    // Manual scan is NO LONGER POSSIBLE (Backend Controlled)
+    // We change this to a "Status" check or removed entirely.
+    const handleRefresh = () => {
+        // In future: emit('request_scan') via socket
+        alert("El escáner opera automáticamente en el servidor (Intervalo: 15min)");
     };
 
-    // Import removed from here
-
-
-    // Auto-scan on mount OR load from cache
-    useEffect(() => {
-        // Try to load from cache first
-        if (cachedData && cachedData.opportunities.length > 0) {
-            console.log('[OpportunityFinder] Loading from cache...');
-            setOpportunities(cachedData.opportunities);
-            setDetectedRegime(cachedData.regime || null);
-            setIsFromCache(true);
-        } else {
-            // No cache, do fresh scan
-            scan();
-        }
-    }, []);
+    // Alias for backward compatibility with JSX
+    const scan = handleRefresh;
 
     return (
         <div className="h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col overflow-hidden relative">
@@ -129,22 +75,29 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
             <div className="p-4 border-b border-border bg-background/50 backdrop-blur-sm flex flex-col gap-4">
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-lg text-white shadow-lg shadow-blue-500/20">
-                            <Cpu size={20} />
+                        <div className="relative">
+                            <div className={`p-2 rounded-lg text-white shadow-lg ${isConnected ? 'bg-gradient-to-br from-green-600 to-emerald-600 shadow-green-500/20' : 'bg-gray-600'}`}>
+                                <Cpu size={20} className={isConnected ? "animate-pulse" : ""} />
+                            </div>
+                            {isConnected && <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                            </span>}
                         </div>
                         <div>
                             <h2 className="text-sm font-mono font-bold text-primary uppercase tracking-wider">Criptodamus Auto-Pilot</h2>
-                            <p className="text-[10px] text-secondary">Motor Matemático Autónomo v4.0</p>
+                            <p className="text-[10px] text-secondary">
+                                {isConnected ? '🟢 Conectado al Servidor Neural (24/7)' : '🔴 Desconectado (Reconectando...)'}
+                            </p>
                         </div>
                     </div>
 
                     <button
-                        onClick={scan}
-                        disabled={loading}
-                        className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-white text-background rounded font-mono text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md min-w-[120px] justify-center ml-auto md:ml-0"
+                        onClick={handleRefresh}
+                        className="flex items-center gap-2 px-4 py-2 bg-surface hover:bg-background border border-border rounded font-mono text-xs font-bold transition-colors shadow-sm ml-auto md:ml-0 opacity-80"
                     >
-                        <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-                        {loading ? 'Calculando...' : 'Escanear'}
+                        <RefreshCw size={14} />
+                        Auto-Scan (15m)
                     </button>
                 </div>
 
