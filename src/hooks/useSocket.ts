@@ -20,7 +20,6 @@ export interface RealTimeCVD {
 export interface SocketState {
     isConnected: boolean;
     liquidations: RealTimeLiquidation[];
-    liquidations: RealTimeLiquidation[];
     cvd: Record<string, RealTimeCVD>;
     aiOpportunities: AIOpportunity[];
 }
@@ -29,7 +28,6 @@ const WS_URL = import.meta.env.VITE_BACKEND_URL || 'ws://localhost:3001/ws';
 
 export const useSocket = () => {
     const [isConnected, setIsConnected] = useState(false);
-    const [liquidations, setLiquidations] = useState<RealTimeLiquidation[]>([]);
     const [liquidations, setLiquidations] = useState<RealTimeLiquidation[]>([]);
     const [cvd, setCvd] = useState<Record<string, RealTimeCVD>>({});
     const [aiOpportunities, setAIOpportunities] = useState<AIOpportunity[]>([]);
@@ -75,7 +73,6 @@ export const useSocket = () => {
                     switch (msg.type) {
                         case 'snapshot':
                             // Initial Load
-                            if (msg.data.liquidations) addLiquidations(msg.data.liquidations);
                             if (msg.data.liquidations) addLiquidations(msg.data.liquidations);
                             if (msg.data.cvd) setCvd(msg.data.cvd);
                             if (msg.data.ai_opportunities) setAIOpportunities(msg.data.ai_opportunities);
