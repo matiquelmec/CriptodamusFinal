@@ -117,6 +117,19 @@ export class StrategyRunner {
                         );
                         name = "Pinball/Divergence";
                         break;
+                    case 'mean_reversion':
+                        // Maps to Swing Strategy (Reversion to Mean in Range)
+                        // analyzeSwingSignal logic is robust for this (Bollinger/RSI reversion)
+                        result = analyzeSwingSignal(
+                            prices,
+                            highs,
+                            lows,
+                            indicators.fibonacci,
+                            volumes,
+                            undefined // No specific SMC Order Blocks needed for pure mean reversion, or pass if available
+                        );
+                        name = "Mean Reversion (Range)";
+                        break;
                 }
 
                 if (result && result.signal !== 'NEUTRAL') {
