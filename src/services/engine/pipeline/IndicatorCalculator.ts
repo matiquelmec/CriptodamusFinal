@@ -12,6 +12,7 @@ import {
     calculateFractals, detectNPattern, calculateBoxTheory,
     detectBullishDivergence, calculateEMA
 } from '../../mathUtils';
+import { detectChartPatterns } from '../../chartPatterns';
 import { TradingConfig } from '../../../config/tradingConfig';
 import { TechnicalIndicators } from '../../../types';
 
@@ -70,6 +71,24 @@ export class IndicatorCalculator {
         const stochRsi = calculateStochRSI(closes, 14);
         const ichimoku = calculateIchimokuCloud(highs, lows);
 
+        // Chart Patterns (Institutional)
+        const chartPatterns = detectChartPatterns(highs, lows, closes, volumes);
+
+        // Trend Status Calculation
+        let emaAlignment: 'BULLISH' | 'BEARISH' | 'CHAOTIC' = 'CHAOTIC';
+        if (ema20 > ema50 && ema50 > ema100 && ema100 > ema200) emaAlignment = 'BULLISH';
+        else if (ema20 < ema50 && ema50 < ema100 && ema100 < ema200) emaAlignment = 'BEARISH';
+
+        // Crosses (using current candle values)
+        const goldenCross = ema50 > ema200 && (closes.length > 1 ? calculateEMA(closes.slice(0, -1), 50) <= calculateEMA(closes.slice(0, -1), 200) : false);
+        const deathCross = ema50 < ema200 && (closes.length > 1 ? calculateEMA(closes.slice(0, -1), 50) >= calculateEMA(closes.slice(0, -1), 200) : false);
+        // Note: Full historical cross check requires arrays, here we check simple current state or immediate cross if we had previous values. 
+        // For efficiency, we simplistically flag if 50 > 200 as Gold-ish state or rely on dedicated crossover detector if needed. 
+        // Let's stick to state:
+        const isGoldenState = ema50 > ema200;
+        const isDeathState = ema50 < ema200;
+
+
         // Divergence Check (Heavy)
         // Need RSI Array for divergence, calculateRSI returns single value, 
         // need to refactor or use internal helper if we want array.
@@ -85,9 +104,9 @@ export class IndicatorCalculator {
             technicalReasoning: "",
             invalidated: false,
             trendStatus: {
-                emaAlignment: 'CHAOTIC',
-                goldenCross: false,
-                deathCross: false
+                emaAlignment,
+                goldenCross: isGoldenState, // Simplified for state
+                deathCross: isDeathState
             },
             rsi,
             macd,
@@ -113,8 +132,8 @@ export class IndicatorCalculator {
 
             fibonacci: fibLevels, // Renamed to match interface
             ichimokuData: {
-                tenkan: ichimoku.senkouA, // Placeholder if calc missing
-                kijun: ichimoku.senkouA, // Placeholder
+                tenkan: ichimoku.tenkan,
+                kijun: ichimoku.kijun,
                 senkouA: ichimoku.senkouA,
                 senkouB: ichimoku.senkouB,
                 chikou: closes[closes.length - 26] || closes[closes.length - 1], // Lagging span approx
@@ -129,7 +148,8 @@ export class IndicatorCalculator {
 
             // Custom additions for our pipeline
             nPattern,
-            boxTheory
+            boxTheory,
+            chartPatterns // NEW: Active
         }; // Casting valid by structure now
     }
 }

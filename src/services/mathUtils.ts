@@ -70,7 +70,7 @@ export function calculateIchimokuCloud(highs: number[], lows: number[]) {
     // Senkou Span B (52 periods)
     const senkouB = (Math.max(...highs.slice(highs.length - 52)) + Math.min(...lows.slice(lows.length - 52))) / 2;
 
-    return { senkouA, senkouB };
+    return { tenkan, kijun, senkouA, senkouB };
 };
 
 export function calculateBollingerStats(prices: number[], period: number = 20, stdDevMultiplier: number = 2) {
