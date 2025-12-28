@@ -10,6 +10,7 @@ import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
+import crypto from 'crypto';
 
 // Importar rutas
 import marketRoutes from './api/market.js';
@@ -50,6 +51,19 @@ app.get('/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
+  });
+});
+
+// Root Endpoint (Welcome)
+app.get('/', (req, res) => {
+  res.json({
+    message: '🚀 Criptodamus Backend is Live',
+    service: 'Market Data & WebSocket API',
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      docs: '/api/docs (Not Implemented)'
+    }
   });
 });
 
