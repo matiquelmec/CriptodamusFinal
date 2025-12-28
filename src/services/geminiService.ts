@@ -1,4 +1,5 @@
 import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from "../types";
+import { TradingConfig } from '../config/tradingConfig'; // NEW: Centralized Config
 import { getCurrentSessionSimple, analyzeSessionContext, getKillZoneStatus, getSessionProximityInfo } from './sessionExpert';
 import { MacroContext } from './macroService';
 import { analyzeIchimokuSignal } from './ichimokuStrategy'; // NEW: Expert Logic
@@ -113,9 +114,9 @@ export const streamMarketAnalysis = async function* (
         const isCapitulation = (rsi < 20 && rvol > 2) || (zScore && zScore < -2.0); // Panic selling or Statistical Extension
         const isEuphoria = (rsi > 80 && rvol > 2) || (zScore && zScore > 2.0); // FOMO buying or Statistical Extension
 
-        // Z-Score Mean Reversion Boost
-        if (zScore && zScore < -2.5) bullishScore += 4; // Extreme Oversold (Statistical) - Buy Value
-        if (zScore && zScore > 2.5) bearishScore += 4; // Extreme Overbought (Statistical) - Sell Value
+        // Z-Score Mean Reversion Boost (Configurable)
+        if (zScore && zScore < -2.5) bullishScore += TradingConfig.scoring.advisor.z_score_extreme; // Extreme Oversold
+        if (zScore && zScore > 2.5) bearishScore += TradingConfig.scoring.advisor.z_score_extreme; // Extreme Overbought
 
         if (isCapitulation) bullishScore += 3; // Contrarian signal
         if (isEuphoria) bearishScore += 3; // Contrarian signal
@@ -126,12 +127,12 @@ export const streamMarketAnalysis = async function* (
         // Bullish Pinball: Price drops into zone between EMA50 and EMA200 in an Uptrend
         if (ema50 > ema200 && price < ema50 && price > ema200 && rsi < 45) {
             isPinballBuy = true;
-            bullishScore += 3.5; // High Probability Swing
+            bullishScore += TradingConfig.scoring.advisor.pinball_setup; // High Probability Swing
         }
         // Bearish Pinball: Price rallies into zone between EMA50 and EMA200 in a Downtrend
         if (ema50 < ema200 && price > ema50 && price < ema200 && rsi > 55) {
             isPinballSell = true;
-            bearishScore += 3.5; // High Probability Swing
+            bearishScore += TradingConfig.scoring.advisor.pinball_setup; // High Probability Swing
         }
 
         // NEW: LIQUIDATION CASCADE DETECTION (INSTITUCIONAL)
@@ -214,7 +215,7 @@ export const streamMarketAnalysis = async function* (
             const isBullish = macdDivergence.type?.includes('BULLISH');
 
             // Expert Doc: Hidden Divergence is "Holy Grail" for continuation
-            const boost = isHidden ? 5 : 3; // Massive boost for Hidden
+            const boost = isHidden ? TradingConfig.scoring.advisor.hidden_divergence : 3; // Massive boost for Hidden
 
             if (isBullish) bullishScore += boost;
             else bearishScore += boost;
@@ -244,7 +245,7 @@ export const streamMarketAnalysis = async function* (
         // Bearish SFP (Sweep Highs)
         if ((distToR1 < 0.005 || price > bollinger.upper) && rvol > 1.5) {
             if (stochRsi.k < stochRsi.d || rsi > 70) {
-                bearishScore += 4;
+                bearishScore += TradingConfig.scoring.advisor.sfp_sweep;
                 bullishScore *= 0.5;
                 isSFP = true;
                 sfpType = 'BEARISH_SWEEP';
@@ -254,7 +255,7 @@ export const streamMarketAnalysis = async function* (
         // Bullish SFP (Sweep Lows)
         if ((distToS1 < 0.005 || price < bollinger.lower) && rvol > 1.5) {
             if (stochRsi.k > stochRsi.d || rsi < 30) {
-                bullishScore += 4;
+                bullishScore += TradingConfig.scoring.advisor.sfp_sweep;
                 bearishScore *= 0.5;
                 isSFP = true;
                 sfpType = 'BULLISH_SWEEP';
@@ -349,12 +350,11 @@ export const streamMarketAnalysis = async function* (
                 if (cvd.divergence) {
                     // NEW: ABSORPTION LOGIC (World Class)
                     if (cvd.divergence === 'CVD_ABSORPTION_BUY') {
-                        bullishScore += 4; // Whale Absorption (Passive Buys)
+                        bullishScore += TradingConfig.scoring.advisor.volume_absorption; // Whale Absorption (Passive Buys)
                     } else if (cvd.divergence === 'CVD_ABSORPTION_SELL') {
-                        bearishScore += 4; // Whale Absorption (Passive Sells)
+                        bearishScore += TradingConfig.scoring.advisor.volume_absorption; // Whale Absorption (Passive Sells)
                     }
                 }
-
                 if (cvd.trend === 'BEARISH' && !cvd.divergence?.includes('ABSORPTION')) {
                     // Aggressors Selling -> Penalize Longs
                     bullishScore -= 1;

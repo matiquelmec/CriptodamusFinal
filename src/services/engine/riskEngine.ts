@@ -1,23 +1,24 @@
 import { MarketRisk, FundamentalTier } from '../../types';
-import { fetchCandles } from '../api/binanceApi'; // Import from new API module
+import { fetchCandles, fetchCryptoData } from '../api/binanceApi';
+import { TradingConfig } from '../../config/tradingConfig'; // Import from new API module
 
 // NEW: FUNDAMENTAL TIER CALCULATOR
 // Approximates tier based on Symbol (Hardcoded Elite) or Volume/Memes
 export const calculateFundamentalTier = (symbol: string, isMeme: boolean): FundamentalTier => {
-    // S TIER: The Kings (Store of Value / L1 Std)
-    const S_TIER = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'];
-    if (S_TIER.includes(symbol)) return 'S';
+    // Tiers from Config
+    const { s_tier, a_tier_bluechips, c_tier_patterns } = TradingConfig.assets.tiers;
+
+    // S TIER: The Kings
+    if ((s_tier as unknown as string[]).includes(symbol)) return 'S';
 
     // C TIER: Memes & Low Cap Speculation
     if (isMeme) return 'C';
-    const C_TIER_PATTERNS = ['PEPE', 'DOGE', 'SHIB', 'BONK', 'WIF', 'FLOKI', '1000SATS', 'ORDI'];
-    if (C_TIER_PATTERNS.some(p => symbol.includes(p))) return 'C';
+    if ((c_tier_patterns as unknown as string[]).some(p => symbol.includes(p))) return 'C';
 
-    // A TIER: Established Blue Chips (Defi/L1/L2 High Vol)
-    const A_TIER = ['XRPUSDT', 'ADAUSDT', 'LINKUSDT', 'AVAXUSDT', 'DOTUSDT', 'TRXUSDT', 'TONUSDT', 'SUIUSDT', 'APTUSDT'];
-    if (A_TIER.includes(symbol)) return 'A';
+    // A TIER: Established Blue Chips
+    if ((a_tier_bluechips as unknown as string[]).includes(symbol)) return 'A';
 
-    // B TIER: The rest (Mid Caps)
+    // B TIER: The rest
     return 'B';
 };
 
@@ -45,8 +46,8 @@ export const getMarketRisk = async (): Promise<MarketRisk> => {
         // --- RISK LOGIC ---
 
         // Case A: Whale Manipulation (Massive Volume + Potential Churn)
-        // If volume is > 3.5x average, someone is aggressively entering/exiting BTC
-        if (volumeRatio > 3.5) {
+        // If volume is > Config Threshold (3.5x), someone is aggressively entering/exiting BTC
+        if (volumeRatio > TradingConfig.risk.whale_volume_ratio) {
             return {
                 level: 'HIGH',
                 note: `🐋 BALLENAS DETECTADAS: Volumen BTC anormal (x${volumeRatio.toFixed(1)}). Posible manipulación.`,

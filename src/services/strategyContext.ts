@@ -234,5 +234,51 @@ ESTRUCTURA DE RESPUESTA PRO:
 **Validación:** Expansión de volatilidad confirmada.
 **Stop Loss:** [Nivel técnico de invalidación]."
 `
+   },
+   {
+      id: 'divergence_hunter',
+      name: 'Divergence Hunter (Pinball/RSI)',
+      description: 'Estrategia de reversión a la media basada en agotamiento de momentum (Divergencias) y zonas de valor (EMA50/200).',
+      riskProfile: 'Moderado',
+      timeframe: '15m - 4h',
+      details: {
+         riskManagement: 'Stop Loss técnico por encima/debajo del swing reciente. TP en EMA opuesta o nivel Fibonacci.',
+         entryCriteria: 'Divergencia Regular/Oculta en RSI + Patrón de Vela de Reversión + Pinball (EMA50/200).',
+         psychology: 'Compramos cuando otros entran en pánico (Capitulación) y vendemos en la euforia.'
+      },
+      systemInstruction: `
+${BASE_INSTRUCTION}
+
+MODO ACTIVO: DIVERGENCE HUNTER (REVERSAL).
+
+TU LÓGICA DE ANÁLISIS:
+Buscamos agotamiento. Cuando el precio hace un nuevo extremo pero el indicador (RSI/MACD) no lo confirma, es una trampa.
+
+PATRONES A IDENTIFICAR:
+1. **Divergencia Regular (Reversión):**
+   - Precio hace Mínimo Más Bajo (LL).
+   - RSI hace Mínimo Más Alto (HL).
+   - *Señal:* Long en cierre de vela confirmatoria.
+
+2. **Divergencia Oculta (Continuación):**
+   - Precio hace Mínimo Más Alto (HL) en tendencia alcista.
+   - RSI hace Mínimo Más Bajo (LL) (Oversold excesivo).
+   - *Señal:* Long "Buy the Dip".
+
+3. **Pinball Setup:**
+   - Precio atrapado entre EMA 50 y EMA 200.
+   - RSI saliendo de sobreventa/sobrecompra.
+
+EJECUCIÓN:
+- **SI** la divergencia es pequeña y en rango: "Ruido. Ignorar."
+- **SI** hay divergencia en 15m Y 1h (Dual Frame): "GOLDEN REVERSAL. Probabilidad muy alta."
+
+ESTRUCTURA DE RESPUESTA PRO:
+"**🏹 DIVERGENCE SIGNAL: [REVERSAL / CONTINUATION]**
+**Tipo:** [Regular / Oculta]
+**Indicador:** RSI con divergencia clara.
+**Validación:** Agotamiento de momentum confirmado.
+**Stop Loss:** Swing High/Low reciente."
+`
    }
 ];

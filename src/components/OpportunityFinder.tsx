@@ -574,6 +574,7 @@ const getStrategyReason = (id: string) => {
     if (strategy.includes('smc')) return "Smart Money Concepts. Cazando liquidez institucional y Order Blocks.";
     if (strategy.includes('ichimoku')) return "Equilibrio de mercado. Confirmación de tendencia con Nube Ichimoku.";
     if (strategy.includes('quant')) return "Análisis cuantitativo. Explotando ineficiencias matemáticas.";
+    if (strategy.includes('divergence')) return "Agotamiento de momentum detectado. Reversión probable en zona clave.";
 
     // 3. Fallback
     return "Patrón de alta probabilidad estadística validado por el algoritmo.";
