@@ -25,6 +25,8 @@ import { calculateDCAPlan } from '../dcaCalculator';
 import { fetchCryptoData, fetchCandles } from '../api/binanceApi';
 import { getMarketRisk, calculateFundamentalTier } from './riskEngine';
 
+import { calculateEMA } from '../mathUtils';
+
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {
     // 0. INITIALIZATION
     console.log(`[Scanner] PIPELINE START: ${style} mode...`);
@@ -104,7 +106,22 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             // Apply Macro Filters (Context Awareness)
             if (macroContext) {
-                totalScore = applyMacroFilters(totalScore, coin.symbol, strategyResult.primaryStrategy?.signal || 'LONG', macroContext);
+                totalScore = applyMacroFilters(totalScore, coin.symbol, signalSide, macroContext);
+            }
+
+            // --- STAGE 4.5: SMART MTF VERIFICATION (Architect Check) ---
+            // "The Architect verifies the Macro Structure before demolition"
+            // We only check for Freeze Strategy or High Confidence setups to save API calls
+            if (strategyResult.primaryStrategy?.id === 'FREEZE_STRATEGY' || totalScore > 75) {
+                // If we are scanning 15m, check 4H. If scanning 4H, this check is redundant (self-check) or needs 1D.
+                // Assuming default run is 15m for opportunities.
+                if (interval === '15m') {
+                    const isMacroAligned = await verifyMacroTrend(coin.id, signalSide);
+                    if (!isMacroAligned) {
+                        console.log(`[Smart MTF] Discarding ${coin.symbol} - Macro 4H Mismatch (Architect Veto)`);
+                        return; // DISCARD: Counter-trend to macro
+                    }
+                }
             }
 
             // --- STAGE 5: FILTERING & OUTPUT ---
@@ -113,10 +130,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 symbol: coin.symbol,
                 timestamp: Date.now(),
                 timeframe: interval,
-                session: advancedData.confluence?.sessionContext || "GLOBAL", // Fallback
+                session: "GLOBAL", // Fallback until session context is strictly typed
                 riskRewardRatio: 2.5, // Calc dynamically if possible
                 strategy: strategyResult.primaryStrategy?.id || baseScoreResult.strategies[0] || 'hybrid_algo',
-                side: strategyResult.primaryStrategy?.signal || 'LONG',
+                side: signalSide,
                 confidenceScore: Math.round(Math.min(100, totalScore)),
                 entryZone: {
                     min: indicators.price * 0.995,
@@ -148,7 +165,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             // Fix: Pass decomposed arguments matching calculateDCAPlan signature
             const dcaPlan = calculateDCAPlan(
                 indicators.price,
-                indicators.confluenceAnalysis || { topResistances: [], topSupports: [], poiScore: 0, levels: [] }, // Safe fallback
+                indicators.confluenceAnalysis || { topResistances: [], topSupports: [], poiScore: 0, levels: [], supportPOIs: [], resistancePOIs: [] }, // Safe fallback
                 indicators.atr,
                 signalSide,
                 indicators.marketRegime,
@@ -210,4 +227,24 @@ function applyMacroFilters(
     }
 
     return adjustedScore;
+}
+
+// --- HELPER: SMART ARCHITECT CHECK (MTF) ---
+async function verifyMacroTrend(symbolId: string, signalSide: 'LONG' | 'SHORT'): Promise<boolean> {
+    try {
+        const candles4h = await fetchCandles(symbolId, '4h');
+        if (!candles4h || candles4h.length < 200) return true; // Benefit of doubt
+
+        const closes = candles4h.map(c => c.close);
+        const currentPrice = closes[closes.length - 1];
+        const ema200 = calculateEMA(closes, 200);
+
+        if (signalSide === 'LONG') {
+            return currentPrice > ema200;
+        } else {
+            return currentPrice < ema200;
+        }
+    } catch (e) {
+        return true;
+    }
 }

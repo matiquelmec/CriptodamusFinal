@@ -31,11 +31,16 @@ export interface POIData {
     price: number;
     score: number;
     factors: string[];
+    type: 'SUPPORT' | 'RESISTANCE';
 }
 
 export interface ConfluenceData {
     topSupports: POIData[];
     topResistances: POIData[];
+    supportPOIs: POIData[]; // NEW: Full list for UI/Debug
+    resistancePOIs: POIData[]; // NEW: Full list
+    poiScore?: number; // Optional aggregate score
+    levels?: POIData[]; // Optional flat list
 }
 
 // Extended Technical Indicators with Advanced Market Structure
