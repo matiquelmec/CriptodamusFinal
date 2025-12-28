@@ -22,7 +22,7 @@ export interface SocketState {
     cvd: Record<string, RealTimeCVD>;
 }
 
-const WS_URL = 'ws://localhost:3001/ws';
+const WS_URL = import.meta.env.VITE_BACKEND_URL || 'ws://localhost:3001/ws';
 
 export const useSocket = () => {
     const [isConnected, setIsConnected] = useState(false);
