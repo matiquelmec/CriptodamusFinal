@@ -652,6 +652,20 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     <Globe size={12} className="text-secondary/70" />
                     <span>{data.session || 'GLOBAL'}</span>
                 </div>
+                {/* NEW: Macro Compass Badge */}
+                {data.metrics?.fractalAnalysis && (
+                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4" title="Macro Tendencia (4H)">
+                        {data.metrics.fractalAnalysis.trend_4h === (data.side === 'LONG' ? 'BULLISH' : 'BEARISH') ? (
+                            <span className="flex items-center gap-1 text-success font-bold animate-pulse">
+                                <Layers size={12} /> 4H ALIGNED
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-1 text-warning font-bold">
+                                <Layers size={12} /> 4H NEUTRAL
+                            </span>
+                        )}
+                    </div>
+                )}
                 <div className="flex items-center gap-1.5 border-l border-border/50 pl-4" title="Ratio Riesgo:Beneficio (vs TP3)">
                     <Target size={12} className="text-secondary/70" />
                     <span className={data.riskRewardRatio && data.riskRewardRatio >= 3 ? "text-success font-bold" : "text-primary"}>

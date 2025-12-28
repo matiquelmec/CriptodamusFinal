@@ -8,6 +8,7 @@
 import { TechnicalIndicators, MarketRisk } from '../../../types';
 import { detectMarketRegime } from '../../marketRegimeDetector';
 import { selectStrategies } from '../../strategySelector';
+import { TradingConfig } from '../../../config/tradingConfig';
 
 // Strategy Adapters
 import { analyzeIchimoku } from '../../strategies/IchimokuAdapter';
@@ -145,8 +146,9 @@ export class StrategyRunner {
         // 3. Freeze Strategy (Priority Override)
         const freezeSignal = analyzeFreezeStrategy(indicators, risk);
         if (freezeSignal.active) {
-            totalScoreBoost += 25;
-            strategyDetails.push(`❄️ FREEZE PROTOCOL ACTIVE: High Probability Reversal (+25)`);
+            const boost = TradingConfig.scoring.weights.freeze_protocol_boost || 25;
+            totalScoreBoost += boost;
+            strategyDetails.push(`❄️ FREEZE PROTOCOL ACTIVE: High Probability Reversal (+${boost})`);
             if (!bestStrategyResult) {
                 bestStrategyResult = {
                     id: 'freeze_protocol',

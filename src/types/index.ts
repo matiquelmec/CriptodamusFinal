@@ -363,6 +363,11 @@ export interface AIOpportunity {
     rsiDivergence?: string; // NEW: Description or Type
     volumeExpert?: import('./types-advanced').VolumeExpertAnalysis; // NEW: Institutional Data for UI
     sessionContext?: string; // NEW: Contexto de sesión (e.g. "ASIA_SWEEP")
+    fractalAnalysis?: {
+      trend_4h: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+      ema200_4h: number;
+      price_4h: number;
+    };
   };
   chartPatterns?: ChartPattern[]; // NEW: Smart Geometric Patterns
   dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI

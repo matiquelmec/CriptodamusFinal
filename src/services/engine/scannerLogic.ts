@@ -112,12 +112,18 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             // --- STAGE 4.5: SMART MTF VERIFICATION (Architect Check) ---
             // "The Architect verifies the Macro Structure before demolition"
             // We only check for Freeze Strategy or High Confidence setups to save API calls
+            // --- STAGE 4.5: SMART MTF VERIFICATION (Architect Check) ---
+            // "The Architect verifies the Macro Structure before demolition"
+            let macroCompass: MacroCompass | undefined;
+
+            // We only check for Freeze Strategy or High Confidence setups to save API calls
             if (strategyResult.primaryStrategy?.id === 'FREEZE_STRATEGY' || totalScore > 75) {
                 // If we are scanning 15m, check 4H. If scanning 4H, this check is redundant (self-check) or needs 1D.
-                // Assuming default run is 15m for opportunities.
                 if (interval === '15m') {
-                    const isMacroAligned = await verifyMacroTrend(coin.id, signalSide);
-                    if (!isMacroAligned) {
+                    const compassResult = await verifyMacroTrend(coin.id, signalSide);
+                    macroCompass = compassResult;
+
+                    if (!compassResult.aligned) {
                         console.log(`[Smart MTF] Discarding ${coin.symbol} - Macro 4H Mismatch (Architect Veto)`);
                         return; // DISCARD: Counter-trend to macro
                     }
@@ -154,7 +160,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     emaSlope: indicators.emaSlope,
                     isSqueeze: indicators.isSqueeze,
                     volumeExpert: advancedData.volumeExpert,
-                    macdDivergence: indicators.macdDivergence?.type // String check
+                    macdDivergence: indicators.macdDivergence?.type, // String check
+                    fractalAnalysis: macroCompass ? {
+                        trend_4h: macroCompass.trend4h,
+                        ema200_4h: macroCompass.ema200_4h,
+                        price_4h: macroCompass.price
+                    } : undefined
                 },
                 chartPatterns: indicators.chartPatterns,
                 freezeSignal: undefined, // Add if computed
@@ -230,21 +241,34 @@ function applyMacroFilters(
 }
 
 // --- HELPER: SMART ARCHITECT CHECK (MTF) ---
-async function verifyMacroTrend(symbolId: string, signalSide: 'LONG' | 'SHORT'): Promise<boolean> {
+// --- HELPER: SMART ARCHITECT CHECK (MTF) ---
+interface MacroCompass {
+    aligned: boolean;
+    trend4h: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    ema200_4h: number;
+    price: number;
+}
+
+async function verifyMacroTrend(symbolId: string, signalSide: 'LONG' | 'SHORT'): Promise<MacroCompass> {
     try {
         const candles4h = await fetchCandles(symbolId, '4h');
-        if (!candles4h || candles4h.length < 200) return true; // Benefit of doubt
+        if (!candles4h || candles4h.length < 200) {
+            return { aligned: true, trend4h: 'NEUTRAL', ema200_4h: 0, price: 0 }; // Benefit of doubt
+        }
 
         const closes = candles4h.map(c => c.close);
         const currentPrice = closes[closes.length - 1];
         const ema200 = calculateEMA(closes, 200);
 
-        if (signalSide === 'LONG') {
-            return currentPrice > ema200;
-        } else {
-            return currentPrice < ema200;
-        }
+        const trend4h = currentPrice > ema200 ? 'BULLISH' : 'BEARISH';
+
+        let aligned = false;
+        if (signalSide === 'LONG') aligned = currentPrice > ema200;
+        else aligned = currentPrice < ema200;
+
+        return { aligned, trend4h, ema200_4h: ema200, price: currentPrice };
+
     } catch (e) {
-        return true;
+        return { aligned: true, trend4h: 'NEUTRAL', ema200_4h: 0, price: 0 };
     }
 }

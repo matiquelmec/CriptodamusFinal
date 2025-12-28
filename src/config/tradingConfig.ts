@@ -37,7 +37,7 @@ export const TradingConfig = {
 
     // --- SCORING MATRIX ---
     scoring: {
-        min_score_entry: 60,
+        min_score_entry: 65, // RAISED: Quality over Quantity (World Class Standard)
         god_mode_threshold: 90,
         weights: {
             // Trend Following
@@ -56,7 +56,10 @@ export const TradingConfig = {
 
             // Patterns
             chart_pattern_breakout: 15,
-            golden_ticket_pattern: 25 // Instant high conviction
+            golden_ticket_pattern: 25, // Instant high conviction
+
+            // Strategic Overrides
+            freeze_protocol_boost: 25 // Centralized Weight for Freeze
         },
         // NEW: Advisor Specific Weights (0-10 Scale)
         advisor: {
