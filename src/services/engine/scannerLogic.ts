@@ -38,8 +38,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
         market = await fetchCryptoData(mode);
         console.log(`[Scanner] Tickers Loaded: ${market.length}`);
     } catch (e) {
-        console.error("[Scanner] DATA ERROR:", e);
-        throw new Error("EXCHANGE_OFFLINE");
+        console.error("[Scanner] CRITICAL: Exchange Data Unavailable", e);
+        throw new Error("EXCHANGE_CRITICAL_FAILURE"); // Fail Loud: Stop pipeline
     }
 
     // 2. RISK & CONTEXT
@@ -47,7 +47,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     let macroContext: MacroContext | null = null;
     try {
         macroContext = await getMacroContext();
-    } catch (e) { console.warn("[Scanner] Macro Context unavailable"); }
+    } catch (e) {
+        console.error("[Scanner] CRITICAL: Macro Context Failed. Aborting to prevent blind trading.", e);
+        throw new Error("MACRO_CONTEXT_FAILURE"); // Fail Loud: Context is required for "God Mode"
+    }
 
     const topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 60);
     const opportunities: AIOpportunity[] = [];
@@ -108,6 +111,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             if (macroContext) {
                 totalScore = applyMacroFilters(totalScore, coin.symbol, signalSide, macroContext);
             }
+
+            // Apply Technical Context (ADX Range Filter) - HARDENING
+            totalScore = applyTechnicalContext(totalScore, indicators, strategyResult.primaryStrategy?.id);
 
             // --- STAGE 4.5: SMART MTF VERIFICATION (Architect Check) ---
             // "The Architect verifies the Macro Structure before demolition"
@@ -203,7 +209,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             }
 
         } catch (err) {
-            console.warn(`[Scanner] Error processing ${coin.symbol}:`, err);
+            // Individual coin failure is acceptable, but we log it clearly
+            // console.warn(`[Scanner] Skipped ${coin.symbol}:`, err); 
         }
     }));
 
@@ -271,4 +278,32 @@ async function verifyMacroTrend(symbolId: string, signalSide: 'LONG' | 'SHORT'):
     } catch (e) {
         return { aligned: true, trend4h: 'NEUTRAL', ema200_4h: 0, price: 0 };
     }
+}
+
+// --- HELPER: TECHNICAL CONTEXT (ADX RANGE FILTER) ---
+function applyTechnicalContext(
+    baseScore: number,
+    indicators: TechnicalIndicators,
+    strategyId: string | undefined
+): number {
+    let adjustedScore = baseScore;
+
+    // Range Filter (ADX < 25)
+    if (indicators.adx < 25) {
+        // Strategies that THRIVE in ranges or are counter-trend/reversal based
+        // exempting them from the penalty.
+        const isRangeFriendly =
+            strategyId === 'mean_reversion' ||
+            strategyId === 'divergence_hunter' || // Pinball/Div
+            strategyId === 'freeze_protocol' ||   // Reversal
+            strategyId === 'smc_liquidity';       // Often SFP based
+
+        if (!isRangeFriendly) {
+            // Penalize Trend Following Strategies in Range (Kill Switch)
+            // e.g. Breakout, Ichimoku, Quant Volatility (Scalping trend)
+            adjustedScore *= 0.5;
+        }
+    }
+
+    return adjustedScore;
 }

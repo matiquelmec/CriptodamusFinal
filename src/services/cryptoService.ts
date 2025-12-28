@@ -353,10 +353,7 @@ export const getRawTechnicalIndicators = async (symbolDisplay: string): Promise<
             // NEW: Session Analysis Injection
             sessionAnalysis: analyzeSessionContext(currentPrice, volumes[volumes.length - 1], candles1h),
 
-            confluenceAnalysis: {
-                topSupports: confluenceAnalysis.topSupports,
-                topResistances: confluenceAnalysis.topResistances
-            },
+            confluenceAnalysis,
             technicalReasoning: '',
             invalidated: false,
 

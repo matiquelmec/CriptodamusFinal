@@ -1,4 +1,5 @@
 import { MarketData, FearAndGreedData } from '../../types';
+import { SmartCache } from './caching/smartCache'; // NEW: Smart Caching Service
 
 // PRIMARY: Binance Vision (CORS friendly for public data)
 const BINANCE_API_BASE = 'https://data-api.binance.vision/api/v3';
@@ -217,13 +218,22 @@ export const mapBinanceToCoinCap = (symbol: string) => {
 export const fetchCandles = async (symbolId: string, interval: string): Promise<{ timestamp: number, close: number, volume: number, high: number, low: number, open: number }[]> => {
     const isBinance = symbolId === symbolId.toUpperCase() && symbolId.endsWith('USDT');
 
+    // --- SMART CACHING LAYER ---
+    const cacheKey = `candles_${symbolId}_${interval}`;
+    const cachedData = SmartCache.get<any[]>(cacheKey);
+
+    if (cachedData) {
+        // console.log(`[SmartCache] Hit for ${symbolId} (${interval})`); 
+        return cachedData;
+    }
+
     try {
         if (isBinance) {
             // Fetching 1000 candles to ensure deep data for EMA200 calculation (Institutional Precision)
             const res = await fetchWithTimeout(`${BINANCE_API_BASE}/klines?symbol=${symbolId}&interval=${interval}&limit=1000`, {}, 8000);
             if (!res.ok) throw new Error("Binance Candle Error");
             const data = await res.json();
-            return data.map((d: any[]) => ({
+            const parsedData = data.map((d: any[]) => ({
                 timestamp: d[0],
                 open: parseFloat(d[1]),
                 high: parseFloat(d[2]),
@@ -231,6 +241,17 @@ export const fetchCandles = async (symbolId: string, interval: string): Promise<
                 close: parseFloat(d[4]),
                 volume: parseFloat(d[5])
             }));
+
+            // Determine TTL based on Interval (Hybrid Freshness)
+            let ttl = SmartCache.TTL.MICRO; // Default 30s
+            if (interval === '1h') ttl = SmartCache.TTL.SHORT;
+            if (interval === '4h') ttl = SmartCache.TTL.MEDIUM;
+            if (interval === '1d' || interval === '1w') ttl = SmartCache.TTL.LONG;
+
+            // Save to Cache
+            SmartCache.set(cacheKey, parsedData, ttl);
+
+            return parsedData;
         } else {
             const intervalMap: Record<string, string> = {
                 '15m': 'm15',
@@ -243,7 +264,7 @@ export const fetchCandles = async (symbolId: string, interval: string): Promise<
             const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${symbolId}&quoteId=tether`, {}, 4000);
             if (!res.ok) return [];
             const json = await res.json();
-            return json.data.map((d: any) => ({
+            const parsedData = json.data.map((d: any) => ({
                 timestamp: d.period,
                 open: parseFloat(d.open),
                 high: parseFloat(d.high),
@@ -251,6 +272,17 @@ export const fetchCandles = async (symbolId: string, interval: string): Promise<
                 close: parseFloat(d.close),
                 volume: parseFloat(d.volume)
             }));
+
+            // Determine TTL based on Interval (Hybrid Freshness)
+            let ttl = SmartCache.TTL.MICRO; // Default 30s
+            if (interval === '1h') ttl = SmartCache.TTL.SHORT;
+            if (interval === '4h') ttl = SmartCache.TTL.MEDIUM;
+            if (interval === '1d' || interval === '1w') ttl = SmartCache.TTL.LONG;
+
+            // Save to Cache
+            SmartCache.set(cacheKey, parsedData, ttl);
+
+            return parsedData;
         }
     } catch (e) {
         // Retry with CoinCap logic if Binance fails (or vice versa handled by mapBinanceToCoinCap caller)
@@ -269,7 +301,7 @@ export const fetchCandles = async (symbolId: string, interval: string): Promise<
                     const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${fallbackId}&quoteId=tether`, {}, 4000);
                     if (!res.ok) return [];
                     const json = await res.json();
-                    return json.data.map((d: any) => ({
+                    const parsedData = json.data.map((d: any) => ({
                         timestamp: d.period,
                         open: parseFloat(d.open),
                         high: parseFloat(d.high),
@@ -277,6 +309,17 @@ export const fetchCandles = async (symbolId: string, interval: string): Promise<
                         close: parseFloat(d.close),
                         volume: parseFloat(d.volume)
                     }));
+
+                    // Determine TTL based on Interval (Hybrid Freshness)
+                    let ttl = SmartCache.TTL.MICRO; // Default 30s
+                    if (interval === '1h') ttl = SmartCache.TTL.SHORT;
+                    if (interval === '4h') ttl = SmartCache.TTL.MEDIUM;
+                    if (interval === '1d' || interval === '1w') ttl = SmartCache.TTL.LONG;
+
+                    // Save to Cache
+                    SmartCache.set(cacheKey, parsedData, ttl);
+
+                    return parsedData;
                 } catch (err) { return []; }
             }
         }

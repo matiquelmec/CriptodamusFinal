@@ -12,7 +12,7 @@ import {
     StrategyWeight,
     MarketRegime,
     MarketRegimeType
-} from '../types-advanced';
+} from '../types/types-advanced';
 import { STRATEGIES } from './strategyContext';
 import { TradingConfig } from '../config/tradingConfig';
 

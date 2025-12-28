@@ -2,7 +2,7 @@ import { TechnicalIndicators } from '../types';
 import { VolumeProfile } from './volumeProfile';
 import { OrderBlock } from './orderBlocks';
 import { FairValueGap } from './fairValueGaps';
-import { AutoFibsResult, HarmonicPattern } from '../types-advanced';
+import { AutoFibsResult, HarmonicPattern } from '../types/types-advanced';
 
 export interface POI {
     price: number;

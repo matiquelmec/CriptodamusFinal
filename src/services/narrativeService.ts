@@ -1,6 +1,6 @@
 
 import { TechnicalIndicators } from "../types";
-import { MarketRegime } from "../types-advanced";
+import { MarketRegime } from "../types/types-advanced";
 
 /**
  * NARRATIVE SERVICE (Algorithmic Edition)

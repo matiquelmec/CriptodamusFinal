@@ -86,29 +86,29 @@ export const streamMarketAnalysis = async function* (
         // Trend Alignment (Structure) with SLOPE FILTER
         // Expert Rule: Only trust EMA200 if slope is significant (> 0.2 flat threshold example)
         if (price > ema200) {
-            bullishScore += 2;
-            if (emaSlope > 5) bullishScore += 1; // Strong Upward Slope match
+            bullishScore += TradingConfig.scoring.advisor.trend_ema200;
+            if (emaSlope > 5) bullishScore += TradingConfig.scoring.advisor.trend_slope_boost; // Strong Upward Slope match
         } else {
-            bearishScore += 2;
-            if (emaSlope < -5) bearishScore += 1; // Strong Downward Slope match
+            bearishScore += TradingConfig.scoring.advisor.trend_ema200;
+            if (emaSlope < -5) bearishScore += TradingConfig.scoring.advisor.trend_slope_boost; // Strong Downward Slope match
         }
 
-        if (ema20 > ema50) bullishScore += 1; else bearishScore += 1;
+        if (ema20 > ema50) bullishScore += TradingConfig.scoring.advisor.trend_ema_cross; else bearishScore += TradingConfig.scoring.advisor.trend_ema_cross;
 
         // NEW: VWAP Logic (Institutional Consensus)
-        if (price > vwap) bullishScore += 1.5; else bearishScore += 1.5;
+        if (price > vwap) bullishScore += TradingConfig.scoring.advisor.vwap_position; else bearishScore += TradingConfig.scoring.advisor.vwap_position;
 
         // Momentum (RSI & MACD & StochRSI)
-        if (macd.histogram > 0) bullishScore += 1.5; else bearishScore += 1.5;
-        if (rsi > 50) bullishScore += 1; else bearishScore += 1;
+        if (macd.histogram > 0) bullishScore += TradingConfig.scoring.advisor.momentum_macd; else bearishScore += TradingConfig.scoring.advisor.momentum_macd;
+        if (rsi > 50) bullishScore += TradingConfig.scoring.advisor.momentum_rsi; else bearishScore += TradingConfig.scoring.advisor.momentum_rsi;
 
         // StochRSI Cross Check
-        if (stochRsi.k < 20 && stochRsi.k > stochRsi.d) bullishScore += 2; // Golden cross in oversold
-        if (stochRsi.k > 80 && stochRsi.k < stochRsi.d) bearishScore += 2; // Death cross in overbought
+        if (stochRsi.k < 20 && stochRsi.k > stochRsi.d) bullishScore += TradingConfig.scoring.advisor.stoch_cross_extreme; // Golden cross in oversold
+        if (stochRsi.k > 80 && stochRsi.k < stochRsi.d) bearishScore += TradingConfig.scoring.advisor.stoch_cross_extreme; // Death cross in overbought
 
         // Volatility Context (Bollinger)
         const inUpperZone = price > bollinger.middle;
-        if (inUpperZone) bullishScore += 1; else bearishScore += 1;
+        if (inUpperZone) bullishScore += TradingConfig.scoring.advisor.bollinger_zone; else bearishScore += TradingConfig.scoring.advisor.bollinger_zone;
 
         // NEW: Detect Market Extremes with Z-SCORE (Expert Veto)
         const isCapitulation = (rsi < 20 && rvol > 2) || (zScore && zScore < -2.0); // Panic selling or Statistical Extension
@@ -118,8 +118,8 @@ export const streamMarketAnalysis = async function* (
         if (zScore && zScore < -2.5) bullishScore += TradingConfig.scoring.advisor.z_score_extreme; // Extreme Oversold
         if (zScore && zScore > 2.5) bearishScore += TradingConfig.scoring.advisor.z_score_extreme; // Extreme Overbought
 
-        if (isCapitulation) bullishScore += 3; // Contrarian signal
-        if (isEuphoria) bearishScore += 3; // Contrarian signal
+        if (isCapitulation) bullishScore += TradingConfig.scoring.advisor.contrarian_sentiment; // Contrarian signal
+        if (isEuphoria) bearishScore += TradingConfig.scoring.advisor.contrarian_sentiment; // Contrarian signal
 
         // NEW: PINBALL STRATEGY DETECTION (Advisor Logic)
         let isPinballBuy = false;
@@ -139,9 +139,9 @@ export const streamMarketAnalysis = async function* (
         const isLiquidationCascade = rvol > 3 && Math.abs(macd.histogram) > atr * 0.5;
         if (isLiquidationCascade) {
             if (rsi < 30) {
-                bullishScore += 4; // Liquidaciones de longs = oportunidad de compra
+                bullishScore += TradingConfig.scoring.advisor.liquidation_cascade; // Liquidaciones de longs = oportunidad de compra
             } else if (rsi > 70) {
-                bearishScore += 4; // Liquidaciones de shorts = oportunidad de venta
+                bearishScore += TradingConfig.scoring.advisor.liquidation_cascade; // Liquidaciones de shorts = oportunidad de venta
             }
         }
 
@@ -169,7 +169,7 @@ export const streamMarketAnalysis = async function* (
                     fvg && !fvg.filled && Math.abs(price - fvg.midpoint) / price < 0.005
                 );
                 if (nearFVG) {
-                    bullishScore += 2; // FVG sin llenar = zona de imán
+                    bullishScore += TradingConfig.scoring.advisor.fvg_proximity; // FVG sin llenar = zona de imán
                 }
             }
             if (bearish && bearish.length > 0) {
@@ -190,9 +190,9 @@ export const streamMarketAnalysis = async function* (
 
             if (!inValueArea) {
                 if (price < valueAreaLow) {
-                    bullishScore += 1.5; // Zona de descuento
+                    bullishScore += TradingConfig.scoring.advisor.value_area_deviation; // Zona de descuento
                 } else if (price > valueAreaHigh) {
-                    bearishScore += 1.5; // Zona de premium
+                    bearishScore += TradingConfig.scoring.advisor.value_area_deviation; // Zona de premium
                 }
             }
         }
@@ -202,9 +202,9 @@ export const streamMarketAnalysis = async function* (
             harmonicPatterns.forEach(pattern => {
                 // Only consider patterns that are complete and recent (Logic implicit in detection)
                 if (pattern.direction === 'BULLISH') {
-                    bullishScore += 4; // High conviction pattern
+                    bullishScore += TradingConfig.scoring.advisor.harmonic_pattern; // High conviction pattern
                 } else {
-                    bearishScore += 4;
+                    bearishScore += TradingConfig.scoring.advisor.harmonic_pattern;
                 }
             });
         }
@@ -225,8 +225,8 @@ export const streamMarketAnalysis = async function* (
         if (isSqueeze) {
             // If squeezing, potential explosion. Bias towards break direction.
             // If price > ema20, likely expansion up.
-            if (price > ema20) bullishScore += 2;
-            else bearishScore += 2;
+            if (price > ema20) bullishScore += TradingConfig.scoring.advisor.ttm_squeeze_bias;
+            else bearishScore += TradingConfig.scoring.advisor.ttm_squeeze_bias;
         }
 
         // --- PHASE 1.5: MACRO ADJUSTMENTS (NEW) ---
@@ -341,9 +341,9 @@ export const streamMarketAnalysis = async function* (
 
                 // 2. Coinbase Premium (Institutional Conviction)
                 if (coinbasePremium.signal === 'INSTITUTIONAL_BUY') {
-                    bullishScore += 4; // High Trust Signal
+                    bullishScore += TradingConfig.scoring.advisor.coinbase_premium; // High Trust Signal
                 } else if (coinbasePremium.signal === 'INSTITUTIONAL_SELL') {
-                    bearishScore += 4;
+                    bearishScore += TradingConfig.scoring.advisor.coinbase_premium;
                 }
 
                 // 3. CVD Divergences (Microstructure Verification)
@@ -367,9 +367,9 @@ export const streamMarketAnalysis = async function* (
             // NEW: RSI TRENDLINE BREAKS (Leading Indicator)
             if (rsiExpert && rsiExpert.trendlineBreak && rsiExpert.trendlineBreak.detected) {
                 if (rsiExpert.trendlineBreak.direction === 'BULLISH') {
-                    bullishScore += 3; // Early Momentum Shift
+                    bullishScore += TradingConfig.scoring.advisor.rsi_trendline_break; // Early Momentum Shift
                 } else if (rsiExpert.trendlineBreak.direction === 'BEARISH') {
-                    bearishScore += 3;
+                    bearishScore += TradingConfig.scoring.advisor.rsi_trendline_break;
                 }
             }
 
@@ -458,9 +458,9 @@ export const streamMarketAnalysis = async function* (
         const scoreDiff = Math.abs(bullishScore - bearishScore);
         if (scoreDiff < 2 && techData.fractalAnalysis?.trend_1w && !weakTrendWarning) {
             if (techData.fractalAnalysis.trend_1w === 'BULLISH') {
-                bullishScore += 3;
+                bullishScore += TradingConfig.scoring.advisor.fractal_tie_breaker;
             } else {
-                bearishScore += 3;
+                bearishScore += TradingConfig.scoring.advisor.fractal_tie_breaker;
             }
         }
 

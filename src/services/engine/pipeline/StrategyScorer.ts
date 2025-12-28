@@ -63,9 +63,9 @@ export class StrategyScorer {
 
         // 5. Institutional Flow
         if (indicators.zScore < -2) {
-            score += 10; // Mean Reversion Potential
+            score += TradingConfig.scoring.advisor.z_score_extreme; // Mean Reversion Potential
             strategies.push('MEAN_REVERSION');
-            reasoning.push(`📉 Z-Score Extreme Oversold (-2 StdDev) (+10)`);
+            reasoning.push(`📉 Z-Score Extreme Oversold (-2 StdDev) (+${TradingConfig.scoring.advisor.z_score_extreme})`);
         }
 
         // 6. "God Mode" / Golden Ticket

@@ -1,4 +1,4 @@
-import { Candle } from '../types-advanced';
+import { Candle } from '../types/types-advanced';
 
 export interface VolumeProfile {
     poc: number;           // Point of Control (precio con mayor volumen)

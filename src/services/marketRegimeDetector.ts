@@ -17,7 +17,7 @@ import {
     RegimeMetrics,
     TrendDirection,
     ExtremeCondition
-} from '../types-advanced';
+} from '../types/types-advanced';
 import { TechnicalIndicators } from '../types';
 
 /**

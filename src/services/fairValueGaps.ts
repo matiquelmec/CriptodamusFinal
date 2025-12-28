@@ -1,4 +1,4 @@
-import { Candle } from '../types-advanced';
+import { Candle } from '../types/types-advanced';
 
 export interface FairValueGap {
     top: number;

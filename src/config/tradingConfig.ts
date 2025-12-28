@@ -69,7 +69,26 @@ export const TradingConfig = {
             volume_absorption: 4,
             fractal_alignment: 3,
             z_score_extreme: 4,
-            pinball_setup: 3.5
+            pinball_setup: 3.5,
+            // NEW CENTRALIZED WEIGHTS (Audit Remediation)
+            trend_ema200: 2,
+            trend_slope_boost: 1,
+            trend_ema_cross: 1,
+            vwap_position: 1.5,
+            momentum_macd: 1.5,
+            momentum_rsi: 1,
+            stoch_cross_extreme: 2,
+            bollinger_zone: 1,
+            contrarian_sentiment: 3, // Euphoria/Capitulation
+            liquidation_cascade: 4,
+            fvg_proximity: 2,
+            value_area_deviation: 1.5,
+            harmonic_pattern: 4,
+            rsi_trendline_break: 3,
+            funding_rate_extreme: 3,
+            coinbase_premium: 4, // Institutional Trust
+            ttm_squeeze_bias: 2,
+            fractal_tie_breaker: 3
         }
     },
     // NEW: Strategy Dynamic Weights (Regime Matrix)
