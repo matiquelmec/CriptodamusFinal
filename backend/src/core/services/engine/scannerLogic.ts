@@ -164,7 +164,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     emaSlope: indicators.emaSlope,
                     isSqueeze: indicators.isSqueeze,
                     volumeExpert: advancedData.volumeExpert,
-                    macdDivergence: indicators.macdDivergence?.type, // String check
+                    macdDivergence: indicators.macdDivergence?.type || undefined,
                     fractalAnalysis: macroCompass ? {
                         trend_4h: macroCompass.trend4h,
                         ema200_4h: macroCompass.ema200_4h,
@@ -294,20 +294,31 @@ function applyTechnicalContext(
 ): number {
     let adjustedScore = baseScore;
 
-    // Range Filter (ADX < 25)
+    // Range Filter (ADX < 25) - MARKETS ARE SIDEWAYS/CHOPPY
     if (indicators.adx < 25) {
         // Strategies that THRIVE in ranges or are counter-trend/reversal based
-        // exempting them from the penalty.
         const isRangeFriendly =
             strategyId === 'mean_reversion' ||
-            strategyId === 'divergence_hunter' || // Pinball/Div
-            strategyId === 'freeze_protocol' ||   // Reversal
-            strategyId === 'smc_liquidity';       // Often SFP based
+            strategyId === 'divergence_hunter' ||
+            strategyId === 'freeze_protocol' ||
+            strategyId === 'smc_liquidity' ||
+            strategyId === 'swing_institutional'; // Added Swing
 
-        if (!isRangeFriendly) {
-            // Penalize Trend Following Strategies in Range (Kill Switch)
-            // e.g. Breakout, Ichimoku, Quant Volatility (Scalping trend)
+        if (isRangeFriendly) {
+            // RANGE BONUS: If utilizing a range strategy in a range, small boost
+            // adjustedScore *= 1.1; 
+        } else {
+            // TREND PENALTY: Breakout/Trend strategies fail in ranges
+            // e.g. Breakout, Ichimoku, Quant Volatility
+            // We penalize them to avoid false breakouts
             adjustedScore *= 0.5;
+        }
+    }
+    // Trend Filter (ADX > 25) - MARKETS ARE MOVING
+    else {
+        // If we have a strong trend, but we are trying to Mean Revert without extreme conditions, that's dangerous.
+        if (strategyId === 'mean_reversion' && indicators.rsi > 35 && indicators.rsi < 65) {
+            adjustedScore *= 0.8; // Reduce confidence in fighting the trend mid-range
         }
     }
 
