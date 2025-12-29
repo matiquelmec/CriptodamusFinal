@@ -263,11 +263,7 @@ export interface TechnicalIndicators {
   tier?: FundamentalTier; // NEW: Propagate Tier
 }
 
-export enum TabView {
-  DASHBOARD = 'DASHBOARD',
-  CALENDAR = 'CALENDAR',
-  OPPORTUNITIES = 'OPPORTUNITIES'
-}
+
 
 export type TradingStyle = 'SCALP_AGRESSIVE' | 'SWING_INSTITUTIONAL' | 'BREAKOUT_MOMENTUM' | 'ICHIMOKU_CLOUD' | 'MEME_SCALP';
 
