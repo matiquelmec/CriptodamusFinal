@@ -128,6 +128,8 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-secondary" size={12} />
           <input
+            id="scanner-search"
+            name="search"
             type="text"
             placeholder="Buscar moneda..."
             value={searchQuery}
@@ -187,15 +189,15 @@ const Scanner: React.FC<ScannerProps> = ({ onSelectSymbol, selectedSymbol }) => 
                       key={item.id}
                       onClick={() => onSelectSymbol(rawSymbol)}
                       className={`border-b border-border/40 transition-colors cursor-pointer group ${isSelected
-                          ? 'bg-accent/10'
-                          : 'hover:bg-white/5'
+                        ? 'bg-accent/10'
+                        : 'hover:bg-white/5'
                         }`}
                     >
                       <td className="p-2 pl-3">
                         <div className="flex flex-col">
                           <span className={`font-mono font-bold text-xs ${isSelected
-                              ? 'text-accent'
-                              : scanMode === 'memes' ? 'text-pink-400' : 'text-primary'
+                            ? 'text-accent'
+                            : scanMode === 'memes' ? 'text-pink-400' : 'text-primary'
                             }`}>
                             {rawSymbol}
                           </span>

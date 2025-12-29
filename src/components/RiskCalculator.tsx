@@ -17,7 +17,7 @@ const RiskCalculator: React.FC = () => {
       setRiskAmount(riskAmt);
 
       const priceDiffPercent = Math.abs((entryPrice - stopLossPrice) / entryPrice);
-      
+
       if (priceDiffPercent > 0) {
         // Total value of the position (Not margin, but total exposure)
         const posSizeUSDT = riskAmt / priceDiffPercent;
@@ -37,8 +37,10 @@ const RiskCalculator: React.FC = () => {
         {/* Inputs */}
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-mono text-secondary mb-1">Balance de Cuenta (USDT)</label>
+            <label htmlFor="risk-account-balance" className="block text-xs font-mono text-secondary mb-1">Balance de Cuenta (USDT)</label>
             <input
+              id="risk-account-balance"
+              name="accountBalance"
               type="number"
               value={accountBalance}
               onChange={(e) => setAccountBalance(Number(e.target.value))}
@@ -47,11 +49,13 @@ const RiskCalculator: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-mono text-secondary mb-1">
+            <label htmlFor="risk-percentage" className="block text-xs font-mono text-secondary mb-1">
               Riesgo por Trade (%) <span className="text-xs text-accent">(Recomendado: 1-2%)</span>
             </label>
             <div className="flex items-center gap-2">
               <input
+                id="risk-percentage"
+                name="riskPercentage"
                 type="range"
                 min="0.5"
                 max="5"
@@ -66,8 +70,10 @@ const RiskCalculator: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-mono text-secondary mb-1">Precio Entrada</label>
+              <label htmlFor="risk-entry-price" className="block text-xs font-mono text-secondary mb-1">Precio Entrada</label>
               <input
+                id="risk-entry-price"
+                name="entryPrice"
                 type="number"
                 value={entryPrice}
                 onChange={(e) => setEntryPrice(Number(e.target.value))}
@@ -75,8 +81,10 @@ const RiskCalculator: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-xs font-mono text-secondary mb-1">Stop Loss</label>
+              <label htmlFor="risk-stop-loss" className="block text-xs font-mono text-secondary mb-1">Stop Loss</label>
               <input
+                id="risk-stop-loss"
+                name="stopLoss"
                 type="number"
                 value={stopLossPrice}
                 onChange={(e) => setStopLossPrice(Number(e.target.value))}
@@ -89,9 +97,9 @@ const RiskCalculator: React.FC = () => {
         {/* Results */}
         <div className="bg-background rounded-xl p-6 border border-border flex flex-col justify-center relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-10">
-             <AlertTriangle size={100} />
+            <AlertTriangle size={100} />
           </div>
-          
+
           <div className="space-y-6 relative z-10">
             <div>
               <p className="text-xs text-secondary font-mono">Pérdida Máxima Aceptable</p>
@@ -118,7 +126,7 @@ const RiskCalculator: React.FC = () => {
                 </p>
               </div>
             )}
-             {riskPercentage <= 2 && riskPercentage > 0 && (
+            {riskPercentage <= 2 && riskPercentage > 0 && (
               <div className="flex items-start gap-2 bg-success/10 p-3 rounded border border-success/20">
                 <CheckCircle size={16} className="text-success mt-0.5" />
                 <p className="text-xs text-success">

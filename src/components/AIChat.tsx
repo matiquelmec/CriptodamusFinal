@@ -186,6 +186,8 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
       <form onSubmit={handleSubmit} className="p-3 border-t border-border bg-background">
         <div className="flex items-center gap-2">
           <input
+            id="ai-chat-input"
+            name="chatInput"
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}

@@ -145,11 +145,10 @@ export const DonationWidget: React.FC<DonationWidgetProps> = ({
               <button
                 key={level.amount}
                 onClick={() => setSelectedAmount(level.amount)}
-                className={`p-4 rounded-xl border-2 transition-all transform hover:scale-105 ${
-                  isSelected
+                className={`p-4 rounded-xl border-2 transition-all transform hover:scale-105 ${isSelected
                     ? 'border-purple-500 bg-purple-500/20 scale-105'
                     : 'border-gray-600 hover:border-gray-500 bg-gray-800/50'
-                }`}
+                  }`}
               >
                 <div className={`w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-r ${level.color} flex items-center justify-center`}>
                   <level.icon className="w-6 h-6 text-white" />
@@ -174,6 +173,8 @@ export const DonationWidget: React.FC<DonationWidgetProps> = ({
           <div className="relative">
             <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
             <input
+              id="donation-custom-amount"
+              name="customAmount"
               type="number"
               value={selectedAmount}
               onChange={(e) => setSelectedAmount(Number(e.target.value))}

@@ -20,7 +20,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
 
         // Visual Feedback & Close
         setIsSaved(true);
-        
+
         // Wait 1s so user sees the "Success" checkmark, then close
         setTimeout(() => {
             setIsSaved(false);
@@ -41,23 +41,25 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
             </div>
 
             <div className="space-y-6">
-                
+
                 {/* RISK SECTION */}
                 <div className="bg-surface border border-border rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-4 text-warning">
                         <Shield size={20} />
                         <h3 className="font-mono font-bold text-lg text-primary">Gestión de Riesgo por Defecto</h3>
                     </div>
-                    
+
                     <div className="space-y-4">
-                         <div>
-                            <label className="block text-xs font-mono text-secondary mb-2 uppercase tracking-wider">
+                        <div>
+                            <label htmlFor="settings-default-risk" className="block text-xs font-mono text-secondary mb-2 uppercase tracking-wider">
                                 Riesgo Predeterminado por Operación (%)
                             </label>
-                            <input 
-                                type="range" 
-                                min="0.1" 
-                                max="5" 
+                            <input
+                                id="settings-default-risk"
+                                name="defaultRisk"
+                                type="range"
+                                min="0.1"
+                                max="5"
                                 step="0.1"
                                 value={defaultRisk}
                                 onChange={(e) => setDefaultRisk(Number(e.target.value))}
@@ -71,19 +73,19 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                     </div>
                 </div>
 
-                 {/* SYSTEM SECTION */}
-                 <div className="bg-surface border border-border rounded-xl p-6">
+                {/* SYSTEM SECTION */}
+                <div className="bg-surface border border-border rounded-xl p-6">
                     <div className="flex items-center gap-3 mb-4 text-danger">
                         <Database size={20} />
                         <h3 className="font-mono font-bold text-lg text-primary">Zona de Peligro</h3>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                         <div>
                             <h4 className="text-sm font-bold text-primary">Limpiar Caché Local</h4>
                             <p className="text-xs text-secondary">Restaurar valores de fábrica y limpiar datos de sesión.</p>
                         </div>
-                        <button 
+                        <button
                             onClick={handleClearCache}
                             className="flex items-center gap-2 px-4 py-2 border border-danger/30 text-danger hover:bg-danger/10 rounded text-xs font-mono transition-colors"
                         >
@@ -96,7 +98,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
 
             {/* ACTION BAR */}
             <div className="sticky bottom-0 bg-background/80 backdrop-blur border-t border-border p-4 mt-6 flex justify-end">
-                <button 
+                <button
                     onClick={handleSave}
                     disabled={isSaved}
                     className="flex items-center gap-2 px-6 py-2 bg-accent hover:bg-accentHover text-white rounded font-mono text-sm font-bold transition-all shadow-lg shadow-accent/20 disabled:opacity-80 disabled:cursor-wait"
