@@ -150,6 +150,15 @@ export const TradingConfig = {
         fractals: {
             period: 5
         }
+    },
+
+    // --- TELEGRAM NOTIFICATIONS ---
+    telegram: {
+        enabled: true,
+        botToken: '8524882455:AAGghZYyLsfMD6Xo-I2qcOxxHbgT5Ucc4Kw', // Injected by Setup Script
+        chatId: '6463158372', // User ID
+        minScoreAlert: 75, // Only alert if score >= 75
+        alertCooldown: 240 // 4 hours cooldown for same symbol
     }
 } as const;
 

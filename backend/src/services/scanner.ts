@@ -1,6 +1,7 @@
 import EventEmitter from 'events';
 import { scanMarketOpportunities } from '../core/services/engine/scannerLogic';
 import { AIOpportunity, TradingStyle } from '../core/types';
+import { telegramService } from './telegramService';
 
 // Configuration
 const SCAN_INTERVAL_MS = 15 * 60 * 1000; // 15 Minutes
@@ -87,6 +88,9 @@ class ScannerService extends EventEmitter {
             if (results.length > 0) {
                 console.log(`✅ [ScannerService] Found ${results.length} opportunities. Broadcasting...`);
                 this.emit('scan_complete', results);
+
+                // 🚀 TELEGRAM NOTIFICATION HOOK
+                telegramService.broadcastSignals(results).catch(err => console.error("[Scanner] Telegram Error:", err));
 
                 // Also emit a specific event for high quality setups
                 const goldenTickets = results.filter(o => o.confidenceScore >= 80);
