@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Scanner from '../components/Scanner';
 import TradingViewWidget from '../components/TradingViewWidget';
@@ -7,21 +7,17 @@ import AIChat from '../components/AIChat';
 
 const Dashboard: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
-    const symbolParam = searchParams.get('symbol');
 
-    // Local state for immediate responsiveness, but synced with URL
-    const [selectedSymbol, setSelectedSymbol] = useState<string>(symbolParam || "BTC");
-
-    // Sync state when URL changes
-    useEffect(() => {
-        if (symbolParam && symbolParam !== selectedSymbol) {
-            setSelectedSymbol(symbolParam);
-        }
-    }, [symbolParam]);
+    // Single Source of Truth: The URL
+    // If no symbol is present, we treat it as BTC but we DON'T force a redirect to avoid history spam,
+    // unless the user explicitly wants that behavior. For now, we just default the view.
+    const selectedSymbol = searchParams.get('symbol') || "BTC";
 
     const handleSelectSymbol = (symbol: string) => {
-        setSelectedSymbol(symbol);
-        setSearchParams({ symbol });
+        // Only update if different to avoid redundant history entries
+        if (symbol !== selectedSymbol) {
+            setSearchParams({ symbol }, { replace: true });
+        }
     };
 
     return (
