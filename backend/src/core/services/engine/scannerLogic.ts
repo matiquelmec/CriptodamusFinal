@@ -153,6 +153,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 stopLoss: indicators.price * 0.98, // Placeholder default, DCA calculator refines this
                 takeProfits: { tp1: 0, tp2: 0, tp3: 0 }, // Placeholder
                 technicalReasoning: reasoning.join(". "),
+                reasoning: reasoning, // NEW: Pass full array
                 invalidated: false,
                 metrics: {
                     rvol: indicators.rvol,

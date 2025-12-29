@@ -342,6 +342,7 @@ export interface AIOpportunity {
         tp3: number;
     };
     technicalReasoning: string;
+    reasoning?: string[]; // NEW: Structured reasoning for Telegram/UI bullet points
     invalidated: boolean;
     metrics?: {
         rvol: number;

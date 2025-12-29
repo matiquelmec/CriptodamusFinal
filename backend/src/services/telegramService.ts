@@ -1,6 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { TradingConfig } from '../core/config/tradingConfig';
-import { AIOpportunity } from '../types';
+import { AIOpportunity } from '../core/types';
 
 /**
  * TELEGRAM SERVICE (Autre-Pilot Notification System)
@@ -79,15 +79,15 @@ export class TelegramService {
     private async sendOpportunityAlert(opp: AIOpportunity) {
         if (!this.bot) return;
 
-        const sideIcon = opp.signalSide === 'LONG' ? '🟢' : '🔴';
+        const sideIcon = opp.side === 'LONG' ? '🟢' : '🔴';
         const scoreIcon = opp.confidenceScore >= 90 ? '💎 GOD MODE' : opp.confidenceScore >= 80 ? '🔥 HOT' : '⚡';
         const tierIcon = opp.tier === 'S' ? '🏆' : opp.tier === 'A' ? '🅰️' : '🅱️';
 
-        let strategyName = opp.strategyId; // Cleanup name if needed
+        let strategyName = opp.strategy; // Fixed property access logic
 
         let message = `<b>${sideIcon} SEÑAL INSTITUCIONAL: ${opp.symbol} ${sideIcon}</b>\n`;
         message += `<b>${scoreIcon} Confianza: ${opp.confidenceScore}/100</b> | ${tierIcon} Tier ${opp.tier || 'N/A'}\n`;
-        message += `<i>Estrategia: ${opp.primaryStrategy || strategyName}</i>\n\n`;
+        message += `<i>Estrategia: ${strategyName}</i>\n\n`;
 
         // --- DCA LADDER (ENTRADAS) ---
         if (opp.dcaPlan && opp.dcaPlan.entries.length > 0) {
