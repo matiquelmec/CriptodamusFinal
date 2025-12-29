@@ -8,7 +8,7 @@ import MacroStrip from './components/MacroStrip';
 import MacroIndicators from './components/MacroIndicators';
 import EconomicCalendar from './components/EconomicCalendar';
 import OpportunityFinder from './components/OpportunityFinder';
-import SettingsPanel from './components/SettingsPanel';
+
 import { TabView } from './types';
 
 const App: React.FC = () => {
@@ -58,8 +58,7 @@ const App: React.FC = () => {
         return <div className="h-full min-h-[600px] mb-24 lg:mb-0"><OpportunityFinder onSelectOpportunity={handleSelectOpportunity} /></div>;
       case TabView.CALENDAR:
         return <div className="h-full min-h-[600px] mb-24 lg:mb-0"><EconomicCalendar /></div>;
-      case TabView.SETTINGS:
-        return <div className="h-full min-h-[600px] mb-24 lg:mb-0"><SettingsPanel onClose={() => setActiveTab(TabView.DASHBOARD)} /></div>;
+
       default:
         return <div className="flex items-center justify-center h-full text-secondary font-mono">Vista en desarrollo</div>;
     }
@@ -127,12 +126,7 @@ const App: React.FC = () => {
             </button>
           </nav>
 
-          <button
-            onClick={() => setActiveTab(TabView.SETTINGS)}
-            className={`w-8 h-8 rounded border flex items-center justify-center transition-all ${activeTab === TabView.SETTINGS ? 'bg-accent text-white border-accent' : 'bg-surface border-border text-secondary hover:text-primary hover:bg-white/5'}`}
-          >
-            <Settings size={16} />
-          </button>
+
         </div>
       </header>
 
