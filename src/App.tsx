@@ -71,12 +71,17 @@ const App: React.FC = () => {
       <header className="h-14 border-b border-border bg-background/80 backdrop-blur-md flex-shrink-0 z-50 sticky top-0">
         <div className="container mx-auto px-4 h-full flex items-center justify-between">
           <div className="flex items-center gap-3 group cursor-pointer" onClick={() => setActiveTab(TabView.DASHBOARD)}>
-            {/* Criptodamus Custom Vector Logo */}
-            <div className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center drop-shadow-lg transition-transform group-hover:scale-105 duration-300">
-              <img src="/logo.png" alt="Criptodamus Logo" className="w-full h-full object-contain" />
-            </div>
+            {/* Criptodamus Logo - Creative Integration */}
+            <div className="relative h-12 w-48 flex items-center justify-start transition-all duration-300 group-hover:scale-105 group-hover:brightness-110">
+              {/* Glow effect behind the logo */}
+              <div className="absolute inset-0 bg-accent/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-            <h1 className="text-lg md:text-xl font-bold tracking-tight text-white leading-none font-mono tracking-tighter">CRIPTODAMUS</h1>
+              <img
+                src="/logo.png"
+                alt="Criptodamus"
+                className="w-full h-full object-contain object-left relative z-10 drop-shadow-[0_0_15px_rgba(34,211,238,0.3)]"
+              />
+            </div>
           </div>
 
           {/* Macro Indicators - Desktop only */}
