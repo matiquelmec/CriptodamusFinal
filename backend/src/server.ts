@@ -14,13 +14,10 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import crypto from 'crypto';
 
-// Import Routes (Legacy JS)
-// @ts-ignore
-import marketRoutes from './api/market.js';
-// @ts-ignore
-import donationRoutes from './api/donation.js';
-// @ts-ignore
-import proxyRoutes from './api/proxy.js';
+// Import Routes (TypeScript)
+import marketRoutes from './api/market';
+import donationRoutes from './api/donation';
+import proxyRoutes from './api/proxy';
 
 // Import Services
 // @ts-ignore
