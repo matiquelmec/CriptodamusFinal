@@ -55,7 +55,7 @@ interface AppState {
   marketStatus: 'open' | 'closed' | 'pre-market' | 'after-hours';
 
   // UI
-  activeTab: string;
+
   isSidebarOpen: boolean;
   isLoading: boolean;
   notifications: Array<{
@@ -77,7 +77,7 @@ interface AppState {
   updatePosition: (positionId: string, updates: Partial<Position>) => void;
   setSelectedSymbol: (symbol: string) => void;
   toggleWatchlist: (symbol: string) => void;
-  setActiveTab: (tab: string) => void;
+
   toggleSidebar: () => void;
   addNotification: (notification: Omit<AppState['notifications'][0], 'id' | 'timestamp' | 'read'>) => void;
   markNotificationRead: (id: string) => void;
@@ -98,7 +98,7 @@ const initialState = {
   selectedSymbol: 'BTC',
   watchlist: ['BTC', 'ETH', 'SOL'],
   marketStatus: 'open' as const,
-  activeTab: 'DASHBOARD',
+
   isSidebarOpen: true,
   isLoading: false,
   notifications: [],
@@ -159,7 +159,7 @@ export const useAppStore = create<AppState>()(
             : [...state.watchlist, symbol]
         })),
 
-        setActiveTab: (activeTab) => set({ activeTab }),
+
 
         toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
 
