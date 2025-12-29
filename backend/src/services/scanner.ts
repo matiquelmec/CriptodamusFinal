@@ -22,35 +22,60 @@ class ScannerService extends EventEmitter {
     }
 
     /**
-     * Start the autonomous scanning loops
+     * Start the autonomous scanning loops, aligned with 15m candles
      */
     public start() {
-        if (this.mainScanInterval) return; // Already running
+        if (this.mainScanInterval) return; // Already running logic check (though we use timeout now)
 
-        console.log("🚀 [ScannerService] Starting Autonomous Market Scanner...");
+        console.log("🚀 [ScannerService] Starting Autonomous Market Scanner (Synced to 15m Candles)...");
 
-        // Initial Scan (Immediate)
+        // 1. Initial Scan (Immediate) - Per user requirement
         this.runFullScan();
 
-        // 1. Main Institutional Scan (15m/4h)
-        this.mainScanInterval = setInterval(() => {
-            this.runFullScan();
-        }, SCAN_INTERVAL_MS);
-
-        // 2. Meme/Scalp Scan (Fast) - Optional, enabled if MEME_MODE is on
-        // this.memeScanInterval = setInterval(() => {
-        //     this.runMemeScan();
-        // }, MEME_SCAN_INTERVAL_MS);
+        // 2. Schedule next scan aligned to xx:00, xx:15, xx:30, xx:45
+        this.scheduleNextAlignedScan();
     }
 
     /**
      * Stop the scanner loops
      */
     public stop() {
-        if (this.mainScanInterval) clearInterval(this.mainScanInterval);
-        if (this.memeScanInterval) clearInterval(this.memeScanInterval);
+        if (this.mainScanInterval) clearTimeout(this.mainScanInterval);
         this.mainScanInterval = null;
         console.log("🛑 [ScannerService] Stopped.");
+    }
+
+    /**
+     * Helper: Schedule next scan at the exact 15m mark
+     */
+    private scheduleNextAlignedScan() {
+        const now = new Date();
+        const minutes = now.getMinutes();
+        const seconds = now.getSeconds();
+        const milliseconds = now.getMilliseconds();
+
+        // Calculate minutes to next quarter hour (15, 30, 45, 60/00)
+        // If minutes is 14, remainder is 14. 15 - 14 = 1 min to go.
+        // If minutes is 15, remainder is 0. 15 - 0 = 15 min to go (Next slot).
+        const remainder = minutes % 15;
+        const minutesToNext = 15 - remainder;
+
+        // Convert to total milliseconds delay
+        // Subtract current seconds/ms to hit the minute mark exactly :00
+        let delayMs = (minutesToNext * 60 * 1000) - (seconds * 1000) - milliseconds;
+
+        // Safety buffer: If delay is too small (e.g. < 5s), push to next cycle to avoid double execution on edge
+        if (delayMs < 5000) {
+            delayMs += 15 * 60 * 1000;
+        }
+
+        console.log(`⏱️ [ScannerService] Next alignment in ${(delayMs / 1000 / 60).toFixed(2)} minutes (Target: Next 15m Candle)`);
+
+        this.mainScanInterval = setTimeout(() => {
+            this.runFullScan();
+            // Recursive schedule for next cycle
+            this.scheduleNextAlignedScan();
+        }, delayMs);
     }
 
     /**
