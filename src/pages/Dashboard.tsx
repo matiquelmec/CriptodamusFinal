@@ -8,10 +8,14 @@ import AIChat from '../components/AIChat';
 const Dashboard: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
 
-    // Single Source of Truth: The URL
-    // If no symbol is present, we treat it as BTC but we DON'T force a redirect to avoid history spam,
-    // unless the user explicitly wants that behavior. For now, we just default the view.
     const selectedSymbol = searchParams.get('symbol') || "BTC";
+
+    // Auto-select BTC in URL if missing
+    React.useEffect(() => {
+        if (!searchParams.get('symbol')) {
+            setSearchParams({ symbol: "BTC" }, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
 
     const handleSelectSymbol = (symbol: string) => {
         // Only update if different to avoid redundant history entries
