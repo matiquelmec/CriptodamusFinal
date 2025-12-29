@@ -73,27 +73,7 @@ const App: React.FC = () => {
           <div className="flex items-center gap-3 group cursor-pointer" onClick={() => setActiveTab(TabView.DASHBOARD)}>
             {/* Criptodamus Custom Vector Logo */}
             <div className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center drop-shadow-lg transition-transform group-hover:scale-105 duration-300">
-              <svg viewBox="0 0 100 100" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <linearGradient id="hoodGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#1e3a8a" />
-                    <stop offset="100%" stopColor="#0f172a" />
-                  </linearGradient>
-                  <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-                    <feMerge>
-                      <feMergeNode in="coloredBlur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                </defs>
-                <path d="M50 5 C 20 5 10 40 10 65 C 10 85 25 95 50 95 C 75 95 90 85 90 65 C 90 40 80 5 50 5 Z" fill="url(#hoodGradient)" />
-                <path d="M50 15 C 30 15 20 45 20 65 C 20 80 35 85 50 85 C 65 85 80 80 80 65 C 80 45 70 15 50 15 Z" fill="#020617" opacity="0.8" />
-                <path d="M35 55 Q 42 50 45 58" stroke="#06b6d4" strokeWidth="3" fill="none" filter="url(#glow)" className="animate-pulse" />
-                <path d="M65 55 Q 58 50 55 58" stroke="#06b6d4" strokeWidth="3" fill="none" filter="url(#glow)" className="animate-pulse" />
-                <circle cx="40" cy="58" r="2.5" fill="#22d3ee" filter="url(#glow)" />
-                <circle cx="60" cy="58" r="2.5" fill="#22d3ee" filter="url(#glow)" />
-              </svg>
+              <img src="/logo.png" alt="Criptodamus Logo" className="w-full h-full object-contain" />
             </div>
 
             <h1 className="text-lg md:text-xl font-bold tracking-tight text-white leading-none font-mono tracking-tighter">CRIPTODAMUS</h1>
