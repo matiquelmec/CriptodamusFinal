@@ -114,12 +114,14 @@ export class TelegramService {
         }
 
         // --- EDUCATIONAL REASONING ---
-        message += `🧠 <b>ANÁLISIS DE IA (Tesis)</b>\n`;
-        opp.reasoning.forEach(r => {
-            // Clean markdown for Telegram HTML (remove **, __, and leading dashes)
-            const cleanR = r.replace(/\*\*/g, '').replace(/__/g, '').replace(/^[-*]\s*/, '');
-            message += `• ${cleanR}\n`;
-        });
+        if (opp.reasoning && Array.isArray(opp.reasoning)) {
+            message += `🧠 <b>ANÁLISIS DE IA (Tesis)</b>\n`;
+            opp.reasoning.forEach(r => {
+                // Clean markdown for Telegram HTML (remove **, __, and leading dashes)
+                const cleanR = r.replace(/\*\*/g, '').replace(/__/g, '').replace(/^[-*]\s*/, '');
+                message += `• ${cleanR}\n`;
+            });
+        }
 
         const disclaimer = `\n<i>⚠️ Criptodamus AI no asesora financieramente. DYOR.</i>`;
         message += disclaimer;
