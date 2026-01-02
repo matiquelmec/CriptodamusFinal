@@ -277,6 +277,35 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                             </div>
                         </div>
 
+                        {/* 1.5. ML BRAIN DIAGNOSIS (NEW) */}
+                        {selectedSignal.mlPrediction && (
+                            <div className="bg-surface rounded-xl p-5 border border-border">
+                                <h4 className="text-xs font-bold text-blue-400 uppercase mb-3 flex items-center gap-2">
+                                    <Cpu size={14} /> Diagnóstico Neuronal (LSTM)
+                                </h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] text-secondary uppercase font-bold">Predicción</span>
+                                        <div className={`text-lg font-mono font-bold ${selectedSignal.mlPrediction.signal === 'BULLISH' ? 'text-success' : selectedSignal.mlPrediction.signal === 'BEARISH' ? 'text-danger' : 'text-secondary'
+                                            }`}>
+                                            {selectedSignal.mlPrediction.signal}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1 text-right">
+                                        <span className="text-[10px] text-secondary uppercase font-bold">Probabilidad</span>
+                                        <div className="text-lg font-mono font-bold text-primary">
+                                            {selectedSignal.mlPrediction.probability.toFixed(1)}%
+                                        </div>
+                                    </div>
+                                    <div className="col-span-2 pt-2 border-t border-border/50">
+                                        <p className="text-[10px] text-secondary leading-relaxed italic">
+                                            "El modelo analiza patrones no-lineales en las últimas 50 velas. Un score superior al 60% indica alta confianza estadística."
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* 2. THE TRIGGER (WHY?) */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-surface rounded-xl p-5 border border-border col-span-2 md:col-span-1">
@@ -686,6 +715,14 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-yellow-500">
                         <Layers size={12} />
                         <span className="font-bold">WALL</span>
+                    </div>
+                )}
+                {/* NEW: ML Brain Badge */}
+                {data.mlPrediction && (
+                    <div className={`flex items-center gap-1.5 border-l border-border/50 pl-4 ${data.mlPrediction.signal === 'BULLISH' ? 'text-success' : data.mlPrediction.signal === 'BEARISH' ? 'text-danger' : 'text-secondary/70'
+                        } animate-pulse`} title={`Predicción Neuronal: ${data.mlPrediction.signal} (${data.mlPrediction.probability.toFixed(1)}%)`}>
+                        <Cpu size={12} />
+                        <span className="font-bold">AI: {data.mlPrediction.signal}</span>
                     </div>
                 )}
             </div>

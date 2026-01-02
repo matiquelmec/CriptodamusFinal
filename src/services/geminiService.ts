@@ -72,12 +72,42 @@ export const streamMarketAnalysis = async function* (
     if (isAnalysisRequest) {
         let response = "";
 
-        // --- PHASE 0: RISK CHECK ---
-        const isHighRisk = riskProfile.level === 'HIGH';
+        // --- PHASE 0: DATA & ML PRE-FETCH ---
+        let mlPrediction = null;
+        try {
+            const API_URL = import.meta.env.PROD
+                ? 'https://criptodamusfinal.onrender.com'
+                : 'http://localhost:3001';
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+            const mlRes = await fetch(`${API_URL}/api/ml/predict?symbol=${techData.symbol}`, {
+                signal: controller.signal
+            }).catch(() => null);
+
+            clearTimeout(timeoutId);
+
+            if (mlRes && mlRes.ok) {
+                mlPrediction = await mlRes.json();
+            }
+        } catch (e) {
+            console.warn("ML Service unavailable for Advisor analysis");
+        }
 
         // --- PHASE 1: SCORING SYSTEM (MATRIX) ---
+        const isHighRisk = riskProfile.level === 'HIGH';
         let bullishScore = 0;
         let bearishScore = 0;
+
+        // ML SCORING INJECTION
+        if (mlPrediction) {
+            if (mlPrediction.signal === 'BULLISH') {
+                bullishScore += TradingConfig.scoring.advisor.ml_boost || 2; // Config or hardcoded boost
+            } else if (mlPrediction.signal === 'BEARISH') {
+                bearishScore += TradingConfig.scoring.advisor.ml_boost || 2;
+            }
+        }
 
         // CRITICAL: Detect Range Market (ADX < 25)
         const isRangeMarket = adx < 25;
@@ -599,32 +629,11 @@ export const streamMarketAnalysis = async function* (
             }
         }
 
-        // NEW: ML BRAIN INTEGRATION
-        try {
-            const API_URL = import.meta.env.PROD
-                ? 'https://criptodamusfinal.onrender.com'
-                : 'http://localhost:3001';
-
-            // Fetch prediction with short timeout to not block UI
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-            const mlRes = await fetch(`${API_URL}/api/ml/predict?symbol=${techData.symbol}`, {
-                signal: controller.signal
-            }).catch(() => null);
-
-            clearTimeout(timeoutId);
-
-            if (mlRes && mlRes.ok) {
-                const mlData = await mlRes.json();
-                const prob = (mlData.probabilityUp * 100).toFixed(1);
-                const signal = mlData.signal === 'BULLISH' ? '🟢 ALCISTA' : mlData.signal === 'BEARISH' ? '🔴 BAJISTA' : '⚪ NEUTRAL';
-
-                response += `| **🤖 Predicción Neuronal (LSTM)** | ${signal} (${prob}%) | Análisis de patrones no-lineales (50 velas). |\n`;
-            }
-        } catch (e) {
-            // Include console log for debugging but don't break UI
-            console.warn("ML Service unavailable");
+        // NEW: ML BRAIN INTEGRATION IN REPORT
+        if (mlPrediction) {
+            const prob = (mlPrediction.probabilityUp * 100).toFixed(1);
+            const signal = mlPrediction.signal === 'BULLISH' ? '🟢 ALCISTA' : mlPrediction.signal === 'BEARISH' ? '🔴 BAJISTA' : '⚪ NEUTRAL';
+            response += `| **🤖 Predicción Neuronal (LSTM)** | ${signal} (${prob}%) | Análisis de patrones no-lineales (50 velas). |\n`;
         }
 
         // III. ESTRUCTURA TÁCTICA 

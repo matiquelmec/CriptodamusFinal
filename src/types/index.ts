@@ -370,4 +370,9 @@ export interface AIOpportunity {
   harmonicPatterns?: import('./types-advanced').HarmonicPattern[]; // NEW: Patrones para UI
   freezeSignal?: import('../services/strategies/FreezeStrategy').FreezeSignal; // NEW: Freeze Strategy UI Badge
   tier?: FundamentalTier; // NEW: Tier Badge for UI
+  mlPrediction?: { // NEW: AI Brain Integration
+    probability: number;
+    signal: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    confidence: number;
+  };
 }
