@@ -57,8 +57,12 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
                 console.log("✅ Cerebro Cargado (Modo Manual)");
             } catch (loadErr) {
                 console.error("Failed to load model from disk:", loadErr);
-                // Fallback to empty if critical
             }
+        }
+
+        if (!model) {
+            console.warn("⚠️ Modelo no disponible, saltando predicción.");
+            return null;
         }
 
         // 2. Obtener Datos (Reusar o Fetch)
