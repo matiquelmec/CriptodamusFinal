@@ -13,6 +13,7 @@ import rateLimit from 'express-rate-limit';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import crypto from 'crypto';
+import { predictNextMove } from './ml/inference';
 
 // Import Routes (TypeScript)
 import marketRoutes from './api/market';
@@ -267,7 +268,7 @@ function handleWebSocketMessage(clientId: string, data: any) {
 }
 
 // --- ML PREDICTION ENDPOINT ---
-import { predictNextMove } from './ml/inference';
+
 
 app.get('/api/ml/predict', async (req, res) => {
     try {
