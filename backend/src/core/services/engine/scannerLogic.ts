@@ -26,6 +26,7 @@ import { fetchCryptoData, fetchCandles } from '../api/binanceApi';
 import { getMarketRisk, calculateFundamentalTier } from './riskEngine';
 
 import { calculateEMA } from '../mathUtils';
+import { predictNextMove } from '../../../ml/inference'; // NEW: Brain Import
 
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {
     // 0. INITIALIZATION
@@ -134,6 +135,29 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             }
 
             // --- STAGE 5: FILTERING & OUTPUT ---
+
+            let mlResult = null;
+            try {
+                // Only run ML for strong candidates to save CPU, or run for all if capable
+                // Running for all > 50 score
+                if (totalScore > 50) {
+                    mlResult = await predictNextMove(coin.symbol, candles);
+                    if (mlResult) {
+                        // PREDICTION BOOST/PENALTY
+                        // If ML confirms Trend (Confluence) -> Boost
+                        if (mlResult.signal === signalSide) {
+                            const boost = Math.round(mlResult.confidence * 10); // 0-10 points
+                            totalScore += boost;
+                            reasoning.push(`🧠 IA Confluence: ${(mlResult.probabilityUp * 100).toFixed(2)}% probability`);
+                        } else if (mlResult.signal !== 'NEUTRAL' && mlResult.signal !== signalSide) {
+                            // ML contradicts Strategy (Divergence)
+                            totalScore -= 15; // Penalty
+                            reasoning.push(`🧠 IA Divergence: Brain expects ${mlResult.signal}`);
+                        }
+                    }
+                }
+            } catch (e) { console.warn("ML Inference Failed for " + coin.symbol); }
+
             const opportunity: AIOpportunity = {
                 id: coin.id,
                 symbol: coin.symbol,
@@ -145,6 +169,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 side: signalSide,
                 confidenceScore: Math.round(Math.min(100, totalScore)),
                 debugLog: `Base: ${baseScoreResult.score} + Strat: ${strategyResult.primaryStrategy?.score || 0} + Boost: ${strategyResult.scoreBoost}. Context: ${applyTechnicalContext(totalScore, indicators, strategyResult.primaryStrategy?.id) !== totalScore ? 'ADX Penalty Applied' : 'Normal'}`,
+                mlPrediction: mlResult ? {
+                    probability: mlResult.probabilityUp * 100,
+                    signal: mlResult.signal as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
+                    confidence: mlResult.confidence * 100
+                } : undefined,
                 entryZone: {
                     min: indicators.price * 0.995,
                     max: indicators.price * 1.005,

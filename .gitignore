@@ -24,4 +24,6 @@ Thumbs.db
 # Test outputs
 tsc_output*.txt
 vite_build*.txt
+vite_build*.txt
 build_output.txt
+

@@ -599,6 +599,34 @@ export const streamMarketAnalysis = async function* (
             }
         }
 
+        // NEW: ML BRAIN INTEGRATION
+        try {
+            const API_URL = import.meta.env.PROD
+                ? 'https://criptodamusfinal.onrender.com'
+                : 'http://localhost:3001';
+
+            // Fetch prediction with short timeout to not block UI
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+            const mlRes = await fetch(`${API_URL}/api/ml/predict?symbol=${techData.symbol}`, {
+                signal: controller.signal
+            }).catch(() => null);
+
+            clearTimeout(timeoutId);
+
+            if (mlRes && mlRes.ok) {
+                const mlData = await mlRes.json();
+                const prob = (mlData.probabilityUp * 100).toFixed(1);
+                const signal = mlData.signal === 'BULLISH' ? '🟢 ALCISTA' : mlData.signal === 'BEARISH' ? '🔴 BAJISTA' : '⚪ NEUTRAL';
+
+                response += `| **🤖 Predicción Neuronal (LSTM)** | ${signal} (${prob}%) | Análisis de patrones no-lineales (50 velas). |\n`;
+            }
+        } catch (e) {
+            // Include console log for debugging but don't break UI
+            console.warn("ML Service unavailable");
+        }
+
         // III. ESTRUCTURA TÁCTICA 
         response += `\n## III. Estructura Táctica y Refinamiento del Punto de Interés (POI)\n`;
 

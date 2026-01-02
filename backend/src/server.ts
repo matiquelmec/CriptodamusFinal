@@ -266,6 +266,25 @@ function handleWebSocketMessage(clientId: string, data: any) {
     }
 }
 
+// --- ML PREDICTION ENDPOINT ---
+import { predictNextMove } from './ml/inference';
+
+app.get('/api/ml/predict', async (req, res) => {
+    try {
+        const symbol = (req.query.symbol as string) || 'BTCUSDT';
+        // Check if brain is trained (file exists) - Simple check via try/catch in inference
+        const prediction = await predictNextMove(symbol);
+
+        if (!prediction) {
+            return res.status(503).json({ error: 'Brain not ready or training in progress' });
+        }
+        res.json(prediction);
+    } catch (error) {
+        console.error('ML Diagnosis Error:', error);
+        res.status(500).json({ error: 'Internal Brain Error' });
+    }
+});
+
 // Iniciar servidor
 server.listen(PORT, () => {
     console.log(`
@@ -275,3 +294,4 @@ server.listen(PORT, () => {
     🧠 AI Scanner Active: 15m Interval
   `);
 });
+
