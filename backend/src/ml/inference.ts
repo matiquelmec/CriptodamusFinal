@@ -11,7 +11,10 @@ const LOOKBACK = 50;
 async function fetchRecentCandles(symbol: string, interval: string = '15m', limit: number = 100) {
     const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`Binance Error: ${res.statusText}`);
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Binance Error (${res.status}): ${errText}`);
+    }
     const data: any = await res.json();
 
     return data.map((c: any[]) => ({
@@ -29,18 +32,23 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
         if (!model) {
             console.log("🧠 Cargando el cerebro (Modelo LSTM)...");
             // Custom Loader for Pure JS
+            // Custom model loading (bypass tfjs-node file:// issues)
             try {
-                // Read files manually
                 const modelPath = path.join(process.cwd(), 'cols_brain_v1');
-                const jsonPath = path.join(modelPath, 'model.json');
-                const weightsPath = path.join(modelPath, 'weights.bin');
+                const modelFile = path.join(modelPath, 'model.json');
+                const weightsFile = path.join(modelPath, 'weights.bin');
 
-                if (!fs.existsSync(jsonPath) || !fs.existsSync(weightsPath)) {
-                    throw new Error("Model artifacts not found");
+                console.log(`🧠 [ML] Loading Brain from: ${modelPath}`);
+                console.log(`    - Model File: ${modelFile} (${fs.existsSync(modelFile) ? 'FOUND' : 'MISSING'})`);
+                console.log(`    - Weights File: ${weightsFile} (${fs.existsSync(weightsFile) ? 'FOUND' : 'MISSING'})`);
+
+                if (!fs.existsSync(modelFile) || !fs.existsSync(weightsFile)) {
+                    console.error("❌ [ML] Model files missing. Cannot load brain.");
+                    return null;
                 }
 
-                const modelJson = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
-                const weightsBuffer = fs.readFileSync(weightsPath);
+                const modelJson = JSON.parse(fs.readFileSync(modelFile, 'utf8'));
+                const weightsBuffer = fs.readFileSync(weightsFile);
 
                 // Reconstruct IOHandler
                 const ioHandler: tf.IOHandler = {
