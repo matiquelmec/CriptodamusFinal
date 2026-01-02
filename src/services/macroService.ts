@@ -229,11 +229,19 @@ export async function getMacroContext(): Promise<MacroContext> {
     }
 
     try {
+        // Determine API URL (Local vs Prod)
+        const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
+        const API_URL = IS_PROD
+            ? 'https://criptodamusfinal.onrender.com/api/macro/global'
+            : 'http://localhost:3001/api/macro/global';
+
         // Fetch paralelo: BTC Regime (Legacy) + Global Data (Backend)
         const [btcRegime, globalRes] = await Promise.all([
             analyzeBTCRegime(),
-            // Use Metadata IP or localhost. For local dev we assume localhost:3001
-            fetch('http://localhost:3001/api/macro/global').then(r => r.json()).catch(e => null)
+            fetch(API_URL).then(r => r.json()).catch(e => {
+                console.warn("Global Data Fetch Failed:", e);
+                return null;
+            })
         ]);
 
         const globalData: GlobalMarketData = globalRes || {

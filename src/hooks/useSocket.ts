@@ -24,7 +24,10 @@ export interface SocketState {
     aiOpportunities: AIOpportunity[];
 }
 
-const WS_URL = import.meta.env.VITE_BACKEND_URL || 'ws://localhost:3001/ws';
+const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
+const WS_URL = import.meta.env.VITE_BACKEND_URL || (IS_PROD
+    ? 'wss://criptodamusfinal.onrender.com/ws'
+    : 'ws://localhost:3001/ws');
 
 export const useSocket = () => {
     const [isConnected, setIsConnected] = useState(false);
