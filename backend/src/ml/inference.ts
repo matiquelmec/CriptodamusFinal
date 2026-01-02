@@ -54,6 +54,11 @@ function parseBinanceResponse(data: any[]) {
 
 export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandles?: any[]) {
     try {
+        // Normalización de Símbolo (Frontend envía 'BTC', Binance requiere 'BTCUSDT')
+        if (!symbol.toUpperCase().endsWith('USDT') && !symbol.toUpperCase().endsWith('USD')) {
+            symbol = `${symbol.toUpperCase()}USDT`;
+        }
+
         if (!model) {
             console.log("🧠 Cargando el cerebro (Modelo LSTM)...");
             // Custom Loader for Pure JS
