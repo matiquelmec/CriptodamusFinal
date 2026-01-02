@@ -303,6 +303,27 @@ export const streamMarketAnalysis = async function* (
                 bearishScore *= 1.3; // Favorecer shorts
             }
 
+            // NEW: GLOBAL MACRO CORRELATIONS (GOD TIER)
+            if (macroContext.globalData) {
+                const { goldPrice, dxyIndex } = macroContext.globalData;
+
+                // 1. DXY Risk Check
+                if (dxyIndex > 105) {
+                    // Dolar muy fuerte = Activos de riesgo (Crypto) sufren
+                    bullishScore *= 0.8;
+                    techData.technicalReasoning += "\n⚠️ DXY en zona de peligro (>105). Presión bajista macro.";
+                }
+
+                // 2. Gold Safe Haven Check
+                if (goldPrice > 2500) {
+                    // Si el oro vuela y BTC no, es 'Flight to Quality' tradicional
+                    if (btcRegime.regime !== 'BULL') {
+                        bullishScore *= 0.9;
+                        techData.technicalReasoning += "\n⚠️ Flujo de capital hacia ORO (Refugio), saliendo de riesgo.";
+                    }
+                }
+            }
+
             // NEW: EXPERT VOLUME ANALYSIS LOGIC (SMART MONEY)
             if (techData.volumeExpert) {
                 const { derivatives, coinbasePremium, cvd, liquidity } = techData.volumeExpert;
@@ -569,6 +590,13 @@ export const streamMarketAnalysis = async function* (
             const { btcRegime } = macroContext;
             const regimeIcon = btcRegime.regime === 'BULL' ? '🟢' : btcRegime.regime === 'BEAR' ? '🔴' : '🟡';
             response += `| **Régimen Macro (Diario)** | ${regimeIcon} ${btcRegime.regime} (${btcRegime.strength}% Fuerza) | El factor de riesgo predominante. |\n`;
+
+            // NEW: Global Data Row
+            if (macroContext.globalData) {
+                const { dxyIndex, goldPrice } = macroContext.globalData;
+                const dxyRisk = dxyIndex > 105 ? '⚠️ ALTO' : 'Bajo';
+                response += `| **Contexto Global** | 💵 DXY: ${dxyIndex.toFixed(2)} (${dxyRisk}) | 🥇 Oro: $${goldPrice.toFixed(0)} |\n`;
+            }
         }
 
         // III. ESTRUCTURA TÁCTICA 

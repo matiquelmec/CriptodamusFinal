@@ -710,3 +710,72 @@ export function detectNPattern(highs: number[], lows: number[], closes: number[]
 
     return { detected: false, type: 'BULLISH', entryPrice: 0, stopLoss: 0 };
 }
+
+// ============================================================================
+// NEW: QUANTITATIVE & STATISTICAL ANALYSIS (GOD TIER)
+// ============================================================================
+
+// 1. Pearson Correlation Coefficient
+// Returns value between -1 (Perfect Inverse) and 1 (Perfect Direct)
+export function calculatePearsonCorrelation(x: number[], y: number[]): number {
+    const n = Math.min(x.length, y.length);
+    if (n < 5) return 0; // Not enough data for correlation
+
+    const xSlice = x.slice(-n);
+    const ySlice = y.slice(-n);
+
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
+
+    for (let i = 0; i < n; i++) {
+        sumX += xSlice[i];
+        sumY += ySlice[i];
+        sumXY += xSlice[i] * ySlice[i];
+        sumX2 += xSlice[i] * xSlice[i];
+        sumY2 += ySlice[i] * ySlice[i];
+    }
+
+    const numerator = (n * sumXY) - (sumX * sumY);
+    const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+    if (denominator === 0) return 0;
+
+    return numerator / denominator;
+}
+
+// 2. Linear Regression Channel (Trend & Deviation)
+// Returns Middle (Fair Value) and Standard Deviation Bands
+export function calculateLinearRegressionChannel(data: number[], period: number) {
+    if (data.length < period) return { middle: 0, upper: 0, lower: 0, slope: 0 };
+
+    const slice = data.slice(-period);
+    const n = slice.length;
+
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+
+    for (let i = 0; i < n; i++) {
+        sumX += i;
+        sumY += slice[i];
+        sumXY += i * slice[i];
+        sumX2 += i * i;
+    }
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    // Linear Regression Line (Middle) at current point (last index is n-1)
+    const middle = intercept + slope * (n - 1);
+
+    // Calculate Standard Deviation from the regression line
+    let sumSqErr = 0;
+    for (let i = 0; i < n; i++) {
+        const regVal = intercept + slope * i;
+        const err = slice[i] - regVal;
+        sumSqErr += err * err;
+    }
+
+    const stdDev = Math.sqrt(sumSqErr / n);
+    const upper = middle + (2 * stdDev);
+    const lower = middle - (2 * stdDev);
+
+    return { middle, upper, lower, slope };
+}

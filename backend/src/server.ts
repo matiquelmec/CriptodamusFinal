@@ -80,6 +80,17 @@ app.use('/api/v1/market', marketRoutes);
 app.use('/api/donation', donationRoutes);
 app.use('/api/proxy', proxyRoutes);
 
+// NEW: Global Macro Endpoint
+import { fetchGlobalMarketData } from './services/globalMarketService';
+app.get('/api/macro/global', async (req, res) => {
+    try {
+        const data = await fetchGlobalMarketData();
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch global data' });
+    }
+});
+
 // Error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error(err.stack);

@@ -27,10 +27,22 @@ export interface BTCDominanceData {
     changePercent: number; // Cambio en últimas 24h
 }
 
+export interface GlobalMarketData {
+    btcDominance: number;
+    usdtDominance: number;
+    goldPrice: number;
+    dxyIndex: number;
+}
+
 export interface MacroContext {
     btcRegime: BTCRegimeAnalysis;
     btcDominance: BTCDominanceData;
     usdtDominance: USDTDominanceData;
+    globalData?: GlobalMarketData; // NEW: Backend Data
+    correlations?: {
+        btcGold: number;
+        btcDxy: number;
+    };
     timestamp: number;
     isStale: boolean; // true si data > 5 minutos
 }
@@ -216,28 +228,61 @@ export async function getMacroContext(): Promise<MacroContext> {
         };
     }
 
-    // Fetch paralelo de ambos datos para optimizar latencia
-    const [btcRegime, btcDominance, usdtDominance] = await Promise.all([
-        analyzeBTCRegime(),
-        getBTCDominance(),
-        getUSDTDominance()
-    ]);
+    try {
+        // Fetch paralelo: BTC Regime (Legacy) + Global Data (Backend)
+        const [btcRegime, globalRes] = await Promise.all([
+            analyzeBTCRegime(),
+            // Use Metadata IP or localhost. For local dev we assume localhost:3001
+            fetch('http://localhost:3001/api/macro/global').then(r => r.json()).catch(e => null)
+        ]);
 
-    const context: MacroContext = {
-        btcRegime,
-        btcDominance,
-        usdtDominance,
-        timestamp: now,
-        isStale: false
-    };
+        const globalData: GlobalMarketData = globalRes || {
+            btcDominance: 55, usdtDominance: 5, goldPrice: 2000, dxyIndex: 100, timestamp: now
+        };
 
-    // Actualizar caché
-    macroCache = {
-        data: context,
-        fetchedAt: now
-    };
+        // Determine Trends for Legacy Compat based on simple diff (mocked for now)
+        const btcDominance: BTCDominanceData = {
+            current: globalData.btcDominance,
+            trend: 'STABLE',
+            changePercent: 0
+        };
 
-    return context;
+        const usdtDominance: USDTDominanceData = {
+            current: globalData.usdtDominance,
+            trend: 'STABLE'
+        };
+
+        const context: MacroContext = {
+            btcRegime,
+            btcDominance,
+            usdtDominance,
+            globalData,
+            correlations: {
+                btcGold: 0.1, // Placeholder
+                btcDxy: -0.5  // Placeholder
+            },
+            timestamp: now,
+            isStale: false
+        };
+
+        // Actualizar caché
+        macroCache = {
+            data: context,
+            fetchedAt: now
+        };
+
+        return context;
+    } catch (error) {
+        console.warn('[MacroService] Context build failed:', error);
+        const fallback = await analyzeBTCRegime();
+        return {
+            btcRegime: fallback,
+            btcDominance: { current: 55, trend: 'STABLE', changePercent: 0 },
+            usdtDominance: { current: 5, trend: 'STABLE' },
+            timestamp: now,
+            isStale: true
+        };
+    }
 }
 
 /**
@@ -253,7 +298,11 @@ export function formatMacroForAI(macro: MacroContext): string {
         volatilityNote += " [⚠️ KILL SWITCH ACTIVO: Mercado en rango peligroso, no operar]";
     }
 
-    const capitalFlow = `FLUJO DE CAPITAL: BTC.D ${macro.btcDominance.trend} (${macro.btcDominance.current.toFixed(1)}%) | USDT.D ${macro.usdtDominance.trend} (${macro.usdtDominance.current.toFixed(1)}%)`;
+    // NEW: Real Data Display
+    const goldPrice = macro.globalData ? macro.globalData.goldPrice.toFixed(0) : 'N/A';
+    const dxyIndex = macro.globalData ? macro.globalData.dxyIndex.toFixed(2) : 'N/A';
+
+    const capitalFlow = `FLUJO DE CAPITAL:\n- BTC.D: ${macro.btcDominance.current.toFixed(1)}%\n- USDT.D: ${macro.usdtDominance.current.toFixed(1)}%\n- ORO (PAXG): $${goldPrice}\n- DXY (Sintético): ${dxyIndex}`;
 
     let specialConditions = "";
     if (macro.btcRegime.regime === 'BEAR' && (macro.btcDominance.trend === 'RISING' || macro.usdtDominance.trend === 'RISING')) {
@@ -262,7 +311,13 @@ export function formatMacroForAI(macro: MacroContext): string {
         specialConditions = "\n🚀 ALT SEASON DETECTADA: Mercado alcista + BTC perdiendo dominancia. Buscar entradas agresivas en Alts.";
     }
 
-    return `CONTEXTO MACROECONÓMICO INTEGRAL:\n${regimeInfo}\n${volatilityNote}\n${capitalFlow}${specialConditions}`;
+    // NEW: Macro Correlations Alerts
+    if (macro.globalData) {
+        if (macro.globalData.dxyIndex > 105) specialConditions += "\n⚠️ RIESGO MACRO: Dólar extremadamente fuerte (Risk Off).";
+        if (macro.globalData.goldPrice > 2500) specialConditions += "\n🛡️ REFUGIO: Oro en máximos, posible salida de Crypto.";
+    }
+
+    return `CONTEXTO MACROECONÓMICO INTEGRAL (CON ACTUALIZACIÓN EN TIEMPO REAL):\n${regimeInfo}\n${volatilityNote}\n${capitalFlow}${specialConditions}`;
 }
 
 

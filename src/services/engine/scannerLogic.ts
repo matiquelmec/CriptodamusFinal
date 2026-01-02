@@ -254,6 +254,18 @@ function applyMacroFilters(
         adjustedScore *= 0.75;
     }
 
+    // NEW: Global Macro Risk (DXY & Gold)
+    if (macro.globalData) {
+        // High DXY = Risk Off (Crypto Down)
+        if (macro.globalData.dxyIndex > 105 && signalSide === 'LONG') {
+            adjustedScore *= 0.8;
+        }
+        // Gold Flight = Risk Off
+        if (macro.globalData.goldPrice > 2500 && signalSide === 'LONG') {
+            adjustedScore *= 0.9;
+        }
+    }
+
     return adjustedScore;
 }
 
