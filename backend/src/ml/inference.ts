@@ -9,14 +9,39 @@ const LOOKBACK = 50;
 
 // Reutilizamos la lógica de Binance (Duplicada por ahora para seguridad durante ejecución)
 async function fetchRecentCandles(symbol: string, interval: string = '15m', limit: number = 100) {
-    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Binance Error (${res.status}): ${errText}`);
-    }
-    const data: any = await res.json();
+    // 1. Intentar Binance Global
+    let url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
 
+    try {
+        const res = await fetch(url);
+
+        // Si es error 451 (Geo-Block USA), intentar Binance US
+        if (res.status === 451) {
+            console.warn(`⚠️ Binance Global bloqueado (451). Cambiando a Binance US para ${symbol}...`);
+            url = `https://api.binance.us/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+            const resUS = await fetch(url);
+
+            if (!resUS.ok) {
+                const errTextUS = await resUS.text();
+                throw new Error(`Binance US Error (${resUS.status}): ${errTextUS}`);
+            }
+            return parseBinanceResponse(await resUS.json());
+        }
+
+        if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Binance Error (${res.status}): ${errText}`);
+        }
+
+        return parseBinanceResponse(await res.json());
+
+    } catch (error: any) {
+        // Fallback final: Si falla todo, lanzar error
+        throw new Error(`Data Fetch Failed: ${error.message}`);
+    }
+}
+
+function parseBinanceResponse(data: any[]) {
     return data.map((c: any[]) => ({
         timestamp: c[0],
         open: parseFloat(c[1]),

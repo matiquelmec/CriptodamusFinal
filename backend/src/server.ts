@@ -31,6 +31,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Render/Proxy Trust (Fix Rate Limit Validation Error)
+app.set('trust proxy', 1);
+
 // Middleware de seguridad
 app.use(helmet());
 app.use(cors({
