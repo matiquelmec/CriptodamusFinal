@@ -20,7 +20,8 @@ export function generateDCAExecutionPlan(
     tier: FundamentalTier = 'B', // NEW: Fundamental Tier
     harmonicPatterns: import('./harmonicPatterns').HarmonicPattern[] = [], // NEW: For Structural Stops
     freezeSignal?: import('./strategies/FreezeStrategy').FreezeSignal, // NEW: Freeze Strategy Override
-    volumeExpert?: import('../types/types-advanced').VolumeExpertAnalysis // NEW: Predictive Data Injection
+    volumeExpert?: import('../types/types-advanced').VolumeExpertAnalysis, // NEW: Predictive Data Injection
+    mlPrediction?: { signal: 'BULLISH' | 'BEARISH' | 'NEUTRAL'; probability: number; confidence: number; } // NEW: BRAIN INJECTION
 ): string {
     let response = '';
 
@@ -39,8 +40,28 @@ export function generateDCAExecutionPlan(
 
     response += `${executionPhilosophy || defaultPhilosophy}\n\n`;
 
+    // EXPERT TUNING: ML BRAIN ADJUSTMENT
+    let mlAdjustment = { aggression: 'NORMAL', note: '' };
+    if (mlPrediction) {
+        // Alignment Check
+        const isAligned = mlPrediction.signal === side || (mlPrediction.signal === 'BULLISH' && side === 'LONG') || (mlPrediction.signal === 'BEARISH' && side === 'SHORT');
+
+        if (isAligned && mlPrediction.probability > 0.75) {
+            mlAdjustment.aggression = 'AGGRESSIVE';
+            mlAdjustment.note = `🤖 **Smart Pricing:** La IA detecta alta probabilidad (${(mlPrediction.probability * 100).toFixed(0)}%). Entradas más agresivas para asegurar ejecución.`;
+        } else if (!isAligned) {
+            mlAdjustment.aggression = 'CONSERVATIVE';
+            mlAdjustment.note = `🤖 **Precaución IA:** La Red Neuronal no confirma la dirección. Entradas exigentes (Deep Discount) y Stops ajustados.`;
+        }
+    }
+
     if (marketRegime) {
-        response += `> **Ajuste Técnico:** Régimen ${marketRegime.regime}. Position Sizing y Take Profits adaptados.\n\n`;
+        response += `> **Ajuste Técnico:** Régimen ${marketRegime.regime}. Position Sizing y Take Profits adaptados.\n`;
+    }
+    if (mlAdjustment.note) {
+        response += `> ${mlAdjustment.note}\n\n`;
+    } else {
+        response += `\n`;
     }
 
     // --- PREDICTIVE TARGETS EXTRACTION (ADVISOR BRAIN) ---
@@ -76,6 +97,25 @@ export function generateDCAExecutionPlan(
             level0_5: fibonacci.level0_5
         }, tier, predictiveTargets) // ✅ WIRED TO BRAIN
         : null;
+
+    // APPLY ML ADJUSTMENTS TO PLAN
+    if (dcaPlan && mlAdjustment.aggression === 'AGGRESSIVE') {
+        // Aggressive: Move entries closer to price (Front-run)
+        // Entry 1: Move 20% closer to market
+        const delta1 = Math.abs(dcaPlan.entries[0].price - price);
+        dcaPlan.entries[0].price = side === 'LONG' ? price - (delta1 * 0.8) : price + (delta1 * 0.8);
+        dcaPlan.entries[0].factors.push('🤖 AI FOMO');
+
+        // Boost size of Entry 1
+        dcaPlan.entries[0].positionSize += 10;
+        dcaPlan.entries[2].positionSize -= 10;
+    } else if (dcaPlan && mlAdjustment.aggression === 'CONSERVATIVE') {
+        // Conservative: Demand deeper pullback
+        // Entry 1: Move 20% further away
+        const delta1 = Math.abs(dcaPlan.entries[0].price - price);
+        dcaPlan.entries[0].price = side === 'LONG' ? price - (delta1 * 1.2) : price + (delta1 * 1.2);
+        dcaPlan.entries[0].factors.push('🤖 AI SAFETY');
+    }
 
     // EXPERT TUNING: FREEZE STRATEGY OVERRIDE (PRIORITY #1)
     if (dcaPlan && freezeSignal && freezeSignal.active) {
