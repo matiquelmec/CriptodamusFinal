@@ -126,11 +126,28 @@ export class TelegramService {
         const disclaimer = `\n<i>⚠️ Criptodamus AI no asesora financieramente. DYOR.</i>`;
         message += disclaimer;
 
-        try {
-            await this.bot.sendMessage(TradingConfig.telegram.chatId, message, { parse_mode: 'HTML' });
-            console.log(`[Telegram] Sent alert for ${opp.symbol}`);
-        } catch (error) {
-            console.error(`[Telegram] Failed to send message for ${opp.symbol}:`, error);
+        // RETRY LOGIC (Resilience against ETIMEDOUT)
+        const MAX_RETRIES = 3;
+        let attempt = 0;
+        let success = false;
+
+        while (attempt < MAX_RETRIES && !success) {
+            try {
+                attempt++;
+                await this.bot.sendMessage(TradingConfig.telegram.chatId, message, { parse_mode: 'HTML' });
+                console.log(`[Telegram] Sent alert for ${opp.symbol} (Attempt ${attempt})`);
+                success = true;
+            } catch (error: any) {
+                const isTimeout = error.code === 'ETIMEDOUT' || error.message?.includes('ETIMEDOUT') || error.message?.includes('network timeout');
+
+                if (attempt < MAX_RETRIES) {
+                    const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+                    console.warn(`[Telegram] Warning: Failed to send ${opp.symbol} (Attempt ${attempt}/${MAX_RETRIES}). Retrying in ${delay}ms... Error: ${error.message}`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                } else {
+                    console.error(`[Telegram] FINAL FAILURE: Could not send message for ${opp.symbol} after ${MAX_RETRIES} attempts.`, error);
+                }
+            }
         }
     }
 }
