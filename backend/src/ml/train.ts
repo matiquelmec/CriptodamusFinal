@@ -1,4 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-node'; // Enable C++ Backend
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -23,8 +24,8 @@ const SYMBOL = 'BTCUSDT';
 const TIMEFRAME = '15m';
 const LOOKBACK = 50; // Cuántas velas mira hacia atrás para decidir
 const TEST_SIZE = 0.1; // 10% para validar (Examen final)
-const EPOCHS = 10; // Deep Training
-const BATCH_SIZE = 32;
+const EPOCHS = 50; // God Mode Training
+const BATCH_SIZE = 64; // Increased batch for speed
 
 // --- FEATURE ENGINEERING ---
 // No le damos el precio crudo (BTC varía de 20k a 100k).
@@ -46,7 +47,7 @@ async function fetchTrainingData() {
     let allData: any[] = [];
     let from = 0;
     const PAGE_SIZE = 1000;
-    const MAX_ROWS = 5000; // Fast Track (2 semanas) para demostración inmediata
+    const MAX_ROWS = 75000; // FULL HISTORY (God Mode)
 
     while (allData.length < MAX_ROWS) {
         const { data, error } = await supabase

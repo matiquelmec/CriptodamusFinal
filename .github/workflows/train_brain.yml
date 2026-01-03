@@ -1,0 +1,55 @@
+name: Train Brain (Weekly God Mode)
+
+on:
+  schedule:
+    # At 00:00 on Sunday
+    - cron: '0 0 * * 0'
+  workflow_dispatch: # Allow manual trigger via UI
+
+jobs:
+  train-and-update:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: backend/package.json
+
+    - name: Install Dependencies
+      run: npm install
+
+    - name: Train Neural Network (God Mode)
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      run: npx tsx src/ml/train.ts
+
+    - name: Check for Model Changes
+      id: check_changes
+      run: |
+        if [[ -n $(git status --porcelain cols_brain_v1) ]]; then
+          echo "changes_detected=true" >> $GITHUB_OUTPUT
+        else
+          echo "changes_detected=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Commit and Push New Brain
+      if: steps.check_changes.outputs.changes_detected == 'true'
+      run: |
+        git config --global user.name 'Criptodamus Bot'
+        git config --global user.email 'bot@criptodamus.ai'
+        git add cols_brain_v1/model.json cols_brain_v1/weights.bin
+        git commit -m "chore(ai): upgrade neural network weights (weekly retraining)"
+        git push origin main
