@@ -24,9 +24,16 @@ const News: React.FC = () => {
                 ? 'https://criptodamusfinal.onrender.com'
                 : 'http://localhost:3001';
 
-            const response = await fetch(`${API_URL}/api/v1/market/news?currency=${filter === 'ALL' ? 'BTC' : filter}`);
-            if (!response.ok) throw new Error('Error al cargar noticias');
+            const url = `${API_URL}/api/v1/market/news?currency=${filter === 'ALL' ? 'BTC' : filter}`;
+            console.log(`[News] Real-time fetch from: ${url}`);
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                console.error(`[News] Backend returned error ${response.status}: ${response.statusText}`);
+                throw new Error('Error al cargar noticias');
+            }
             const data = await response.json();
+            console.log(`[News] Received ${data.length} news items.`);
             setNews(data);
             setError(null);
         } catch (err) {
@@ -88,26 +95,25 @@ const News: React.FC = () => {
                         {news.map((item) => (
                             <div
                                 key={item.id}
-                                className="relative bg-surface border border-border hover:border-accent/40 rounded-xl transition-all group hover:shadow-xl hover:shadow-accent/5 overflow-hidden flex flex-col"
+                                className="relative bg-surface border border-border hover:border-accent/40 rounded-xl transition-all group hover:shadow-xl hover:shadow-accent/5 overflow-hidden flex flex-col cursor-pointer"
+                                onClick={() => window.open(item.url, '_blank', 'noopener,noreferrer')}
                             >
                                 <div className="p-5 flex-1 flex flex-col">
                                     <div className="flex justify-between items-start gap-4 mb-3">
-                                        <a
-                                            href={item.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="group-hover:text-accent transition-colors"
-                                        >
-                                            <h2 className="text-lg font-bold text-primary leading-tight">
+                                        <div className="block flex-1">
+                                            <h2 className="text-lg font-bold text-primary leading-tight group-hover:text-accent transition-colors">
                                                 {item.title}
                                             </h2>
-                                        </a>
-                                        <div className="p-2 bg-background border border-border rounded-lg text-secondary group-hover:text-primary group-hover:border-accent transition-all flex-shrink-0">
+                                        </div>
+                                        <div
+                                            className="p-2 bg-background border border-border rounded-lg text-secondary group-hover:text-primary group-hover:border-accent transition-all flex-shrink-0"
+                                            onClick={(e) => { e.stopPropagation(); window.open(item.url, '_blank'); }}
+                                        >
                                             <ExternalLink size={16} />
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-wrap items-center gap-4 text-[10px] text-secondary font-bold uppercase tracking-wider mt-auto pt-4">
+                                    <div className="flex flex-wrap items-center gap-4 text-[10px] text-secondary font-bold uppercase tracking-wider mt-auto pt-4 relative z-10">
                                         <div className="flex items-center gap-1.5 bg-background px-2 py-1 rounded border border-border">
                                             <Clock size={12} className="text-accent" />
                                             {item.published_at ? new Date(item.published_at).toLocaleString() : 'N/A'}
@@ -128,14 +134,16 @@ const News: React.FC = () => {
                                         )}
                                     </div>
 
-                                    {/* Link de respaldo para toda la tarjeta (Stretched Link) */}
+                                    {/* Link invisible para SEO y accesibilidad, pero el onClick en el div asegura el funcionamiento en móviles */}
                                     <a
                                         href={item.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="absolute inset-0 z-0"
-                                        aria-label={`Leer noticia: ${item.title}`}
-                                    />
+                                        className="sr-only"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        Leer noticia completa
+                                    </a>
                                 </div>
                             </div>
                         ))}
