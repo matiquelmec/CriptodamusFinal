@@ -23,7 +23,7 @@ import { FilterEngine } from './pipeline/FilterEngine';
 import { getMacroContext, type MacroContext } from '../macroService';
 import { calculateDCAPlan } from '../dcaCalculator';
 import { fetchCryptoData, fetchCandles } from '../api/binanceApi';
-import { getMarketRisk, calculateFundamentalTier } from './riskEngine';
+import { getMarketRisk, calculateFundamentalTier, calculateKellySize, getVolatilityAdjustedLeverage, calculatePortfolioCorrelation } from './riskEngine';
 import { fetchCryptoSentiment } from '../../../services/newsService'; // NEW: Sentiment Engine
 
 import { calculateEMA } from '../mathUtils';
@@ -57,6 +57,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     // NEW: Global Sentiment Analysis (The "Why")
     const globalSentiment = await fetchCryptoSentiment('BTC');
     console.log(`[Scanner] Global Sentiment: ${globalSentiment.score} (${globalSentiment.sentiment}) | "${globalSentiment.summary}"`);
+
+    // --- PHASE 8: CIRCUIT BREAKER CHECK ---
+    // Note: In production this would use persistent data. Using ephemeral for logic demo.
+    const riskLimit = TradingConfig.risk.protection.max_daily_drawdown;
+    // (Logic: If system state says we are in deep drawdown, abort scanning for new entries)
+    // if (globalPortfolio.isCircuitBreakerActive(riskLimit)) {
+    //     console.warn("[Scanner] 🚨 CIRCUIT BREAKER ACTIVE: Halting for safety.");
+    //     return []; 
+    // }
 
     const topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 60);
     const opportunities: AIOpportunity[] = [];
@@ -192,6 +201,16 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
             }
 
+            // --- STAGE 4.8: ADVANCED RISK SIZING (Kelly & Volatility) ---
+            // WinRate approximated from totalScore (e.g. 70 score -> 70% win rate for Kelly)
+            const winRate = totalScore / 100;
+            const kellySize = calculateKellySize(winRate, 2.5); // Using 2.5 as target RR
+            const recommendedLeverage = getVolatilityAdjustedLeverage(indicators.atr, indicators.price, kellySize);
+
+            // Portfolio Heatmap (Phase 8) 
+            // Mocking open positions as empty for now, in live it would pull from active trades
+            const correlationRisk = calculatePortfolioCorrelation(coin.symbol, [], style === 'MEME_SCALP');
+
             const opportunity: AIOpportunity = {
                 id: coin.id,
                 symbol: coin.symbol,
@@ -237,7 +256,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 },
                 chartPatterns: indicators.chartPatterns,
                 freezeSignal: undefined, // Add if computed
-                tier: tier
+                tier: tier,
+
+                // Phase 8: Risk Management
+                kellySize,
+                recommendedLeverage,
+                correlationRisk
             };
 
             // Calculate DCA Plan (Institutional Money Management)

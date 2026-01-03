@@ -377,4 +377,11 @@ export interface AIOpportunity {
     signal: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
     confidence: number;
   };
+  // NEW: Phase 8 Advanced Risk Management
+  kellySize?: number; // % of equity to risk
+  recommendedLeverage?: number; // ATR-based volatility targeting
+  correlationRisk?: {
+    score: number;
+    recommendation: 'PROCEED' | 'REDUCE' | 'BLOCK';
+  };
 }

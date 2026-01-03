@@ -182,4 +182,25 @@ export class VirtualPortfolio {
             equityCurve: curve
         };
     }
+
+    /**
+     * CALCULATE PNL IN LAST 24H
+     */
+    public getDailyPnL(): number {
+        const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+        const recentTrades = this.tradeHistory.filter(t => t.exitTime >= oneDayAgo);
+
+        const realizedPnL = recentTrades.reduce((sum, t) => sum + t.pnlUSD, 0);
+
+        // Return as % of current balance
+        return realizedPnL / (this.balance + this.initialBalance * 0.1); // Avoid div by zero
+    }
+
+    /**
+     * CIRCUIT BREAKER Check
+     */
+    public isCircuitBreakerActive(limit: number): boolean {
+        const dailyPnL = this.getDailyPnL();
+        return dailyPnL <= -limit;
+    }
 }

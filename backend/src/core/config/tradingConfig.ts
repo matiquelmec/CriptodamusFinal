@@ -32,7 +32,11 @@ export const TradingConfig = {
         whale_volume_ratio: 3.5, // Volume > 3.5x average triggers whale alert
         volatility_threshold_multiplier: 3.0, // Range > 3x average range triggers volatility alert
         max_slippage: 0.02,
-        max_leverage_default: 20
+        max_leverage_default: 20,
+        protection: {
+            max_daily_drawdown: 0.05, // 5% Daily Stop
+            max_total_exposure: 0.25  // 25% Portfolio Exposure limit
+        }
     },
 
     // --- SCORING MATRIX ---

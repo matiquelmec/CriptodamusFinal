@@ -479,34 +479,45 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                             ) : <div className="text-xs text-secondary italic p-2">Sin muros de venta relevantes</div>}
                                         </div>
                                     </div>
+                                    ```
                                 </div>
                             )}
 
                         </div>
 
-                        {/* 4. RISK MANAGEMENT */}
+                        {/* 4. RISK MANAGEMENT (PHASE 8) */}
                         <div className="bg-surface rounded-xl p-5 border border-border">
-                            <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
-                                <Shield size={14} /> Gestión de Riesgo Sugerida
+                            <h4 className="text-xs font-bold text-orange-400 uppercase mb-3 flex items-center gap-2">
+                                <Shield size={14} /> Ingeniería de Riesgo (Kelly & Volatility)
                             </h4>
-                            <div className="flex items-center gap-4 text-xs">
-                                <div className="flex-1 bg-background p-3 rounded border border-border">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <div className="bg-background p-3 rounded border border-border">
                                     <span className="block text-[10px] text-secondary uppercase mb-1">Entrada Óptima</span>
                                     <span className="font-mono font-bold text-primary">${selectedSignal.entryZone.min}</span>
                                 </div>
-                                <ArrowRight size={16} className="text-secondary" />
-                                <div className="flex-1 bg-danger/10 p-3 rounded border border-danger/20">
-                                    <span className="block text-[10px] text-danger uppercase mb-1">Stop Loss (Invalidación)</span>
+                                <div className="bg-danger/10 p-3 rounded border border-danger/20">
+                                    <span className="block text-[10px] text-danger uppercase mb-1">Stop Loss</span>
                                     <span className="font-mono font-bold text-danger">${selectedSignal.stopLoss}</span>
-                                    {selectedSignal.tier && (
-                                        <span className="block text-[9px] text-danger/70 mt-0.5">
-                                            {selectedSignal.tier === 'S' ? '(2.5 ATR - Tier S)' :
-                                                selectedSignal.tier === 'A' ? '(2.0 ATR - Tier A)' :
-                                                    selectedSignal.tier === 'B' ? '(1.5 ATR - Tier B)' :
-                                                        '(1.0 ATR - Sniper)'}
-                                        </span>
-                                    )}
                                 </div>
+                                <div className="bg-accent/10 p-3 rounded border border-accent/20">
+                                    <span className="block text-[10px] text-accent uppercase mb-1">Kelly Size</span>
+                                    <span className="font-mono font-bold text-accent">{(selectedSignal.kellySize! * 100).toFixed(2)}%</span>
+                                </div>
+                                {selectedSignal.recommendedLeverage && (
+                                    <div className="bg-blue-500/10 p-3 rounded border border-blue-500/20">
+                                        <span className="block text-[10px] text-blue-400 uppercase mb-1">Palancaje (ATR)</span>
+                                        <span className="font-mono font-bold text-blue-400">{selectedSignal.recommendedLeverage.toFixed(1)}x</span>
+                                    </div>
+                                )}
+                                {selectedSignal.correlationRisk && (
+                                    <div className={`p-3 rounded border col-span-2 ${selectedSignal.correlationRisk.recommendation === 'BLOCK' ? 'bg-danger/20 border-danger/30 text-danger' :
+                                        selectedSignal.correlationRisk.recommendation === 'REDUCE' ? 'bg-warning/20 border-warning/30 text-warning' :
+                                            'bg-success/20 border-success/30 text-success'
+                                        }`}>
+                                        <span className="block text-[10px] uppercase mb-1 font-bold">Heatmap de Correlación</span>
+                                        <span className="font-mono text-[10px]">{selectedSignal.correlationRisk.recommendation}: Riesgo {(selectedSignal.correlationRisk.score * 100).toFixed(0)}%</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -795,18 +806,33 @@ const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDe
                     </div>
                 </div>
 
-                {/* Stop Loss & Reason */}
+                {/* SL & Risk Engineering Bar (New) */}
                 <div className="flex gap-4">
                     <div className="flex-1 space-y-1">
-                        <label className="text-[10px] text-secondary uppercase font-bold flex items-center gap-1">
-                            <Shield size={10} /> Stop Loss
-                        </label>
-                        <div className="p-2 bg-danger/10 border border-danger/20 rounded font-mono text-xs text-danger font-bold">
+                        <label className="text-[9px] text-secondary uppercase font-bold">Stop Loss</label>
+                        <div className="p-2 bg-danger/5 border border-danger/10 rounded font-mono text-xs text-danger font-bold text-center">
                             ${data.stopLoss}
                         </div>
                     </div>
+                    {data.kellySize && (
+                        <div className="flex-1 space-y-1">
+                            <label className="text-[9px] text-accent uppercase font-bold">Kelly (Size)</label>
+                            <div className="p-2 bg-accent/5 border border-accent/10 rounded font-mono text-xs text-accent font-bold text-center">
+                                {(data.kellySize * 100).toFixed(1)}%
+                            </div>
+                        </div>
+                    )}
+                    {data.recommendedLeverage && (
+                        <div className="flex-1 space-y-1">
+                            <label className="text-[9px] text-blue-400 uppercase font-bold">Leverage</label>
+                            <div className="p-2 bg-blue-500/5 border border-blue-500/10 rounded font-mono text-xs text-blue-400 font-bold text-center">
+                                {data.recommendedLeverage.toFixed(1)}x
+                            </div>
+                        </div>
+                    )}
                 </div>
 
+                {/* Algorithm Reasoning Summary */}
                 <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg">
                     <p className="text-[10px] text-secondary italic leading-relaxed line-clamp-2">
                         <span className="text-blue-400 not-italic font-bold mr-1">[ALGORITMO]:</span>
