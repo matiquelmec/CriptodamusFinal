@@ -40,7 +40,12 @@ export const fetchCryptoSentiment = async (currency: string = 'BTC'): Promise<Se
                 "Institutional inflow into crypto funds positive for 3rd week"
             ];
         } else {
-            const response = await axios.get(`https://cryptopanic.com/api/v1/posts/?auth_token=${CRYPTOPANIC_API_KEY}&currencies=${currency}&filter=important`);
+            const url = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${CRYPTOPANIC_API_KEY}&currencies=${currency}&filter=important`;
+            const response = await axios.get(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+            });
             if (response.data && response.data.results) {
                 headlines = response.data.results.map((n: NewsItem) => n.title);
             }
