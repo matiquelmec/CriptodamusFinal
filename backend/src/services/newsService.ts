@@ -120,8 +120,15 @@ export const fetchMarketNews = async (currency: string = 'BTC'): Promise<NewsIte
         });
 
         if (response.data && response.data.results && response.data.results.length > 0) {
-            const results = response.data.results as NewsItem[];
-            console.log(`[NewsService] Successfully fetched ${results.length} news items for ${currency}`);
+            // Normalize items to ensure URL and Source exist (some API keys return restricted fields)
+            const results = (response.data.results as any[]).map(item => ({
+                ...item,
+                url: item.url || `https://cryptopanic.com/news/${item.id}/${item.slug || ''}`,
+                source: item.source || { title: 'CryptoPanic' },
+                currencies: item.currencies || []
+            })) as NewsItem[];
+
+            console.log(`[NewsService] Normalized ${results.length} news items for ${currency}`);
             SmartCache.set(cacheKey, results, SmartCache.TTL.SHORT);
             return results;
         }
