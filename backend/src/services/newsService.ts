@@ -7,12 +7,13 @@ dotenv.config();
 
 const ipv4Agent = new https.Agent({ family: 4 });
 
-interface NewsItem {
+export interface NewsItem {
     id: number;
     title: string;
     published_at: string;
     source: { title: string };
     url: string;
+    currencies?: { code: string; title: string; slug: string }[];
 }
 
 export interface SentimentAnalysis {
@@ -101,6 +102,32 @@ export const fetchCryptoSentiment = async (currency: string = 'BTC'): Promise<Se
     // Cache for 15 minutes
     SmartCache.set(cacheKey, analysis, SmartCache.TTL.MEDIUM);
     return analysis;
+};
+
+export const fetchMarketNews = async (currency: string = 'BTC'): Promise<NewsItem[]> => {
+    const cacheKey = `raw_news_${currency}`;
+    const cached = SmartCache.get<NewsItem[]>(cacheKey);
+    if (cached) return cached;
+
+    if (!CRYPTOPANIC_API_KEY) return [];
+
+    const url = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${CRYPTOPANIC_API_KEY}&currencies=${currency}`;
+    try {
+        const response = await axios.get(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            httpsAgent: ipv4Agent,
+            timeout: 10000
+        });
+
+        if (response.data && response.data.results) {
+            const results = response.data.results as NewsItem[];
+            SmartCache.set(cacheKey, results, SmartCache.TTL.SHORT); // 5 min cache
+            return results;
+        }
+    } catch (e) {
+        console.error("[NewsService] Error fetching raw news:", e);
+    }
+    return [];
 };
 
 async function analyzeWithGemini(headlines: string[], currency: string): Promise<SentimentAnalysis> {

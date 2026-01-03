@@ -116,7 +116,7 @@ app.get('/api/ml/predict', async (req, res) => {
     }
 });
 
-import { fetchCryptoSentiment } from './services/newsService';
+import { fetchCryptoSentiment, fetchMarketNews } from './services/newsService';
 app.get('/api/v1/market/sentiment', async (req, res) => {
     try {
         const symbol = (req.query.symbol as string) || 'BTC';
@@ -124,6 +124,16 @@ app.get('/api/v1/market/sentiment', async (req, res) => {
         res.json(sentiment);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch sentiment' });
+    }
+});
+
+app.get('/api/v1/market/news', async (req, res) => {
+    try {
+        const currency = (req.query.currency as string) || 'BTC';
+        const news = await fetchMarketNews(currency);
+        res.json(news);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch news' });
     }
 });
 

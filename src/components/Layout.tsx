@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Zap, CalendarDays, BarChart } from 'lucide-react';
+import { LayoutDashboard, Zap, CalendarDays, BarChart, Newspaper } from 'lucide-react';
 import MacroIndicators from './MacroIndicators';
 import MacroStrip from './MacroStrip';
 
@@ -60,6 +60,15 @@ const Layout: React.FC = () => {
                         >
                             <CalendarDays size={14} /> Eventos
                         </NavLink>
+                        <NavLink
+                            to="/noticias"
+                            className={({ isActive }) =>
+                                `flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-all ${isActive ? 'bg-border text-white shadow-sm' : 'text-secondary hover:text-primary'
+                                }`
+                            }
+                        >
+                            <Newspaper size={14} /> Noticias
+                        </NavLink>
                     </nav>
                 </div>
             </header>
@@ -109,6 +118,15 @@ const Layout: React.FC = () => {
                 >
                     <CalendarDays size={20} />
                     <span className="text-[10px] font-medium">Eventos</span>
+                </NavLink>
+                <NavLink
+                    to="/noticias"
+                    className={({ isActive }) =>
+                        `flex flex-col items-center gap-1 ${isActive ? 'text-accent' : 'text-secondary'}`
+                    }
+                >
+                    <Newspaper size={20} />
+                    <span className="text-[10px] font-medium">Noticias</span>
                 </NavLink>
             </nav>
         </div>
