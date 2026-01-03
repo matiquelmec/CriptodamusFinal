@@ -808,7 +808,8 @@ export const streamMarketAnalysis = async function* (
             techData.tier, // NEW: Tier logic
             techData.harmonicPatterns || [], // NEW: Structural Stops
             freezeSignal, // NEW: Freeze Override
-            techData.volumeExpert // ✅ NEW: Predictive Data Passed
+            techData.volumeExpert, // ✅ NEW: Predictive Data Passed
+            mlPrediction || undefined // NEW: BRAIN INJECTION ✅
         );
 
         // ESCENARIO B: ALTERNATIVO (HEDGING)
