@@ -22,8 +22,9 @@ async function verify() {
     // 2. Test Inference Service
     console.log("🧠 Probando Servicio de Inferencia...");
     try {
-        // Mock simple 50 candles
-        const prediction = await predictNextMove('BTCUSDT');
+        // Test raw ticker normalization (ETH -> ETHUSDT)
+        console.log("🧪 Probando normalización de símbolo: 'ETH'...");
+        const prediction = await predictNextMove('ETH');
 
         if (prediction) {
             console.log("✅ Predicción Exitosa:");

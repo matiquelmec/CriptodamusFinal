@@ -710,3 +710,112 @@ export function detectNPattern(highs: number[], lows: number[], closes: number[]
 
     return { detected: false, type: 'BULLISH', entryPrice: 0, stopLoss: 0 };
 }
+
+// NEW: Cumulative Volume Delta (CVD) Calculations for Order Flow Analysis
+export function calculateCVD(volumes: number[], takerBuyVolumes: number[]): number[] {
+    if (!volumes || !takerBuyVolumes || volumes.length !== takerBuyVolumes.length) return [];
+
+    let cvd = 0;
+    const cvdLine: number[] = [];
+
+    for (let i = 0; i < volumes.length; i++) {
+        // Taker Buy Volume = Aggressive Buys
+        // Total Volume = Aggressive Buys + Aggressive Sells
+        // Aggressive Sells = Total Volume - Taker Buy Volume
+        // Delta = Aggressive Buys - Aggressive Sells
+        // Delta = Taker Buy - (Total - Taker Buy) = 2 * Taker Buy - Total
+
+        const totalVol = volumes[i];
+        const buyVol = takerBuyVolumes[i];
+        const delta = (2 * buyVol) - totalVol;
+
+        cvd += delta;
+        cvdLine.push(cvd);
+    }
+    return cvdLine;
+}
+
+// NEW: CVD Divergence Detection (The "Truth" vs Price)
+export function detectCVDDivergence(prices: number[], cvd: number[], lows: number[], highs: number[]): 'BULLISH' | 'BEARISH' | 'NONE' {
+    if (prices.length < 30 || cvd.length < 30) return 'NONE';
+
+    // Lookback for pivots
+    const i = prices.length - 1;
+
+    // 1. CHECK BULLISH ABSORPTION (Price Lower Low, CVD Higher Low)
+    // Finding recent price low
+    let recentLowPrice = Infinity;
+    let recentLowIndex = -1;
+    // Check last 5 candles for a local low
+    for (let j = i; j > i - 5; j--) {
+        if (lows[j] < recentLowPrice) {
+            recentLowPrice = lows[j];
+            recentLowIndex = j;
+        }
+    }
+
+    if (recentLowIndex !== -1) {
+        // Find previous swing low (5 to 30 candles back)
+        let prevLowPrice = Infinity;
+        let prevLowIndex = -1;
+        for (let j = recentLowIndex - 5; j > Math.max(0, recentLowIndex - 40); j--) {
+            // Simple pivot check
+            if (lows[j] < lows[j - 1] && lows[j] < lows[j + 1]) {
+                // Is it a significant low to compare against?
+                // We want to compare against the *lowest* point in that window to confirm LL
+                if (lows[j] < prevLowPrice) {
+                    prevLowPrice = lows[j];
+                    prevLowIndex = j;
+                }
+            }
+        }
+
+        // Logic: Price made Lower Low, but CVD made Higher Low
+        if (prevLowIndex !== -1 && recentLowPrice < prevLowPrice) {
+            // Check CVD at those exact moments
+            const recentCVD = cvd[recentLowIndex];
+            const prevCVD = cvd[prevLowIndex];
+
+            if (recentCVD > prevCVD) {
+                return 'BULLISH'; // Passive Buying absorbing the dump
+            }
+        }
+    }
+
+    // 2. CHECK BEARISH EXHAUSTION (Price Higher High, CVD Lower High)
+    // Find recent price high
+    let recentHighPrice = -Infinity;
+    let recentHighIndex = -1;
+    for (let j = i; j > i - 5; j--) {
+        if (highs[j] > recentHighPrice) {
+            recentHighPrice = highs[j];
+            recentHighIndex = j;
+        }
+    }
+
+    if (recentHighIndex !== -1) {
+        // Find previous swing high
+        let prevHighPrice = -Infinity;
+        let prevHighIndex = -1;
+        for (let j = recentHighIndex - 5; j > Math.max(0, recentHighIndex - 40); j--) {
+            if (highs[j] > highs[j - 1] && highs[j] > highs[j + 1]) {
+                if (highs[j] > prevHighPrice) {
+                    prevHighPrice = highs[j];
+                    prevHighIndex = j;
+                }
+            }
+        }
+
+        // Logic: Price Higher High, CVD Lower High
+        if (prevHighIndex !== -1 && recentHighPrice > prevHighPrice) {
+            const recentCVD = cvd[recentHighIndex];
+            const prevCVD = cvd[prevHighIndex];
+
+            if (recentCVD < prevCVD) {
+                return 'BEARISH'; // Passive Selling absorbing the pump
+            }
+        }
+    }
+
+    return 'NONE';
+}

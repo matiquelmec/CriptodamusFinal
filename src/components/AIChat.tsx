@@ -27,185 +27,184 @@ const AIChat: React.FC<AIChatProps> = ({ selectedSymbol }) => {
   // PREPARE INPUT ON SYMBOL CHANGE (NO AUTO-FIRE)
   useEffect(() => {
     // Reset Chat with Autonomous System Message
-    setMessages([{
-      id: Date.now().toString(),
+    id: Date.now().toString(),
       role: 'model',
-      content: `### 🤖 Asesor Autónomo Institucional (Tier-1)\n\n**Activo Seleccionado:** ${selectedSymbol}\n\n**Capacidades Institucionales (God Tier):**\n- 🤖 **Red Neuronal (God Mode v2.0)**: Entrenada con **75,000 velas** + Auto-Aprendizaje Semanal (CI/CD)\n- 💾 **Memoria Eterna**: Archivo en tiempo real de cada vela cerrada para entrenamiento continuo\n- ❄️ **Estrategia Smart Freeze**: Detección de N-Pattern + Box Theory (0.5 Golden Zone)\n- 🧱 **Flujo de Órdenes Real**: Detección de Muros (Orderbook) y Absorción\n- 🧲 **Imanes de Liquidación**: Mapa de calor de stops (100x/50x)\n- 🧠 **Inteligencia Educativa**: Explica el "Por qué" del trade con analogías\n- 📐 **Patrones Chartistas Inteligentes**: Geometría Clásica filtrada por Volumen (HCH, Wedges)\n- 🦋 **Patrones Armónicos**: Identificación de Estructuras Geométricas y Zonas PRZ\n- 🛡️ **Escenarios Inteligentes**: Planes automáticos para Breakouts (FOMO) e Invalidaciones\n- 〽️ **Divergencias Avanzadas**: RSI Regular (Reversal) y MACD\n- 📈 **RSI Experto (Cardwell)**: Detecta Estructura de Mercado, Super Rangos y Reversiones\n- 🎯 **SMC (Smart Money Concepts)**: Order Blocks, FVG y Barridos de Liquidez\n- 💎 **Validación Fractal**: Multi-timeframe (1H + 4H + 1D + 1W)\n\n**Detección Automática:**\nEl sistema detecta el régimen de mercado (Bear/Bull/Altseason) y ajusta la estrategia en tiempo real.\n\n**Para comenzar:** Haz clic en **Enviar** para generar un análisis integral con plan DCA institucional.`,
-      timestamp: Date.now(),
-      isThinking: false
-    }]);
+        content: `### 🤖 Asesor Autónomo Institucional (Tier-1)\n\n**Activo Seleccionado:** ${selectedSymbol}\n\n**Capacidades Institucionales (God Tier):**\n- 🤖 **Red Neuronal (God Mode v2.0)**: Entrenada con **75,000 velas** + Auto-Aprendizaje Semanal (CI/CD)\n- 🗞️ **Sentiment Engine (Smart Data)**: Análisis de Noticias en Tiempo Real (CryptoPanic + Gemini Flash)\n- 🌊 **Truth Layer (CVD)**: Detección de Divergencias de Volumen y Absorción de Ballenas\n- 💾 **Memoria Eterna**: Archivo en tiempo real de cada vela cerrada para entrenamiento continuo\n- ❄️ **Estrategia Smart Freeze**: Detección de N-Pattern + Box Theory (0.5 Golden Zone)\n- 🧱 **Flujo de Órdenes Real**: Detección de Muros (Orderbook)\n- 🧲 **Imanes de Liquidación**: Mapa de calor de stops (100x/50x)\n- 🧠 **Inteligencia Educativa**: Explica el "Por qué" del trade con analogías\n- 📐 **Patrones Chartistas Inteligentes**: Geometría Clásica filtrada por Volumen (HCH, Wedges)\n- 🦋 **Patrones Armónicos**: Identificación de Estructuras Geométricas y Zonas PRZ\n- 🛡️ **Escenarios Inteligentes**: Planes automáticos para Breakouts (FOMO) e Invalidaciones\n- 〽️ **Divergencias Avanzadas**: RSI Regular (Reversal) y MACD\n- 📈 **RSI Experto (Cardwell)**: Detecta Estructura de Mercado, Super Rangos y Reversiones\n- 🎯 **SMC (Smart Money Concepts)**: Order Blocks, FVG y Barridos de Liquidez\n- 💎 **Validación Fractal**: Multi-timeframe (1H + 4H + 1D + 1W)\n\n**Detección Automática:**\nEl sistema detecta el régimen de mercado (Bear/Bull/Altseason) y ajusta la estrategia en tiempo real.\n\n**Para comenzar:** Haz clic en **Enviar** para generar un análisis integral con plan DCA institucional.`,
+          timestamp: Date.now(),
+            isThinking: false
+  }]);
 
-    // Pre-fill the input
-    setInput("Generar Análisis Integral");
+  // Pre-fill the input
+  setInput("Generar Análisis Integral");
 
-  }, [selectedSymbol]);
+}, [selectedSymbol]);
 
-  const handleReset = () => {
-    setIsLoading(false);
-    setMessages([]);
-    setInput("Generar Análisis Integral");
+const handleReset = () => {
+  setIsLoading(false);
+  setMessages([]);
+  setInput("Generar Análisis Integral");
+};
+
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!input.trim() || isLoading) return;
+
+  const userMsg: ChatMessage = {
+    id: Date.now().toString(),
+    role: 'user',
+    content: input,
+    timestamp: Date.now()
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  setMessages(prev => [...prev, userMsg]);
+  setInput(''); // Clear input after sending
+  setIsLoading(true);
 
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: input,
-      timestamp: Date.now()
-    };
+  let botMsgId = (Date.now() + 1).toString();
+  setMessages(prev => [...prev, {
+    id: botMsgId,
+    role: 'model',
+    content: '',
+    timestamp: Date.now(),
+    isThinking: true
+  }]);
 
-    setMessages(prev => [...prev, userMsg]);
-    setInput(''); // Clear input after sending
-    setIsLoading(true);
+  try {
+    // UPGRADE: Fetch RAW data objects, not just strings
+    // Also fetch Market Risk for the advisor
+    const contextPromise = Promise.all([
+      getMarketContextForAI(),
+      getMacroContext(), // NEW: Structured macro data
+      getRawTechnicalIndicators(selectedSymbol), // New robust function
+      getFearAndGreedIndex(),
+      getMarketRisk() // New Risk Fetch
+    ]);
 
-    let botMsgId = (Date.now() + 1).toString();
-    setMessages(prev => [...prev, {
-      id: botMsgId,
-      role: 'model',
-      content: '',
-      timestamp: Date.now(),
-      isThinking: true
-    }]);
+    const [marketContext, macroContext, techData, sentimentData, riskProfile] = await Promise.race([
+      contextPromise,
+      new Promise<any[]>((resolve) => setTimeout(() => resolve(["Contexto timeout", null, null, null, { level: 'LOW' }]), 4000))
+    ]);
 
-    try {
-      // UPGRADE: Fetch RAW data objects, not just strings
-      // Also fetch Market Risk for the advisor
-      const contextPromise = Promise.all([
-        getMarketContextForAI(),
-        getMacroContext(), // NEW: Structured macro data
-        getRawTechnicalIndicators(selectedSymbol), // New robust function
-        getFearAndGreedIndex(),
-        getMarketRisk() // New Risk Fetch
-      ]);
+    const sentimentString = sentimentData ? `Fear & Greed: ${sentimentData.value}` : "Sentiment N/A";
+    const combinedContextString = `${marketContext}\n${sentimentString}`;
 
-      const [marketContext, macroContext, techData, sentimentData, riskProfile] = await Promise.race([
-        contextPromise,
-        new Promise<any[]>((resolve) => setTimeout(() => resolve(["Contexto timeout", null, null, null, { level: 'LOW' }]), 4000))
-      ]);
+    // Pass structured data + SMC Strategy ID (fixed)
+    const stream = streamMarketAnalysis(
+      userMsg.content,
+      combinedContextString,
+      macroContext, // NEW: Structured macro data
+      techData, // Passing the object directly
+      'smc_liquidity', // FIXED: Always use SMC Institutional
+      riskProfile || { level: 'LOW', note: '' }
+    );
 
-      const sentimentString = sentimentData ? `Fear & Greed: ${sentimentData.value}` : "Sentiment N/A";
-      const combinedContextString = `${marketContext}\n${sentimentString}`;
+    let botResponse = '';
 
-      // Pass structured data + SMC Strategy ID (fixed)
-      const stream = streamMarketAnalysis(
-        userMsg.content,
-        combinedContextString,
-        macroContext, // NEW: Structured macro data
-        techData, // Passing the object directly
-        'smc_liquidity', // FIXED: Always use SMC Institutional
-        riskProfile || { level: 'LOW', note: '' }
-      );
-
-      let botResponse = '';
-
-      for await (const chunk of stream) {
-        botResponse += chunk;
-        setMessages(prev => prev.map(msg =>
-          msg.id === botMsgId ? { ...msg, content: botResponse, isThinking: false } : msg
-        ));
-      }
-
-    } catch (error) {
-      console.error(error);
+    for await (const chunk of stream) {
+      botResponse += chunk;
       setMessages(prev => prev.map(msg =>
-        msg.id === botMsgId ? { ...msg, content: 'Error crítico en motor matemático. Los datos del mercado no son accesibles.', isThinking: false } : msg
+        msg.id === botMsgId ? { ...msg, content: botResponse, isThinking: false } : msg
       ));
-    } finally {
-      setIsLoading(false);
     }
-  };
 
-  return (
-    <div className="h-full flex flex-col bg-surface border border-border rounded-xl shadow-sm overflow-hidden relative">
-      {/* Header - Simplified */}
-      <div className="p-3 border-b border-border bg-background/50 backdrop-blur-sm z-20 flex justify-between items-center">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            <Bot size={16} className="text-accent" />
-            <h2 className="text-xs font-mono font-bold uppercase tracking-wide">Asesor Autónomo</h2>
-            {/* Status Indicator */}
-            <div className="flex items-center gap-1 bg-success/10 px-1.5 rounded-full border border-success/20 ml-2">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
-              </span>
-              <span className="text-[9px] font-mono text-success font-bold uppercase">Ready</span>
-            </div>
-          </div>
-          {/* Fixed Strategy Display */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded w-fit">
-            <Shield size={10} className="text-blue-400" />
-            <span className="text-[10px] font-mono font-medium text-blue-400">SMC Institucional</span>
+  } catch (error) {
+    console.error(error);
+    setMessages(prev => prev.map(msg =>
+      msg.id === botMsgId ? { ...msg, content: 'Error crítico en motor matemático. Los datos del mercado no son accesibles.', isThinking: false } : msg
+    ));
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+return (
+  <div className="h-full flex flex-col bg-surface border border-border rounded-xl shadow-sm overflow-hidden relative">
+    {/* Header - Simplified */}
+    <div className="p-3 border-b border-border bg-background/50 backdrop-blur-sm z-20 flex justify-between items-center">
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <Bot size={16} className="text-accent" />
+          <h2 className="text-xs font-mono font-bold uppercase tracking-wide">Asesor Autónomo</h2>
+          {/* Status Indicator */}
+          <div className="flex items-center gap-1 bg-success/10 px-1.5 rounded-full border border-success/20 ml-2">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
+            </span>
+            <span className="text-[9px] font-mono text-success font-bold uppercase">Ready</span>
           </div>
         </div>
+        {/* Fixed Strategy Display */}
+        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded w-fit">
+          <Shield size={10} className="text-blue-400" />
+          <span className="text-[10px] font-mono font-medium text-blue-400">SMC Institucional</span>
+        </div>
+      </div>
 
-        <button
-          onClick={handleReset}
-          title="Limpiar Chat"
-          className="p-1.5 text-secondary hover:text-primary hover:bg-white/5 rounded transition-colors"
+      <button
+        onClick={handleReset}
+        title="Limpiar Chat"
+        className="p-1.5 text-secondary hover:text-primary hover:bg-white/5 rounded transition-colors"
+      >
+        <RefreshCw size={14} />
+      </button>
+    </div>
+
+    {/* Chat Area */}
+    <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      {messages.map((msg) => (
+        <div
+          key={msg.id}
+          className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
         >
-          <RefreshCw size={14} />
+          <div className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-primary text-background' : 'bg-accent/10 text-accent border border-accent/20'
+            }`}>
+            {msg.role === 'user' ? <User size={12} /> : <Sparkles size={12} />}
+          </div>
+
+          <div className={`max-w-[95%] rounded p-3 text-xs leading-relaxed shadow-sm ${msg.role === 'user'
+            ? 'bg-primary text-background'
+            : 'bg-surface border border-border text-primary'
+            }`}>
+            {msg.isThinking ? (
+              <div className="flex items-center gap-2 text-secondary py-1">
+                <Loader2 size={12} className="animate-spin" />
+                <span className="font-mono text-[10px]">Detectando régimen de mercado y analizando confluencias...</span>
+              </div>
+            ) : (
+              <div className="markdown-body font-mono whitespace-pre-wrap">
+                {msg.content}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+      <div ref={messagesEndRef} />
+    </div>
+
+    <form onSubmit={handleSubmit} className="p-3 border-t border-border bg-background">
+      <div className="flex items-center gap-2">
+        <input
+          id="ai-chat-input"
+          name="chatInput"
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={`Analizar ${selectedSymbol} con SMC institucional...`}
+          className="flex-1 bg-surface border border-border rounded pl-3 pr-2 py-2 text-xs text-primary placeholder-secondary/50 focus:border-accent focus:outline-none font-mono transition-all disabled:opacity-50"
+          disabled={isLoading}
+        />
+        <button
+          type="submit"
+          disabled={isLoading || !input.trim()}
+          className="flex items-center justify-center gap-2 px-3 py-2 bg-accent hover:bg-accentHover text-white rounded font-mono text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-accent/20 shrink-0"
+        >
+          {isLoading ? <Loader2 size={14} className="animate-spin" /> : <> <Send size={14} /> <span>Enviar</span> </>}
         </button>
       </div>
-
-      {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-          >
-            <div className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-primary text-background' : 'bg-accent/10 text-accent border border-accent/20'
-              }`}>
-              {msg.role === 'user' ? <User size={12} /> : <Sparkles size={12} />}
-            </div>
-
-            <div className={`max-w-[95%] rounded p-3 text-xs leading-relaxed shadow-sm ${msg.role === 'user'
-              ? 'bg-primary text-background'
-              : 'bg-surface border border-border text-primary'
-              }`}>
-              {msg.isThinking ? (
-                <div className="flex items-center gap-2 text-secondary py-1">
-                  <Loader2 size={12} className="animate-spin" />
-                  <span className="font-mono text-[10px]">Detectando régimen de mercado y analizando confluencias...</span>
-                </div>
-              ) : (
-                <div className="markdown-body font-mono whitespace-pre-wrap">
-                  {msg.content}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      <form onSubmit={handleSubmit} className="p-3 border-t border-border bg-background">
-        <div className="flex items-center gap-2">
-          <input
-            id="ai-chat-input"
-            name="chatInput"
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={`Analizar ${selectedSymbol} con SMC institucional...`}
-            className="flex-1 bg-surface border border-border rounded pl-3 pr-2 py-2 text-xs text-primary placeholder-secondary/50 focus:border-accent focus:outline-none font-mono transition-all disabled:opacity-50"
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            className="flex items-center justify-center gap-2 px-3 py-2 bg-accent hover:bg-accentHover text-white rounded font-mono text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-accent/20 shrink-0"
-          >
-            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <> <Send size={14} /> <span>Enviar</span> </>}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
+    </form>
+  </div>
+);
 };
 
 export default AIChat;

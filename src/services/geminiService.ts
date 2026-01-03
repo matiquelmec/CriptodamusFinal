@@ -103,9 +103,9 @@ export const streamMarketAnalysis = async function* (
         // ML SCORING INJECTION
         if (mlPrediction) {
             if (mlPrediction.signal === 'BULLISH') {
-                bullishScore += TradingConfig.scoring.advisor.ml_boost || 2; // Config or hardcoded boost
+                bullishScore += (TradingConfig.scoring.advisor as any).ml_boost || 2;
             } else if (mlPrediction.signal === 'BEARISH') {
-                bearishScore += TradingConfig.scoring.advisor.ml_boost || 2;
+                bearishScore += (TradingConfig.scoring.advisor as any).ml_boost || 2;
             }
         }
 
@@ -547,6 +547,15 @@ export const streamMarketAnalysis = async function* (
             response += `> 💎 **MODO DIOS:** Alineación total de timeframes (15m-1W). Probabilidad Institucional.\n`;
         } else if (techData.volumeExpert?.cvd?.divergence?.includes('ABSORPTION')) {
             response += `> 🐋 **ALERTA BALLENAS:** Absorción Institucional Detectada. El "Smart Money" está posicionado.\n`;
+        } else if (techData.cvdDivergence && techData.cvdDivergence !== 'NONE') {
+            // NEW: Root Level CVD check (Smart Data Phase 7)
+            const cvdIcon = techData.cvdDivergence === 'BULLISH' ? '🐋🟢' : '🐋🔴';
+            const cvdType = techData.cvdDivergence === 'BULLISH' ? 'ABSORCIÓN' : 'AGOTAMIENTO';
+            response += `> ${cvdIcon} **SMART DATA:** Divergencia de Flujo de Órdenes (${cvdType}). Las ballenas están ${techData.cvdDivergence === 'BULLISH' ? 'comprando la caída' : 'vendiendo el pump'}.\n`;
+
+            // Adjust score based on this truth
+            if (techData.cvdDivergence === 'BULLISH') bullishScore += 3;
+            else if (techData.cvdDivergence === 'BEARISH') bearishScore += 3;
         }
 
         response += `> *${investmentThesis}*\n\n`; // Insert AI Thesis here

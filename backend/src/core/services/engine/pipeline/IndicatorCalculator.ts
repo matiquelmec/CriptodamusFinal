@@ -10,7 +10,8 @@ import {
     calculateSlope, calculateATR, calculateZScore,
     calculateAutoFibs, calculateStochRSI, calculateIchimokuCloud,
     calculateFractals, detectNPattern, calculateBoxTheory,
-    detectBullishDivergence, calculateEMA
+    detectBullishDivergence, calculateEMA,
+    calculateCVD, detectCVDDivergence // NEW: Order Flow
 } from '../../mathUtils';
 import { detectChartPatterns } from '../../chartPatterns';
 import { TradingConfig } from '../../../config/tradingConfig';
@@ -28,6 +29,8 @@ export class IndicatorCalculator {
         const lows = candles.map(c => c.low);
         const closes = candles.map(c => c.close);
         const volumes = candles.map(c => c.volume);
+        // Extract Taker Buy Volume (or 0.5 * Volume if missing) for CVD
+        const takerBuyVolumes = candles.map(c => c.takerBuyBaseVolume || (c.volume * 0.5));
 
         // 1. Basic Indicators (RSI, MACD, BB)
         const rsi = calculateRSI(closes, TradingConfig.indicators.rsi.period);
@@ -97,6 +100,12 @@ export class IndicatorCalculator {
         // Let's implement a quick RSI array generator for divergence check
         // Note: compute() should stay relatively fast.
 
+        // Note: compute() should stay relatively fast.
+
+        // 6. ORDER FLOW (CVD)
+        const cvdLine = calculateCVD(volumes, takerBuyVolumes);
+        const cvdDivergence = detectCVDDivergence(closes, cvdLine, lows, highs);
+
         return {
             symbol: symbol,
             price: closes[closes.length - 1],
@@ -149,7 +158,9 @@ export class IndicatorCalculator {
             // Custom additions for our pipeline
             nPattern,
             boxTheory,
-            chartPatterns // NEW: Active
+            chartPatterns, // NEW: Active
+            cvd: cvdLine, // NEW
+            cvdDivergence // NEW
         }; // Casting valid by structure now
     }
 }

@@ -194,6 +194,8 @@ export interface TechnicalIndicators {
 
   // NEW: Expert Volume & Derivatives
   volumeExpert?: import('./types-advanced').VolumeExpertAnalysis;
+  cvd?: number[]; // NEW: Cumulative Volume Delta
+  cvdDivergence?: 'BULLISH' | 'BEARISH' | 'NONE'; // NEW: Order Flow Divergence
 
   technicalReasoning: string;
   invalidated: boolean; // Si el precio ya tocó SL o TP

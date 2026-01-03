@@ -171,8 +171,8 @@ export interface TechnicalIndicators {
     sma10?: number;
     sma30?: number;
     rsiFreeze?: number; // 9 Periods
-    boxTheory?: import('../../services/mathUtils').BoxTheoryResult;
-    nPattern?: import('../../services/mathUtils').NPatternResult;
+    boxTheory?: import('../services/mathUtils').BoxTheoryResult;
+    nPattern?: import('../services/mathUtils').NPatternResult;
 
     // NEW: EXPERT METRICS
     macdDivergence?: Divergence;
@@ -193,6 +193,8 @@ export interface TechnicalIndicators {
 
     // NEW: Expert Volume & Derivatives
     volumeExpert?: import('./types-advanced').VolumeExpertAnalysis;
+    cvd?: number[]; // NEW: Cumulative Volume Delta
+    cvdDivergence?: 'BULLISH' | 'BEARISH' | 'NONE'; // NEW: Order Flow Divergence
 
     technicalReasoning: string;
     invalidated: boolean; // Si el precio ya tocó SL o TP

@@ -199,7 +199,8 @@ export const mapBinanceToCoinCap = (symbol: string) => {
     return map[symbol];
 }
 
-export const fetchCandles = async (symbolId: string, interval: string): Promise<{ timestamp: number, close: number, volume: number, high: number, low: number, open: number }[]> => {
+// Update return type
+export const fetchCandles = async (symbolId: string, interval: string): Promise<{ timestamp: number, close: number, volume: number, high: number, low: number, open: number, takerBuyBaseVolume: number }[]> => {
     const isBinance = symbolId === symbolId.toUpperCase() && symbolId.endsWith('USDT');
 
     // --- SMART CACHING LAYER ---
@@ -223,7 +224,8 @@ export const fetchCandles = async (symbolId: string, interval: string): Promise<
                 high: parseFloat(String(d[2])),
                 low: parseFloat(String(d[3])),
                 close: parseFloat(String(d[4])),
-                volume: parseFloat(String(d[5]))
+                volume: parseFloat(String(d[5])),
+                takerBuyBaseVolume: parseFloat(String(d[9])) // Index 9: Taker Buy Base Asset Volume
             }));
 
             // Determine TTL based on Interval (Hybrid Freshness)
@@ -248,14 +250,18 @@ export const fetchCandles = async (symbolId: string, interval: string): Promise<
             const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${symbolId}&quoteId=tether`, {}, 4000);
             if (!res.ok) return [];
             const json = await res.json();
-            const parsedData = json.data.map((d: any) => ({
-                timestamp: d.period,
-                open: parseFloat(d.open),
-                high: parseFloat(d.high),
-                low: parseFloat(d.low),
-                close: parseFloat(d.close),
-                volume: parseFloat(d.volume)
-            }));
+            const parsedData = json.data.map((d: any) => {
+                const vol = parseFloat(d.volume);
+                return {
+                    timestamp: d.period,
+                    open: parseFloat(d.open),
+                    high: parseFloat(d.high),
+                    low: parseFloat(d.low),
+                    close: parseFloat(d.close),
+                    volume: vol,
+                    takerBuyBaseVolume: vol * 0.5 // Fallback to neutral delta
+                };
+            });
 
             // Determine TTL based on Interval (Hybrid Freshness)
             let ttl = SmartCache.TTL.MICRO; // Default 30s
@@ -285,14 +291,18 @@ export const fetchCandles = async (symbolId: string, interval: string): Promise<
                     const res = await fetchWithTimeout(`${COINCAP_API_BASE}/candles?exchange=binance&interval=${ccInterval}&baseId=${fallbackId}&quoteId=tether`, {}, 4000);
                     if (!res.ok) return [];
                     const json = await res.json();
-                    const parsedData = json.data.map((d: any) => ({
-                        timestamp: d.period,
-                        open: parseFloat(d.open),
-                        high: parseFloat(d.high),
-                        low: parseFloat(d.low),
-                        close: parseFloat(d.close),
-                        volume: parseFloat(d.volume)
-                    }));
+                    const parsedData = json.data.map((d: any) => {
+                        const vol = parseFloat(d.volume);
+                        return {
+                            timestamp: d.period,
+                            open: parseFloat(d.open),
+                            high: parseFloat(d.high),
+                            low: parseFloat(d.low),
+                            close: parseFloat(d.close),
+                            volume: vol,
+                            takerBuyBaseVolume: vol * 0.5 // Fallback
+                        };
+                    });
 
                     // Determine TTL based on Interval (Hybrid Freshness)
                     let ttl = SmartCache.TTL.MICRO; // Default 30s

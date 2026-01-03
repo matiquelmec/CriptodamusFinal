@@ -24,6 +24,7 @@ import { getMacroContext, type MacroContext } from '../macroService';
 import { calculateDCAPlan } from '../dcaCalculator';
 import { fetchCryptoData, fetchCandles } from '../api/binanceApi';
 import { getMarketRisk, calculateFundamentalTier } from './riskEngine';
+import { fetchCryptoSentiment } from '../../../services/newsService'; // NEW: Sentiment Engine
 
 import { calculateEMA } from '../mathUtils';
 import { predictNextMove } from '../../../ml/inference'; // NEW: Brain Import
@@ -52,6 +53,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
         console.error("[Scanner] CRITICAL: Macro Context Failed. Aborting to prevent blind trading.", e);
         throw new Error("MACRO_CONTEXT_FAILURE"); // Fail Loud: Context is required for "God Mode"
     }
+
+    // NEW: Global Sentiment Analysis (The "Why")
+    const globalSentiment = await fetchCryptoSentiment('BTC');
+    console.log(`[Scanner] Global Sentiment: ${globalSentiment.score} (${globalSentiment.sentiment}) | "${globalSentiment.summary}"`);
 
     const topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 60);
     const opportunities: AIOpportunity[] = [];
@@ -113,6 +118,18 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 totalScore = applyMacroFilters(totalScore, coin.symbol, signalSide, macroContext);
             }
 
+            // NEW: Sentiment Filter
+            if (globalSentiment.score > 0.3 && signalSide === 'LONG') {
+                totalScore += 10;
+                reasoning.push("🗞️ Sentiment: Positive News Catalyst");
+            } else if (globalSentiment.score < -0.3 && signalSide === 'SHORT') {
+                totalScore += 10;
+                reasoning.push("🗞️ Sentiment: Negative News FUD");
+            } else if ((globalSentiment.score > 0.5 && signalSide === 'SHORT') || (globalSentiment.score < -0.5 && signalSide === 'LONG')) {
+                totalScore -= 20; // Fight against extreme narrative
+                reasoning.push("⚠️ Sentiment Warning: Fighting the Narrative");
+            }
+
             // Apply Technical Context (ADX Range Filter) - HARDENING
             totalScore = applyTechnicalContext(totalScore, indicators, strategyResult.primaryStrategy?.id);
 
@@ -157,6 +174,23 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     }
                 }
             } catch (e) { console.warn("ML Inference Failed for " + coin.symbol); }
+
+            // --- STAGE 4.7: ORDER FLOW VERIFICATION (Truth Layer) ---
+            if (indicators.cvdDivergence && indicators.cvdDivergence !== 'NONE') {
+                if (indicators.cvdDivergence === 'BULLISH' && signalSide === 'LONG') {
+                    totalScore += 20; // Massive Boost: Buying into the dip (Absorption)
+                    reasoning.push("🌊 CVD Divergence: Institutional Absorption Detected");
+                } else if (indicators.cvdDivergence === 'BEARISH' && signalSide === 'SHORT') {
+                    totalScore += 20; // Massive Boost: Selling into the pump (Exhaustion)
+                    reasoning.push("🌊 CVD Divergence: Institutional Exhaustion Detected");
+                } else if (
+                    (indicators.cvdDivergence === 'BULLISH' && signalSide === 'SHORT') ||
+                    (indicators.cvdDivergence === 'BEARISH' && signalSide === 'LONG')
+                ) {
+                    totalScore -= 15; // Penalty: Fighting the hidden flow
+                    reasoning.push("⚠️ CVD Warning: Order Flow Contradicts Signal");
+                }
+            }
 
             const opportunity: AIOpportunity = {
                 id: coin.id,
