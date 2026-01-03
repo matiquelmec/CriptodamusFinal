@@ -107,14 +107,14 @@ const News: React.FC = () => {
                                 <div className="flex flex-wrap items-center gap-4 text-[10px] text-secondary font-bold uppercase tracking-wider">
                                     <div className="flex items-center gap-1.5 bg-background px-2 py-1 rounded border border-border">
                                         <Clock size={12} className="text-accent" />
-                                        {new Date(item.published_at).toLocaleString()}
+                                        {item.published_at ? new Date(item.published_at).toLocaleString() : 'N/A'}
                                     </div>
                                     <div className="flex items-center gap-1.5 bg-background px-2 py-1 rounded border border-border">
                                         <Hash size={12} className="text-accent" />
-                                        {item.source.title}
+                                        {item.source?.title || 'Unknown Source'}
                                     </div>
 
-                                    {item.currencies && (
+                                    {item.currencies && item.currencies.length > 0 && (
                                         <div className="flex gap-2">
                                             {item.currencies.slice(0, 3).map(c => (
                                                 <span key={c.code} className="text-accent border border-accent/20 px-2 py-1 rounded bg-accent/5">
