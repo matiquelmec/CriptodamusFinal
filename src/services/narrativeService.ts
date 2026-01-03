@@ -15,6 +15,12 @@ export interface NarrativeContext {
     marketRegime: MarketRegime;
     sentiment: "BULLISH" | "BEARISH" | "NEUTRAL";
     confidenceScore: number;
+    news?: {
+        sentiment: string;
+        score: number;
+        summary: string;
+        headlineCount: number;
+    };
 }
 
 // ----------------------------------------------------------------------------
@@ -45,33 +51,45 @@ export const generateInvestmentThesis = async (context: NarrativeContext): Promi
         }
     }
 
+    // 2.5 News Sentiment Integration
+    let newsNote = "";
+    if (context.news && context.news.headlineCount > 0) {
+        const sentimentMap: Record<string, string> = {
+            'BULLISH': 'optimista',
+            'BEARISH': 'pesimista',
+            'NEUTRAL': 'cauteloso'
+        };
+        const mood = sentimentMap[context.news.sentiment] || 'neutral';
+        newsNote = ` El flujo de noticias es predominantemente ${mood} (${context.news.summary}).`;
+    }
+
     // 3. Assemble Thesis based on Scenarios
 
     // SCENARIO A: STRONG UPTREND (Bullish + High ADX)
     if (sentiment === "BULLISH" && regime === "TRENDING") {
         if (adx > 25) {
-            return `Estructura alcista sólida confirmada por momentum. El precio muestra fortaleza sobre medias móviles clave.${institutionalNote} Buscamos continuidad en la tendencia, priorizando entradas en retrocesos (buy the dip).`;
+            return `Estructura alcista sólida confirmada por momentum. El precio muestra fortaleza sobre medias móviles clave.${institutionalNote}${newsNote} Buscamos continuidad en la tendencia, priorizando entradas en retrocesos (buy the dip).`;
         } else {
-            return `Tendencia alcista presente pero perdiendo fuerza momentum (ADX bajo).${institutionalNote} Precaución con falsos rompimientos; esperar confirmación de volumen antes de añadir posiciones.`;
+            return `Tendencia alcista presente pero perdiendo fuerza momentum (ADX bajo).${institutionalNote}${newsNote} Precaución con falsos rompimientos; esperar confirmación de volumen antes de añadir posiciones.`;
         }
     }
 
     // SCENARIO B: STRONG DOWNTREND (Bearish + High ADX)
     if (sentiment === "BEARISH" && regime === "TRENDING") {
         if (rsi < 30) {
-            return `Tendencia bajista extendida, pero RSI en sobreventa sugiere un posible rebote técnico a corto plazo (Dead Cat Bounce).${institutionalNote} No es momento de shortear agresivamente, esperar pullbacks a resistencia.`;
+            return `Tendencia bajista extendida, pero RSI en sobreventa sugiere un posible rebote técnico a corto plazo (Dead Cat Bounce).${institutionalNote}${newsNote} No es momento de shortear agresivamente, esperar pullbacks a resistencia.`;
         }
-        return `Dominio total de la oferta. Estructura de máximos y mínimos decrecientes intacta.${institutionalNote} El camino de menor resistencia es a la baja; vender en rebotes a la EMA200.`;
+        return `Dominio total de la oferta. Estructura de máximos y mínimos decrecientes intacta.${institutionalNote}${newsNote} El camino de menor resistencia es a la baja; vender en rebotes a la EMA200.`;
     }
 
     // SCENARIO C: RANGE / CHOP (Ranging)
     if (regime === "RANGING" || sentiment === "NEUTRAL") {
         if (rsi > 70) {
-            return `El activo se encuentra en la parte alta de un rango lateral.${institutionalNote} Probabilidad alta de rechazo en resistencia. Estrategia de reversión a la media (Mean Reversion) favorecida.`;
+            return `El activo se encuentra en la parte alta de un rango lateral.${institutionalNote}${newsNote} Probabilidad alta de rechazo en resistencia. Estrategia de reversión a la media (Mean Reversion) favorecida.`;
         } else if (rsi < 30) {
-            return `El precio testea el soporte inferior del rango actual.${institutionalNote} Oportunidad de compra de bajo riesgo con stop ajustado bajo el mínimo previo.`;
+            return `El precio testea el soporte inferior del rango actual.${institutionalNote}${newsNote} Oportunidad de compra de bajo riesgo con stop ajustado bajo el mínimo previo.`;
         }
-        return `Fase de consolidación e indecisión. El precio oscila sin dirección clara entre zonas de liquidez.${institutionalNote} Mantenerse al margen o scalpear los extremos del rango.`;
+        return `Fase de consolidación e indecisión. El precio oscila sin dirección clara entre zonas de liquidez.${institutionalNote}${newsNote} Mantenerse al margen o scalpear los extremos del rango.`;
     }
 
     // SCENARIO D: VOLATILE / UNCERTAIN

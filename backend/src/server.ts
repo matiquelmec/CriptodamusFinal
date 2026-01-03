@@ -104,7 +104,6 @@ app.get('/api/macro/global', async (req, res) => {
 app.get('/api/ml/predict', async (req, res) => {
     try {
         const symbol = (req.query.symbol as string) || 'BTCUSDT';
-        // Check if brain is trained (file exists) - Simple check via try/catch in inference
         const prediction = await predictNextMove(symbol);
 
         if (!prediction) {
@@ -114,6 +113,17 @@ app.get('/api/ml/predict', async (req, res) => {
     } catch (error) {
         console.error('ML Diagnosis Error:', error);
         res.status(500).json({ error: 'Internal Brain Error' });
+    }
+});
+
+import { fetchCryptoSentiment } from './services/newsService';
+app.get('/api/v1/market/sentiment', async (req, res) => {
+    try {
+        const symbol = (req.query.symbol as string) || 'BTC';
+        const sentiment = await fetchCryptoSentiment(symbol);
+        res.json(sentiment);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch sentiment' });
     }
 });
 

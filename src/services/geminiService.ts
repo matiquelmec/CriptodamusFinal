@@ -74,6 +74,8 @@ export const streamMarketAnalysis = async function* (
 
         // --- PHASE 0: DATA & ML PRE-FETCH ---
         let mlPrediction = null;
+        let newsSentiment = null;
+
         try {
             const API_URL = import.meta.env.PROD
                 ? 'https://criptodamusfinal.onrender.com'
@@ -82,17 +84,19 @@ export const streamMarketAnalysis = async function* (
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-            const mlRes = await fetch(`${API_URL}/api/ml/predict?symbol=${techData.symbol}`, {
-                signal: controller.signal
-            }).catch(() => null);
+            // Parallel Pre-fetch (ML + News)
+            const [mlRes, newsRes] = await Promise.all([
+                fetch(`${API_URL}/api/ml/predict?symbol=${techData.symbol}`, { signal: controller.signal }).catch(() => null),
+                fetch(`${API_URL}/api/v1/market/sentiment?symbol=${techData.symbol.split('USDT')[0]}`, { signal: controller.signal }).catch(() => null)
+            ]);
 
             clearTimeout(timeoutId);
 
-            if (mlRes && mlRes.ok) {
-                mlPrediction = await mlRes.json();
-            }
+            if (mlRes && mlRes.ok) mlPrediction = await mlRes.json();
+            if (newsRes && newsRes.ok) newsSentiment = await newsRes.json();
+
         } catch (e) {
-            console.warn("ML Service unavailable for Advisor analysis");
+            console.warn("External Services unavailable for Advisor analysis");
         }
 
         // --- PHASE 1: SCORING SYSTEM (MATRIX) ---
@@ -106,6 +110,15 @@ export const streamMarketAnalysis = async function* (
                 bullishScore += (TradingConfig.scoring.advisor as any).ml_boost || 2;
             } else if (mlPrediction.signal === 'BEARISH') {
                 bearishScore += (TradingConfig.scoring.advisor as any).ml_boost || 2;
+            }
+        }
+
+        // NEWS SENTIMENT SCORING (NEW)
+        if (newsSentiment) {
+            if (newsSentiment.sentiment === 'BULLISH') {
+                bullishScore += Math.abs(newsSentiment.score) * 3; // News can boost up to 3 points
+            } else if (newsSentiment.sentiment === 'BEARISH') {
+                bearishScore += Math.abs(newsSentiment.score) * 3;
             }
         }
 
@@ -479,7 +492,8 @@ export const streamMarketAnalysis = async function* (
             technicalIndicators: techData,
             marketRegime: { regime: 'UNKNOWN', confidence: 0 } as any,
             sentiment: sentiment.includes('ALCISTA') ? 'BULLISH' : sentiment.includes('BAJISTA') ? 'BEARISH' : 'NEUTRAL',
-            confidenceScore: confidenceLevel
+            confidenceScore: confidenceLevel,
+            news: newsSentiment // Pass news to AI prompt
         };
 
         if (techData.marketRegime) {
@@ -567,7 +581,13 @@ export const streamMarketAnalysis = async function* (
         } else if (techData.cvdDivergence && techData.cvdDivergence !== 'NONE') {
             const cvdIcon = techData.cvdDivergence === 'BULLISH' ? '🐋🟢' : '🐋🔴';
             const cvdType = techData.cvdDivergence === 'BULLISH' ? 'ABSORCIÓN' : 'AGOTAMIENTO';
-            response += `> ${cvdIcon} **SMART DATA:** Divergencia de Flujo de Órdenes (${cvdType}). Las ballenas están ${techData.cvdDivergence === 'BULLISH' ? 'comprando la caída' : 'vendiendo el pump'}.\n`;
+            response += `> ${cvdIcon} **TRUTH LAYER (CVD):** Divergencia de Flujo de Órdenes (${cvdType}). Las ballenas están ${techData.cvdDivergence === 'BULLISH' ? 'acumulando agresivamente' : 'distribuyendo antes de la caída'}.\n`;
+        }
+
+        // SENTIMENT ENGINE BLOCK (NEW)
+        if (newsSentiment && newsSentiment.headlineCount > 0) {
+            const newsIcon = newsSentiment.sentiment === 'BULLISH' ? '🗞️🟢' : newsSentiment.sentiment === 'BEARISH' ? '🗞️🔴' : '🗞️⚪';
+            response += `> ${newsIcon} **SENTIMENT ENGINE:** ${newsSentiment.summary} (Basado en ${newsSentiment.headlineCount} noticias analizadas).\n`;
         }
 
         response += `> *${investmentThesis}*\n\n`; // Insert AI Thesis here
