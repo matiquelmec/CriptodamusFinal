@@ -108,6 +108,13 @@ export function analyzeFreezeStrategy(
     if (entryType === 'BULLISH' && rsiFreeze > 75) return signal; // Don't buy top
     if (entryType === 'BEARISH' && rsiFreeze < 25) return signal; // Don't sell bottom
 
+    // NEW: Statistical Safety (Z-Score Veto)
+    const zScore = (data as any).zScore;
+    if (zScore !== undefined) {
+        if (entryType === 'BULLISH' && zScore > 3.0) return signal; // Extreme Overbought Euphoria
+        if (entryType === 'BEARISH' && zScore < -3.0) return signal; // Extreme Oversold Panic
+    }
+
     signal.active = true;
     signal.type = entryType;
     signal.entryPrice = baseEntryPrice;
