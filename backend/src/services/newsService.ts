@@ -41,7 +41,7 @@ export const fetchCryptoSentiment = async (currency: string = 'BTC'): Promise<Se
             "Institutional inflow into crypto funds positive for 3rd week"
         ];
     } else {
-        const url = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${CRYPTOPANIC_API_KEY}&currencies=${currency}&filter=important`;
+        const url = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${CRYPTOPANIC_API_KEY}&currencies=${currency}`;
         const maxRetries = 2;
         let lastError = null;
 
@@ -58,6 +58,7 @@ export const fetchCryptoSentiment = async (currency: string = 'BTC'): Promise<Se
 
                 if (response.data && response.data.results) {
                     headlines = response.data.results.map((n: NewsItem) => n.title);
+                    console.log(`[NewsService] Successfully fetched ${headlines.length} headlines for ${currency}`);
                     break; // Success!
                 }
             } catch (e: any) {
