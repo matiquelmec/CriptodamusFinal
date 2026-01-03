@@ -41,12 +41,10 @@ export const fetchGlobalMarketData = async (): Promise<GlobalMarketData> => {
         }
 
         // 2. Fetch Gold Price (PAXG/USDT from Binance API) - Proxy for XAU
-        let goldPrice = 2000;
+        let goldPrice = 2650; // Updated fallback to realistic value
         try {
-            // Use binance.vision (easier for server-side)
-            const binanceRes = await fetch('https://data-api.binance.vision/api/v3/ticker/price?symbol=PAXGUSDT', {
-                headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
+            // Use production API instead of testnet (.vision)
+            const binanceRes = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT');
             if (binanceRes.ok) {
                 const bData: any = await binanceRes.json();
                 goldPrice = parseFloat(bData.price);
@@ -70,7 +68,8 @@ export const fetchGlobalMarketData = async (): Promise<GlobalMarketData> => {
         } catch (e) { }
 
         // Inverse EUR is a crude DXY proxy directionally
-        const dxyProxy = 1 / eurUsdt * 100; // Not exact DXY value but directionally identical
+        // Real DXY is ~102. 1/EURUSD * 93.5 is a much better synthetic fit for the current era.
+        const dxyProxy = (1 / eurUsdt) * 112.5; // Adjusted offset for modern macro alignment (~102-103)
 
         cache = {
             btcDominance: btcD,
