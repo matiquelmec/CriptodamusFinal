@@ -88,41 +88,51 @@ const News: React.FC = () => {
                         {news.map((item) => (
                             <div
                                 key={item.id}
-                                className="bg-surface border border-border hover:border-accent/40 rounded-xl p-5 transition-all group hover:shadow-xl hover:shadow-accent/5"
+                                className="bg-surface border border-border hover:border-accent/40 rounded-xl transition-all group hover:shadow-xl hover:shadow-accent/5 overflow-hidden"
                             >
-                                <div className="flex justify-between items-start gap-4 mb-3">
-                                    <h2 className="text-lg font-bold text-primary leading-tight group-hover:text-accent transition-colors">
-                                        {item.title}
-                                    </h2>
-                                    <a
-                                        href={item.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-2 bg-background border border-border rounded-lg text-secondary hover:text-primary hover:border-accent transition-all flex-shrink-0"
-                                    >
-                                        <ExternalLink size={16} />
-                                    </a>
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-4 text-[10px] text-secondary font-bold uppercase tracking-wider">
-                                    <div className="flex items-center gap-1.5 bg-background px-2 py-1 rounded border border-border">
-                                        <Clock size={12} className="text-accent" />
-                                        {item.published_at ? new Date(item.published_at).toLocaleString() : 'N/A'}
+                                <div className="p-5">
+                                    <div className="flex justify-between items-start gap-4 mb-3">
+                                        <a
+                                            href={item.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="block flex-1"
+                                        >
+                                            <h2 className="text-lg font-bold text-primary leading-tight group-hover:text-accent transition-colors">
+                                                {item.title}
+                                            </h2>
+                                        </a>
+                                        <a
+                                            href={item.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="p-2 bg-background border border-border rounded-lg text-secondary hover:text-primary hover:border-accent transition-all flex-shrink-0"
+                                            title="Leer noticia completa"
+                                        >
+                                            <ExternalLink size={16} />
+                                        </a>
                                     </div>
-                                    <div className="flex items-center gap-1.5 bg-background px-2 py-1 rounded border border-border">
-                                        <Hash size={12} className="text-accent" />
-                                        {item.source?.title || 'Unknown Source'}
-                                    </div>
 
-                                    {item.currencies && item.currencies.length > 0 && (
-                                        <div className="flex gap-2">
-                                            {item.currencies.slice(0, 3).map(c => (
-                                                <span key={c.code} className="text-accent border border-accent/20 px-2 py-1 rounded bg-accent/5">
-                                                    #{c.code}
-                                                </span>
-                                            ))}
+                                    <div className="flex flex-wrap items-center gap-4 text-[10px] text-secondary font-bold uppercase tracking-wider">
+                                        <div className="flex items-center gap-1.5 bg-background px-2 py-1 rounded border border-border">
+                                            <Clock size={12} className="text-accent" />
+                                            {item.published_at ? new Date(item.published_at).toLocaleString() : 'N/A'}
                                         </div>
-                                    )}
+                                        <div className="flex items-center gap-1.5 bg-background px-2 py-1 rounded border border-border">
+                                            <Hash size={12} className="text-accent" />
+                                            {item.source?.title || 'Unknown Source'}
+                                        </div>
+
+                                        {item.currencies && item.currencies.length > 0 && (
+                                            <div className="flex gap-2">
+                                                {item.currencies.slice(0, 3).map(c => (
+                                                    <span key={c.code} className="text-accent border border-accent/20 px-2 py-1 rounded bg-accent/5">
+                                                        #{c.code}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))}
