@@ -1,6 +1,6 @@
 {
   "name": "criptodamus-backend",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Backend API for Criptodamus Trading Platform",
   "main": "server.js",
   "type": "module",
@@ -21,6 +21,7 @@
     "helmet": "^7.0.0",
     "mercadopago": "^2.0.0",
     "node-cache": "^5.1.2",
+    "node-cron": "^3.0.3",
     "node-telegram-bot-api": "^0.67.0",
     "ws": "^8.14.0"
   },
@@ -29,7 +30,9 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/cors": "^2.8.17",
     "@types/node": "^25.0.3",
+    "@types/node-cron": "^3.0.11",
     "@types/node-telegram-bot-api": "^0.64.13",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
