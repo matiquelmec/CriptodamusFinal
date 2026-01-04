@@ -28,6 +28,8 @@ import { fetchCryptoSentiment } from '../../../services/newsService'; // NEW: Se
 
 import { calculateEMA } from '../mathUtils';
 import { predictNextMove } from '../../../ml/inference'; // NEW: Brain Import
+import { getExpertVolumeAnalysis, enrichWithDepthAndLiqs } from '../../../services/volumeExpert'; // NEW: Volume Expert Service
+import { VolumeExpertAnalysis } from '../../types/types-advanced'; // NEW: Correct Type Import
 
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {
     // 0. INITIALIZATION
@@ -184,6 +186,49 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
             } catch (e) { console.warn("ML Inference Failed for " + coin.symbol); }
 
+            // --- STAGE 4.6: EXPERT VOLUME ANALYSIS (God Tier) ---
+            // Only fetch mainly IO-heavy data for strong candidates (Score > 50)
+            let volumeAnalysis: VolumeExpertAnalysis | undefined;
+
+            if (totalScore > 50) {
+                try {
+                    volumeAnalysis = await getExpertVolumeAnalysis(coin.symbol);
+                    if (volumeAnalysis) {
+                        // 1. Coinbase Premium Signal
+                        if (volumeAnalysis.coinbasePremium.signal === 'INSTITUTIONAL_BUY' && signalSide === 'LONG') {
+                            totalScore += 15;
+                            reasoning.push(`🏦 Premium: Institutional Buying Detected (+${volumeAnalysis.coinbasePremium.gapPercent.toFixed(3)}%)`);
+                        } else if (volumeAnalysis.coinbasePremium.signal === 'INSTITUTIONAL_SELL' && signalSide === 'SHORT') {
+                            totalScore += 15;
+                            reasoning.push(`🏦 Premium: Institutional Selling Detected (${volumeAnalysis.coinbasePremium.gapPercent.toFixed(3)}%)`);
+                        }
+
+                        // 2. CVD Trend Confirmation
+                        if (volumeAnalysis.cvd.trend === 'BULLISH' && signalSide === 'LONG') {
+                            totalScore += 10;
+                            reasoning.push("🌊 CVD: Aggressive Buying Flow");
+                        } else if (volumeAnalysis.cvd.trend === 'BEARISH' && signalSide === 'SHORT') {
+                            totalScore += 10;
+                            reasoning.push("🌊 CVD: Aggressive Selling Flow");
+                        }
+
+                        // 3. Open Interest Confluence (Price UP + OI UP = Strong Trend)
+                        const oiValueMillions = volumeAnalysis.derivatives.openInterestValue / 1_000_000;
+                        if (oiValueMillions > 50) { // Significant market interest
+                            if (signalSide === 'LONG' && volumeAnalysis.derivatives.fundingRate > 0.01) {
+                                // High funding usually means long crowded, but if price is breaking out it's momentum.
+                                // Let's use OI Growth if available (snapshot doesn't have growth yet).
+                                // Using pure magnitude for now:
+                                totalScore += 5;
+                                reasoning.push(`📊 OI: High Interest Market ($${oiValueMillions.toFixed(1)}M)`);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    // console.warn("Volume Expert Failed:", err);
+                }
+            }
+
             // --- STAGE 4.7: ORDER FLOW VERIFICATION (Truth Layer) ---
             if (indicators.cvdDivergence && indicators.cvdDivergence !== 'NONE') {
                 if (indicators.cvdDivergence === 'BULLISH' && signalSide === 'LONG') {
@@ -246,7 +291,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     zScore: indicators.zScore,
                     emaSlope: indicators.emaSlope,
                     isSqueeze: indicators.isSqueeze,
-                    volumeExpert: advancedData.volumeExpert,
+                    volumeExpert: volumeAnalysis, // NEW: Populated from Backend Service
                     macdDivergence: indicators.macdDivergence?.type || undefined,
                     fractalAnalysis: macroCompass ? {
                         trend_4h: macroCompass.trend4h,
