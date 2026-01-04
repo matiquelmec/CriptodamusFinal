@@ -21,8 +21,7 @@ import donationRoutes from './api/donation';
 import proxyRoutes from './api/proxy';
 
 // Import Services
-// @ts-ignore
-import { binanceStream } from './services/binanceStream.js';
+import { binanceStream } from './services/binanceStream';
 import { scannerService } from './services/scanner';
 import { AIOpportunity } from './core/types';
 
@@ -158,6 +157,10 @@ app.use((req, res) => {
     });
 });
 
+// Iniciar Scheduler (Cron Jobs)
+import { initScheduler, runTrainingJob } from './scheduler';
+initScheduler();
+
 // Iniciar conexión con Binance (Legacy Stream)
 try {
     binanceStream.start();
@@ -167,6 +170,19 @@ try {
 
 // Iniciar Scanner Service (AI)
 scannerService.start();
+
+// --- ADMIN ENDPOINTS ---
+app.post('/api/admin/retrain', (req, res) => {
+    // Basic protection (TODO: Add proper Auth Middleware)
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET && secret !== 'criptodamus_god_mode') {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    console.log("⚡ [Admin] Triggering Manual Retraining...");
+    runTrainingJob();
+    res.json({ status: 'ok', message: 'Training process spawned in background' });
+});
 
 // Crear servidor HTTP
 const server = createServer(app);

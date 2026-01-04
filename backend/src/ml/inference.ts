@@ -1,42 +1,40 @@
 import * as tf from '@tensorflow/tfjs';
 import * as fs from 'fs';
 import path from 'path';
-// Native fetch used
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
 
+// ESM Polyfill
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Cargar ENV
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const BUCKET_NAME = 'models';
+
+const supabase = (SUPABASE_URL && SUPABASE_KEY) ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 let model: tf.LayersModel | null = null;
 const LOOKBACK = 50;
 
-// Reutilizamos la lógica de Binance (Duplicada por ahora para seguridad durante ejecución)
+// Reutilizamos la lógica de Binance
 async function fetchRecentCandles(symbol: string, interval: string = '15m', limit: number = 100) {
-    // 1. Intentar Binance Global
     let url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-
     try {
         const res = await fetch(url);
-
-        // Si es error 451 (Geo-Block USA), intentar Binance US
         if (res.status === 451) {
-            console.warn(`⚠️ Binance Global bloqueado (451). Cambiando a Binance US para ${symbol}...`);
             url = `https://api.binance.us/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
             const resUS = await fetch(url);
-
-            if (!resUS.ok) {
-                const errTextUS = await resUS.text();
-                throw new Error(`Binance US Error (${resUS.status}): ${errTextUS}`);
-            }
+            if (!resUS.ok) throw new Error('Binance US Error');
             return parseBinanceResponse(await resUS.json());
         }
-
-        if (!res.ok) {
-            const errText = await res.text();
-            throw new Error(`Binance Error (${res.status}): ${errText}`);
-        }
-
+        if (!res.ok) throw new Error('Binance Error');
         return parseBinanceResponse(await res.json());
-
     } catch (error: any) {
-        // Fallback final: Si falla todo, lanzar error
         throw new Error(`Data Fetch Failed: ${error.message}`);
     }
 }
@@ -52,62 +50,88 @@ function parseBinanceResponse(data: any[]) {
     }));
 }
 
+async function downloadModelFromCloud(saveDir: string) {
+    if (!supabase) {
+        console.warn("⚠️ [ML] Sin credenciales Supabase. No se puede descargar modelo de la nube.");
+        return false;
+    }
+
+    try {
+        console.log("☁️ [ML] Buscando modelo actualizado en Supabase...");
+
+        // 1. Download JSON
+        const { data: jsonData, error: jsonErr } = await supabase.storage.from(BUCKET_NAME).download('model.json');
+        if (jsonErr) throw jsonErr;
+
+        // 2. Download Weights
+        const { data: weightData, error: weightErr } = await supabase.storage.from(BUCKET_NAME).download('weights.bin');
+        if (weightErr) throw weightErr;
+
+        if (!fs.existsSync(saveDir)) fs.mkdirSync(saveDir, { recursive: true });
+
+        // Save to disk
+        const jsonBuffer = await jsonData.arrayBuffer();
+        const weightBuffer = await weightData.arrayBuffer();
+
+        fs.writeFileSync(path.join(saveDir, 'model.json'), Buffer.from(jsonBuffer));
+        fs.writeFileSync(path.join(saveDir, 'weights.bin'), Buffer.from(weightBuffer));
+
+        console.log("✅ [ML] Modelo descargado y actualizado desde la Nube.");
+        return true;
+
+    } catch (e) {
+        console.warn("⚠️ [ML] No se pudo descargar modelo de la nube (usando local si existe):", e);
+        return false;
+    }
+}
+
 export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandles?: any[]) {
     try {
-        // Normalización de Símbolo (Frontend envía 'BTC', Binance requiere 'BTCUSDT')
-        if (!symbol.toUpperCase().endsWith('USDT') && !symbol.toUpperCase().endsWith('USD')) {
-            symbol = `${symbol.toUpperCase()}USDT`;
-        }
+        if (!symbol.toUpperCase().endsWith('USDT')) symbol = `${symbol.toUpperCase()}USDT`;
 
         if (!model) {
-            console.log("🧠 Cargando el cerebro (Modelo LSTM)...");
-            // Custom Loader for Pure JS
-            // Custom model loading (bypass tfjs-node file:// issues)
-            try {
-                const modelPath = path.join(process.cwd(), 'cols_brain_v1');
-                const modelFile = path.join(modelPath, 'model.json');
-                const weightsFile = path.join(modelPath, 'weights.bin');
+            console.log("🧠 Cargando el cerebro (Inferencia)...");
 
-                console.log(`🧠 [ML] Loading Brain from: ${modelPath}`);
-                console.log(`    - Model File: ${modelFile} (${fs.existsSync(modelFile) ? 'FOUND' : 'MISSING'})`);
-                console.log(`    - Weights File: ${weightsFile} (${fs.existsSync(weightsFile) ? 'FOUND' : 'MISSING'})`);
+            // PATHS
+            const modelPath = path.join(__dirname, 'temp_model'); // Usamos misma carpeta que train
+            const modelFile = path.join(modelPath, 'model.json');
+            const weightsFile = path.join(modelPath, 'weights.bin');
 
-                if (!fs.existsSync(modelFile) || !fs.existsSync(weightsFile)) {
-                    console.error("❌ [ML] Model files missing. Cannot load brain.");
-                    return null;
-                }
+            // INTENTO DE DESCARGA CLOUD (Sincronización al inicio)
+            // Solo descargamos si no existe o forzamos? 
+            // Por simplicidad, intentamos descargar si no está en memoria.
+            await downloadModelFromCloud(modelPath);
 
-                const modelJson = JSON.parse(fs.readFileSync(modelFile, 'utf8'));
-                const weightsBuffer = fs.readFileSync(weightsFile);
-
-                // Reconstruct IOHandler
-                const ioHandler: tf.IOHandler = {
-                    load: async () => {
-                        return {
-                            modelTopology: modelJson.modelTopology,
-                            weightSpecs: modelJson.weightsManifest[0].weights,
-                            weightData: weightsBuffer.buffer.slice(weightsBuffer.byteOffset, weightsBuffer.byteOffset + weightsBuffer.byteLength)
-                        };
-                    }
-                };
-
-                model = await tf.loadLayersModel(ioHandler);
-                console.log("✅ Cerebro Cargado (Modo Manual)");
-            } catch (loadErr) {
-                console.error("Failed to load model from disk:", loadErr);
+            if (!fs.existsSync(modelFile) || !fs.existsSync(weightsFile)) {
+                console.error("❌ [ML] Model files missing even after cloud sync attempt.");
+                return null;
             }
+
+            // CARGA MANUAL (Bypass tfjs-node file:// weirdness)
+            const modelJson = JSON.parse(fs.readFileSync(modelFile, 'utf8'));
+            const weightsBuffer = fs.readFileSync(weightsFile);
+
+            const ioHandler: tf.io.IOHandler = {
+                load: async () => {
+                    return {
+                        modelTopology: modelJson.modelTopology,
+                        weightSpecs: modelJson.weightsManifest[0].weights,
+                        weightData: weightsBuffer.buffer.slice(weightsBuffer.byteOffset, weightsBuffer.byteOffset + weightsBuffer.byteLength)
+                    };
+                }
+            };
+
+            model = await tf.loadLayersModel(ioHandler);
+            console.log("✅ Cerebro Listo para Predicciones.");
         }
 
-        if (!model) {
-            console.warn("⚠️ Modelo no disponible, saltando predicción.");
-            return null;
-        }
+        if (!model) return null;
 
-        // 2. Obtener Datos (Reusar o Fetch)
+        // PIPELINE DE INFERENCIA
         const candles = existingCandles || await fetchRecentCandles(symbol);
         if (candles.length < LOOKBACK + 1) throw new Error("Not enough data");
 
-        // 3. Preprocesar (Feature Engineering EXACTO al de entrenamiento)
+        // Feature Engineering (Debe ser idéntico a train.ts)
         const returns: number[] = [];
         const ranges: number[] = [];
 
@@ -118,33 +142,27 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
             ranges.push(rng);
         }
 
-        // Tomar las últimas 50
         const lastReturns = returns.slice(-LOOKBACK);
         const lastRanges = ranges.slice(-LOOKBACK);
 
-        // Construir Secuencia [1, 50, 2]
         const sequence: number[][] = [];
         for (let j = 0; j < LOOKBACK; j++) {
             sequence.push([lastReturns[j], lastRanges[j]]);
         }
 
-        // Tensor
         const input = tf.tensor3d([sequence], [1, LOOKBACK, 2]);
-
-        // 4. Inferencia
         const predictionTensor = model.predict(input) as tf.Tensor;
         const probabilityData = await predictionTensor.data();
         const probability = probabilityData[0];
 
-        // Cleanup tensors
         input.dispose();
         predictionTensor.dispose();
 
         return {
             symbol,
-            probabilityUp: probability, // 0.0 a 1.0 (Probabilidad de Subida)
-            signal: probability > 0.6 ? 'BULLISH' : probability < 0.4 ? 'BEARISH' : 'NEUTRAL',
-            confidence: Math.abs(probability - 0.5) * 2, // 0 a 1
+            probabilityUp: probability,
+            signal: probability > 0.55 ? 'BULLISH' : probability < 0.45 ? 'BEARISH' : 'NEUTRAL', // Tightened threshold
+            confidence: Math.abs(probability - 0.5) * 2,
             timestamp: Date.now()
         };
 
