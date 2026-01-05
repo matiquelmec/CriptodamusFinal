@@ -175,7 +175,7 @@ scannerService.start();
 app.post('/api/admin/retrain', (req, res) => {
     // Basic protection (TODO: Add proper Auth Middleware)
     const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET && secret !== 'criptodamus_god_mode') {
+    if (secret !== process.env.ADMIN_SECRET) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
 

@@ -8,9 +8,13 @@ import axios from 'axios';
 
 const router = express.Router();
 
-// Configuración MercadoPago (reemplazar con credenciales reales)
-const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || 'TEST-YOUR-ACCESS-TOKEN';
+// Configuración MercadoPago
+const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || (process.env.NODE_ENV === 'production' ? '' : 'TEST-YOUR-ACCESS-TOKEN');
 // const MP_PUBLIC_KEY = process.env.MP_PUBLIC_KEY || 'TEST-YOUR-PUBLIC-KEY';
+
+if (process.env.NODE_ENV === 'production' && !MP_ACCESS_TOKEN) {
+    console.warn("⚠️ WARNING: MP_ACCESS_TOKEN not set in production. Donation features may fail.");
+}
 
 interface DonationRequest {
     amount: number;
