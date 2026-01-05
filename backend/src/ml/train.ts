@@ -1,5 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
-import '@tensorflow/tfjs-node'; // Enable C++ Backend
+// import '@tensorflow/tfjs-node'; // Enable C++ Backend (Disabled for Windows Compatibility)
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -199,7 +199,5 @@ export async function trainModel() {
     }
 }
 
-// Permitir ejecución manual si se llama directamente: node train.js
-if (import.meta.url === `file://${process.argv[1]}`) {
-    trainModel();
-}
+// Permitir ejecución manual y por scheduler
+trainModel();

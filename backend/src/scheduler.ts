@@ -17,7 +17,35 @@ export function initScheduler() {
         runTrainingJob();
     });
 
-    console.log('   ✅ Job registrado: Weekly AI Retraining (Domingos 00:00 UTC)');
+    // Job: Ingestión de Datos Semanal (Sábado 23:00 UTC) - Preparación para entreno
+    cron.schedule('0 23 * * 6', () => {
+        console.log('⏰ [Scheduler] Ejecutando Tarea Programada: Ingestión de Datos...');
+        runIngestionJob();
+    });
+
+    console.log('   ✅ Job registrado: Weekly Data Ingestion (Sábados 23:00 UTC)');
+}
+
+export function runIngestionJob() {
+    const ingestScript = path.join(__dirname, 'ml', 'ingest.ts');
+    console.log(`🚀 [Scheduler] Spawning Ingestion Process: ${ingestScript}`);
+
+    const isTs = __filename.endsWith('.ts');
+    const child = fork(ingestScript, [], {
+        execArgv: isTs ? ['--import', 'tsx'] : []
+    });
+
+    child.on('message', (msg) => {
+        console.log(`[Data Ingest]:`, msg);
+    });
+
+    child.on('exit', (code) => {
+        if (code === 0) {
+            console.log('✅ [Scheduler] Ingestión Finalizada Exitosamente.');
+        } else {
+            console.error(`❌ [Scheduler] Ingestión falló con código ${code}`);
+        }
+    });
 }
 
 export function runTrainingJob() {
@@ -27,7 +55,13 @@ export function runTrainingJob() {
 
     console.log(`🚀 [Scheduler] Spawning Training Process: ${trainingScript}`);
 
-    const child = fork(trainingScript);
+    // Detectamos si estamos corriendo con tsx (ts-node environment)
+    const isTs = __filename.endsWith('.ts');
+
+    // Si es TS, necesitamos registrar el loader 'tsx' o 'ts-node' en el proceso hijo
+    const child = fork(trainingScript, [], {
+        execArgv: isTs ? ['--import', 'tsx'] : []
+    });
 
     child.on('message', (msg) => {
         console.log(`[AI Trainer]:`, msg);

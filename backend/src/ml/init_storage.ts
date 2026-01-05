@@ -37,9 +37,8 @@ async function initStorage() {
         if (bucketError.message.includes('already exists')) {
             console.log(`✅ Bucket '${BUCKET_NAME}' ya existe.`);
         } else {
-            console.error(`❌ Error creando bucket: ${bucketError.message}`);
-            console.warn("⚠️ Es probable que necesites crear el bucket 'models' MANUALMENTE en el Dashboard de Supabase.");
-            return;
+            console.log(`ℹ️ Mensaje de Supabase: ${bucketError.message}`);
+            console.log("⚠️ Continuando con la subida de archivos (asumiendo que el bucket existe)...");
         }
     } else {
         console.log(`✅ Bucket '${BUCKET_NAME}' creado exitosamente.`);
