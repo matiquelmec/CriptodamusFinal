@@ -21,6 +21,33 @@ class ScannerService extends EventEmitter {
         this.opportunities = [];
     }
 
+
+
+    /**
+     * Helper: Verify and Log Data Freshness from Supabase
+     */
+    private async checkDataIntegrity() {
+        try {
+            const { createClient } = await import('@supabase/supabase-js');
+            const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
+
+            const { data, error } = await supabase
+                .from('market_candles')
+                .select('timestamp')
+                .eq('symbol', 'BTCUSDT')
+                .order('timestamp', { ascending: false })
+                .limit(1);
+
+            if (data && data.length > 0) {
+                console.log(`📊 [Data Check] Última vela en BD (Corteza Cerebral): ${data[0].timestamp}`);
+            } else {
+                console.warn("⚠️ [Data Check] No se encontraron velas en la BD.");
+            }
+        } catch (e) {
+            console.error("⚠️ [Data Check] Error verificando integridad de datos.", e);
+        }
+    }
+
     /**
      * Start the autonomous scanning loops, aligned with 15m candles
      */
@@ -28,6 +55,9 @@ class ScannerService extends EventEmitter {
         if (this.mainScanInterval) return; // Already running logic check (though we use timeout now)
 
         console.log("🚀 [ScannerService] Starting Autonomous Market Scanner (Synced to 15m Candles)...");
+
+        // 0. Verify Data Integrity (Log latest candle to console for user peace of mind)
+        this.checkDataIntegrity();
 
         // 1. Initial Scan (Immediate) - Per user requirement
         this.runFullScan();
