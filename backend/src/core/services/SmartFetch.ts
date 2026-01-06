@@ -65,6 +65,13 @@ export class SmartFetch {
 
             return response.data;
         } catch (error: any) {
+            // 2.5 Geo-Block Evasion (451) -> Switch to Binance US
+            if (error.response?.status === 451 && url.includes('api.binance.com')) {
+                const newUrl = url.replace('api.binance.com', 'api.binance.us');
+                console.warn(`[SmartFetch] 🌍 Geo-Blocked (451). Rerouting to Binance US: ${newUrl}`);
+                return this.executeRequest<T>(newUrl, config, retriesLeft);
+            }
+
             // 3. Retry Logic
             const shouldRetry = this.isRetryableError(error) && retriesLeft > 0;
 
