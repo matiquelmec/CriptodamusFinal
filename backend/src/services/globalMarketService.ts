@@ -61,8 +61,8 @@ export const fetchGlobalMarketData = async (): Promise<GlobalMarketData> => {
         lastFetch = now;
         return cache;
 
-    } catch (error) {
-        console.error('[GlobalService] Critical Error:', error);
+    } catch (error: any) {
+        console.error('[GlobalService] Critical Error:', error.message || error);
         if (cache) return cache;
         return {
             btcDominance: 55,
