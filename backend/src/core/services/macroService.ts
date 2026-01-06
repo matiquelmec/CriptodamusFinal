@@ -28,7 +28,8 @@ export interface BTCDominanceData {
 }
 
 export interface MacroContext {
-    btcRegime: BTCRegimeAnalysis;
+    btcRegime: BTCRegimeAnalysis; // Daily
+    btcWeeklyRegime: BTCRegimeAnalysis; // Weekly (NEW)
     btcDominance: BTCDominanceData;
     usdtDominance: USDTDominanceData;
     timestamp: number;
@@ -72,14 +73,15 @@ const fetchWithTimeout = async (url: string, timeout = 4000): Promise<Response> 
 // ============================================================================
 
 /**
- * Analiza el régimen de mercado de BTC usando EMAs en timeframe diario
+ * Analiza el régimen de mercado de BTC usando EMAs en el timeframe solicitado
+ * @param interval Timeframe a analizar ('1d', '1w'). Default: '1d'
  * @returns Análisis completo del régimen con razonamiento
  */
-async function analyzeBTCRegime(): Promise<BTCRegimeAnalysis> {
+async function analyzeBTCRegime(interval: string = '1d'): Promise<BTCRegimeAnalysis> {
     try {
-        // Obtener velas diarias de BTC (últimos 200 días para EMA200)
+        // Parametrizamos el intervalo en la URL
         const res = await fetchWithTimeout(
-            'https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=200',
+            `https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=200`,
             5000
         );
 
@@ -99,7 +101,7 @@ async function analyzeBTCRegime(): Promise<BTCRegimeAnalysis> {
         const atrPercent = (atr / currentPrice) * 100;
 
         let volatilityStatus: 'LOW' | 'NORMAL' | 'HIGH' = 'NORMAL';
-        if (atrPercent > 4.5) volatilityStatus = 'HIGH'; // >4.5% movimiento diario promedio es alto
+        if (atrPercent > 4.5) volatilityStatus = 'HIGH'; // >4.5% movimiento promedio es alto
         else if (atrPercent < 1.5) volatilityStatus = 'LOW';
 
         // Lógica de régimen
@@ -112,27 +114,29 @@ async function analyzeBTCRegime(): Promise<BTCRegimeAnalysis> {
         const goldenCross = ema50 > ema200;
         const deathCross = ema50 < ema200;
 
+        const tfLabel = interval === '1d' ? 'Diario' : 'Semanal';
+
         // Determinar régimen con lógica robusta y educativa
         if (goldenCross && priceAboveEMA50 && priceAboveEMA200) {
             regime = 'BULL';
             strength = 85;
-            reasoning = '🟢 Alcista (Diario): Precio sobre EMAs 50 y 200. "Golden Cross" activo (La media de 50 días cruzó arriba de la de 200), indicando que el momentum de corto plazo supera al histórico.';
+            reasoning = `🟢 Alcista (${tfLabel}): Precio sobre EMAs 50 y 200. Golden Cross activo, momentum fuerte.`;
         } else if (deathCross && !priceAboveEMA50 && !priceAboveEMA200) {
             regime = 'BEAR';
             strength = 85;
-            reasoning = '🔴 Bajista (Diario): Precio bajo EMAs 50 y 200. "Death Cross" activo (La media de 50 días cruzó abajo de la de 200), señalando debilidad estructural a largo plazo.';
+            reasoning = `🔴 Bajista (${tfLabel}): Precio bajo EMAs 50 y 200. Death Cross activo, debilidad estructural.`;
         } else if (priceAboveEMA200 && !goldenCross) {
             regime = 'BULL';
             strength = 65;
-            reasoning = '🟡 Alcista Débil (Diario): Precio sobre la EMA de 200 días (Soporte Mayor), pero sin Golden Cross. El mercado es resiliente pero le falta momentum explosivo.';
+            reasoning = `🟡 Alcista Débil (${tfLabel}): Precio sobre EMA 200 (Soporte Mayor), pero sin Golden Cross. Resiliente.`;
         } else if (!priceAboveEMA200 && !deathCross) {
             regime = 'BEAR';
             strength = 65;
-            reasoning = '🟠 Bajista Débil (Diario): Precio bajo la EMA de 200 días (Resistencia Mayor), pero sin Death Cross. Peligro de caída mayor si no recupera pronto.';
+            reasoning = `🟠 Bajista Débil (${tfLabel}): Precio bajo EMA 200 (Resistencia Mayor), sin Death Cross. Peligro.`;
         } else {
             regime = 'RANGE';
             strength = 50;
-            reasoning = '⚪ Rango / Indecisión (Diario): El precio está atrapado entre las EMAs 50 y 200. El mercado busca dirección; operar con cautela (esperar ruptura).';
+            reasoning = `⚪ Rango / Indecisión (${tfLabel}): Precio entre EMAs. Esperar ruptura.`;
         }
 
         return {
@@ -147,7 +151,7 @@ async function analyzeBTCRegime(): Promise<BTCRegimeAnalysis> {
         };
 
     } catch (error) {
-        console.warn('[MacroService] BTC Regime analysis failed:', error);
+        console.warn(`[MacroService] BTC Regime (${interval}) analysis failed:`, error);
         // Fallback: Régimen neutral para no afectar el sistema
         return {
             regime: 'RANGE',
@@ -217,14 +221,16 @@ export async function getMacroContext(): Promise<MacroContext> {
     }
 
     // Fetch paralelo de ambos datos para optimizar latencia
-    const [btcRegime, btcDominance, usdtDominance] = await Promise.all([
-        analyzeBTCRegime(),
+    const [btcRegime, btcWeeklyRegime, btcDominance, usdtDominance] = await Promise.all([
+        analyzeBTCRegime('1d'),
+        analyzeBTCRegime('1w'),
         getBTCDominance(),
         getUSDTDominance()
     ]);
 
     const context: MacroContext = {
         btcRegime,
+        btcWeeklyRegime,
         btcDominance,
         usdtDominance,
         timestamp: now,
@@ -246,7 +252,7 @@ export async function getMacroContext(): Promise<MacroContext> {
  * @returns String formateado con información educativa y análisis de condiciones especiales
  */
 export function formatMacroForAI(macro: MacroContext): string {
-    const regimeInfo = `RÉGIMEN BTC (Diario): ${macro.btcRegime.regime} (${macro.btcRegime.strength}% Fuerza). ${macro.btcRegime.reasoning}`;
+    const regimeInfo = `RÉGIMEN BTC (Semanal): ${macro.btcWeeklyRegime.regime} | (Diario): ${macro.btcRegime.regime} (${macro.btcRegime.strength}% Fuerza). ${macro.btcRegime.reasoning}`;
 
     let volatilityNote = `VOLATILIDAD: ${macro.btcRegime.volatilityStatus} (ATR: ${macro.btcRegime.atr.toFixed(0)})`;
     if (macro.btcRegime.volatilityStatus === 'HIGH' && macro.btcRegime.regime === 'RANGE') {

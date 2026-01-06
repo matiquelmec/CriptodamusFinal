@@ -128,32 +128,47 @@ class ScannerService extends EventEmitter {
         const startTime = Date.now();
 
         try {
-            console.log(`🔍 [ScannerService] Executing Full Scan at ${new Date().toISOString()}...`);
+            console.log(`🔍 [ScannerService] Executing DUAL-CORE Scan at ${new Date().toISOString()}...`);
 
-            // 1. Run Core Scanner Logic
-            // We use 'SWING_INSTITUTIONAL' as the baseline for the 24/7 backend 
-            // as it covers the most robust signals.
-            const results = await scanMarketOpportunities('SWING_INSTITUTIONAL');
+            // DUAL-CORE SCANNING: Parallel Execution
+            // 1. Core 1: Macro Swing (4H) - For Trends, Ichimoku, SMC
+            // 2. Core 2: Micro Scalp (15m) - For Volatility, Squeezes, Memes
 
-            // 2. Update Cache
-            this.opportunities = results;
+            const [swingResults, scalpResults] = await Promise.all([
+                scanMarketOpportunities('SWING_INSTITUTIONAL'),
+                scanMarketOpportunities('SCALP_AGRESSIVE')
+            ]);
+
+            console.log(`📊 [Scanner] Raw Results - Swing (4H): ${swingResults.length} | Scalp (15m): ${scalpResults.length}`);
+
+            // 3. Merge & Deduplicate
+            // If a coin appears in both, usually we keep both if strategies differ. 
+            // If identical strategy/signal, we prioritize the higher score.
+            // For simplicity in UI, we just push all distinct opportunities.
+            const allResults = [...swingResults, ...scalpResults];
+
+            // Deduplicate by ID (Symbol + Strategy) to avoid react key issues if any overlap occurs
+            const uniqueResults = Array.from(new Map(allResults.map(item => [item.id, item])).values());
+
+            // 4. Update Cache
+            this.opportunities = uniqueResults;
             this.lastScanTime = Date.now();
 
-            // 3. Broadcast Results
-            if (results.length > 0) {
-                console.log(`✅ [ScannerService] Found ${results.length} opportunities. Broadcasting...`);
-                this.emit('scan_complete', results);
+            // 5. Broadcast Results
+            if (uniqueResults.length > 0) {
+                console.log(`✅ [ScannerService] Broadcast: ${uniqueResults.length} opportunities (Merged).`);
+                this.emit('scan_complete', uniqueResults);
 
                 // 🚀 TELEGRAM NOTIFICATION HOOK
-                telegramService.broadcastSignals(results).catch(err => console.error("[Scanner] Telegram Error:", err));
+                telegramService.broadcastSignals(uniqueResults).catch(err => console.error("[Scanner] Telegram Error:", err));
 
-                // Also emit a specific event for high quality setups
-                const goldenTickets = results.filter(o => o.confidenceScore >= 80);
+                // Golden Tickets (High Confidence)
+                const goldenTickets = uniqueResults.filter(o => o.confidenceScore >= 80);
                 if (goldenTickets.length > 0) {
                     this.emit('golden_ticket', goldenTickets);
                 }
             } else {
-                console.log("ℹ️ [ScannerService] Scan complete. No opportunities found matching strict criteria.");
+                console.log("ℹ️ [ScannerService] Scan complete. Market is quiet (0 signals found).");
             }
 
         } catch (error) {
@@ -162,7 +177,7 @@ class ScannerService extends EventEmitter {
         } finally {
             this.isScanning = false;
             const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-            console.log(`⏱️ [ScannerService] Scan finished in ${duration}s`);
+            console.log(`⏱️ [ScannerService] Dual-Core Scan finished in ${duration}s`);
         }
     }
 

@@ -41,7 +41,7 @@ export const TradingConfig = {
 
     // --- SCORING MATRIX ---
     scoring: {
-        min_score_entry: 55, // ADJUSTED: Tuned down from 65 for ranging conditions
+        min_score_entry: 60, // ADJUSTED: Tuned for Quality > Quantity
         god_mode_threshold: 90,
         weights: {
             // Trend Following
@@ -51,48 +51,50 @@ export const TradingConfig = {
             // Momentum
             rsi_oversold: 10,
             rsi_overbought: 10,
-            rsi_divergence: 20, // High value signal
+            rsi_divergence: 20,
 
-            // Volume / Institutional
-            volume_spike: 10,
-            order_block_retest: 15,
-            liquidation_flutter: 10,
+            // Volume / Institutional (BOOSTED)
+            volume_spike: 20, // Was 10
+            order_block_retest: 20, // Was 15
+            liquidation_flutter: 20, // Was 10
+            cvd_divergence_boost: 25, // NEW: Smart Money Footprint
+            ml_confidence_max: 30, // NEW: Centralized ML Boost Limit
 
             // Patterns
             chart_pattern_breakout: 15,
-            golden_ticket_pattern: 25, // Instant high conviction
+            golden_ticket_pattern: 25,
 
             // Strategic Overrides
-            freeze_protocol_boost: 25 // Centralized Weight for Freeze
+            freeze_protocol_boost: 25
         },
-        // NEW: Advisor Specific Weights (0-10 Scale)
+        // NEW: Advisor Specific Weights (Normalized to Scoring Impact)
         advisor: {
-            hidden_divergence: 5, // Holy Grail
-            sfp_sweep: 4,         // High Prob
-            order_block_retest: 2.5,
-            volume_absorption: 4,
-            fractal_alignment: 3,
-            z_score_extreme: 4,
-            pinball_setup: 3.5,
-            // NEW CENTRALIZED WEIGHTS (Audit Remediation)
-            trend_ema200: 2,
-            trend_slope_boost: 1,
-            trend_ema_cross: 1,
-            vwap_position: 1.5,
-            momentum_macd: 1.5,
-            momentum_rsi: 1,
-            stoch_cross_extreme: 2,
-            bollinger_zone: 1,
-            contrarian_sentiment: 3, // Euphoria/Capitulation
-            liquidation_cascade: 4,
-            fvg_proximity: 2,
-            value_area_deviation: 1.5,
-            harmonic_pattern: 4,
-            rsi_trendline_break: 3,
-            funding_rate_extreme: 3,
-            coinbase_premium: 4, // Institutional Trust
-            ttm_squeeze_bias: 2,
-            fractal_tie_breaker: 3
+            hidden_divergence: 15, // Was 5
+            sfp_sweep: 20,         // Was 4 (Institutional Signal)
+            order_block_retest: 15, // Was 2.5
+            volume_absorption: 20, // Was 4
+            fractal_alignment: 10, // Was 3
+            z_score_extreme: 20, // Was 4 (Mean Reversion Power)
+            pinball_setup: 15, // Was 3.5
+            // NEW CENTRALIZED WEIGHTS
+            trend_ema200: 10,
+            trend_slope_boost: 5,
+            trend_ema_cross: 5,
+            vwap_position: 10,
+            momentum_macd: 5,
+            momentum_rsi: 5,
+            stoch_cross_extreme: 10,
+            bollinger_zone: 5,
+            contrarian_sentiment: 15,
+            liquidation_cascade: 20, // Was 4
+            fvg_proximity: 10,
+            value_area_deviation: 10,
+            harmonic_pattern: 20, // Was 4
+            rsi_trendline_break: 15,
+            funding_rate_extreme: 15,
+            coinbase_premium: 20, // Was 4 (Institutional Trust)
+            ttm_squeeze_bias: 10,
+            fractal_tie_breaker: 10
         }
     },
     // NEW: Strategy Dynamic Weights (Regime Matrix)

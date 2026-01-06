@@ -34,7 +34,9 @@ export const analyzeSwingSignal = (
 
     const ema50 = calculateEMA(prices, 50);
     const ema200 = calculateEMA(prices, 200);
-    const isBullishTrend = ema50 > ema200;
+    // Hardened Trend Logic: Price > EMA200 dictates structure (Recovery/Bull), Cross is secondary confirmation.
+    // If we only wait for Cross, we miss V-Shapes.
+    const isBullishTrend = (ema50 > ema200) || (currentPrice > ema200);
 
     // CHECK FIBONACCI PROXIMITY (Golden Pocket)
     // fibs.level0_618 is the Golden Pocket level

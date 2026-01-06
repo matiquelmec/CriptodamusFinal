@@ -1,5 +1,4 @@
-
-import fetch from 'node-fetch';
+import { SmartFetch } from '../core/services/SmartFetch';
 
 export interface GlobalMarketData {
     btcDominance: number;
@@ -20,55 +19,36 @@ export const fetchGlobalMarketData = async (): Promise<GlobalMarketData> => {
     }
 
     try {
-        // 1. Fetch Dominance from CoinGecko (No Key Required, strict rate limits but ok for server cache 5m)
-        // Global Endpoint: https://api.coingecko.com/api/v3/global
-        let btcD = 55.0; // Fallback
-        let usdtD = 5.0; // Fallback
+        // 1. Fetch Dominance from CoinGecko using SmartFetch
+        let btcD = 55.0;
+        let usdtD = 5.0;
 
         try {
-            const cgRes = await fetch('https://api.coingecko.com/api/v3/global');
-            if (cgRes.ok) {
-                const cgData: any = await cgRes.json();
-                if (cgData.data && cgData.data.market_cap_percentage) {
-                    btcD = cgData.data.market_cap_percentage.btc || 55.0;
-                    usdtD = cgData.data.market_cap_percentage.usdt || 5.0;
-                }
-            } else {
-                console.warn('[GlobalService] CoinGecko API error:', cgRes.status);
+            const cgData = await SmartFetch.get<any>('https://api.coingecko.com/api/v3/global');
+            if (cgData.data && cgData.data.market_cap_percentage) {
+                btcD = cgData.data.market_cap_percentage.btc || 55.0;
+                usdtD = cgData.data.market_cap_percentage.usdt || 5.0;
             }
         } catch (e) {
-            console.warn('[GlobalService] CoinGecko fetch failed:', e);
+            console.warn('[GlobalService] CoinGecko fetch failed (handled by SmartFetch):', e instanceof Error ? e.message : e);
         }
 
-        // 2. Fetch Gold Price (PAXG/USDT from Binance API) - Proxy for XAU
-        let goldPrice = 4300; // Updated fallback to match current regime
+        // 2. Fetch Gold Price (PAXG/USDT)
+        let goldPrice = 4300;
         try {
-            // Use production API instead of testnet (.vision)
-            const binanceRes = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT');
-            if (binanceRes.ok) {
-                const bData: any = await binanceRes.json();
-                goldPrice = parseFloat(bData.price);
-            }
+            const bData = await SmartFetch.get<any>('https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT');
+            goldPrice = parseFloat(bData.price);
         } catch (e) {
-            console.warn('[GlobalService] Binance Gold Proxy fetch failed:', e);
+            console.warn('[GlobalService] Gold Proxy fetch failed');
         }
 
-        // 3. Synthetic DXY (Dollar Strength)
-        // Real DXY API is paid. We verify "Dollar Strength" inversely via EUR/USDT direction and USDT.D strength.
-        // For this version, we will return a "Derived DXY" based on USDT.D which correlates highly.
-        // Formula approx: DXY ~= USDT.D * 20 (Rough heuristic for correlation logic) or just return 0 to indicate "use synthetic logic"
-        // Better approach: Get EURUSDT from Binance and invert.
+        // 3. Synthetic DXY
         let eurUsdt = 1.1;
         try {
-            const eurRes = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT');
-            if (eurRes.ok) {
-                const eurData: any = await eurRes.json();
-                eurUsdt = parseFloat(eurData.price);
-            }
+            const eurData = await SmartFetch.get<any>('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT');
+            eurUsdt = parseFloat(eurData.price);
         } catch (e) { }
 
-        // Inverse EUR is a crude DXY proxy directionally
-        // Consistent with high Gold prices and a weak dollar scenario (e.g. DXY 90-95)
         const dxyProxy = (1 / eurUsdt) * 100;
 
         cache = {
@@ -79,12 +59,10 @@ export const fetchGlobalMarketData = async (): Promise<GlobalMarketData> => {
             timestamp: now
         };
         lastFetch = now;
-
         return cache;
 
     } catch (error) {
-        console.error('[GlobalService] Critical Error fetching global data:', error);
-        // Return stale cache if available, else static failover
+        console.error('[GlobalService] Critical Error:', error);
         if (cache) return cache;
         return {
             btcDominance: 55,

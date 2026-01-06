@@ -25,6 +25,8 @@ import { calculateDCAPlan } from '../dcaCalculator';
 import { fetchCryptoData, fetchCandles } from '../api/binanceApi';
 import { getMarketRisk, calculateFundamentalTier, calculateKellySize, getVolatilityAdjustedLeverage, calculatePortfolioCorrelation } from './riskEngine';
 import { fetchCryptoSentiment } from '../../../services/newsService'; // NEW: Sentiment Engine
+import { estimateLiquidationClusters } from '../../../services/engine/liquidationEngine'; // NEW: Liquidation Engine
+import { fetchGlobalMarketData } from '../../../services/globalMarketService'; // NEW: Global Macro Engine
 
 import { calculateEMA } from '../mathUtils';
 import { predictNextMove } from '../../../ml/inference'; // NEW: Brain Import
@@ -144,20 +146,33 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             // Apply Technical Context (ADX Range Filter) - HARDENING
             totalScore = applyTechnicalContext(totalScore, indicators, strategyResult.primaryStrategy?.id);
 
+
             // --- STAGE 4.5: SMART MTF VERIFICATION (Architect Check) ---
             // "The Architect verifies the Macro Structure before demolition"
-            let macroCompass: MacroCompass | undefined;
+            // NEW RULES:
+            // 1. If Signal is SHORT, we ALWAYS verify 4H trend (Safety First).
+            // 2. If Signal is LONG, we verify if score is high enough or strategy requires it.
 
-            // We only check for Freeze Strategy or High Confidence setups to save API calls
-            if (strategyResult.primaryStrategy?.id === 'FREEZE_STRATEGY' || totalScore > 75) {
-                // If we are scanning 15m, check 4H. If scanning 4H, this check is redundant (self-check) or needs 1D.
+            let macroCompass: MacroCompass | undefined;
+            const needsArchitectCheck = signalSide === 'SHORT' || totalScore > 75 || strategyResult.primaryStrategy?.id === 'FREEZE_STRATEGY';
+
+            if (needsArchitectCheck) {
                 if (interval === '15m') {
                     const compassResult = await verifyMacroTrend(coin.id, signalSide);
                     macroCompass = compassResult;
 
                     if (!compassResult.aligned) {
-                        console.log(`[Smart MTF] Discarding ${coin.symbol} - Macro 4H Mismatch (Architect Veto)`);
-                        return; // DISCARD: Counter-trend to macro
+                        // Strict veto for Shorts against 4H Trend
+                        if (signalSide === 'SHORT') {
+                            console.log(`[Smart MTF] VETO ${coin.symbol}: Short signal against 4H Trend (Price > EMA200). Logic: Don't short uptrends.`);
+                            return;
+                        }
+
+                        // For Longs, we might tolerate it if it's a "Buy the Dip" logic (Price < EMA200 but oversold), 
+                        // but generally we want alignment.
+                        console.log(`[Smart MTF] Warning ${coin.symbol} - Macro 4H Mismatch (Architect Veto)`);
+                        // return; // We allow Longs to survive if score is huge (reversal), but penalized elsewhere
+                        totalScore -= 20; // Heavy penalty instead of hard block for Longs (catching falling knives is risky but profitable)
                     }
                 }
             }
@@ -172,15 +187,23 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     mlResult = await predictNextMove(coin.symbol, candles);
                     if (mlResult) {
                         // PREDICTION BOOST/PENALTY
-                        // If ML confirms Trend (Confluence) -> Boost
-                        if (mlResult.signal === signalSide) {
-                            const boost = Math.round(mlResult.confidence * 10); // 0-10 points
-                            totalScore += boost;
-                            reasoning.push(`🧠 IA Confluence: ${(mlResult.probabilityUp * 100).toFixed(2)}% probability`);
-                        } else if (mlResult.signal !== 'NEUTRAL' && mlResult.signal !== signalSide) {
-                            // ML contradicts Strategy (Divergence)
-                            totalScore -= 15; // Penalty
-                            reasoning.push(`🧠 IA Divergence: Brain expects ${mlResult.signal}`);
+                        // NEW: ML Safety Check - Ignore ML Short if Daily Structure is Bullish
+                        const dailyBullish = macroContext?.btcRegime.regime === 'BULL' || (macroContext?.btcRegime.currentPrice || 0) > (macroContext?.btcRegime.ema200 || 0);
+
+                        if (mlResult.signal === 'BEARISH' && dailyBullish && signalSide === 'SHORT') {
+                            // ML says Short, Daily says Bull -> Ignore ML (Noise)
+                            reasoning.push(`🧠 IA Ignored: Bearish prediction clashes with Daily Bull Trend`);
+                        } else {
+                            // Normal Logic
+                            if (mlResult.signal === signalSide) {
+                                const boost = Math.round(mlResult.confidence * 30); // 0-30 points (Scaled for 75k candle brain)
+                                totalScore += boost;
+                                reasoning.push(`🧠 IA Confluence: ${(mlResult.probabilityUp * 100).toFixed(2)}% probability`);
+                            } else if (mlResult.signal !== 'NEUTRAL' && mlResult.signal !== signalSide) {
+                                // ML contradicts Strategy (Divergence)
+                                totalScore -= 15; // Penalty
+                                reasoning.push(`🧠 IA Divergence: Brain expects ${mlResult.signal}`);
+                            }
                         }
                     }
                 }
@@ -196,10 +219,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     if (volumeAnalysis) {
                         // 1. Coinbase Premium Signal
                         if (volumeAnalysis.coinbasePremium.signal === 'INSTITUTIONAL_BUY' && signalSide === 'LONG') {
-                            totalScore += 15;
+                            totalScore += TradingConfig.scoring.advisor.coinbase_premium;
                             reasoning.push(`🏦 Premium: Institutional Buying Detected (+${volumeAnalysis.coinbasePremium.gapPercent.toFixed(3)}%)`);
                         } else if (volumeAnalysis.coinbasePremium.signal === 'INSTITUTIONAL_SELL' && signalSide === 'SHORT') {
-                            totalScore += 15;
+                            totalScore += TradingConfig.scoring.advisor.coinbase_premium;
                             reasoning.push(`🏦 Premium: Institutional Selling Detected (${volumeAnalysis.coinbasePremium.gapPercent.toFixed(3)}%)`);
                         }
 
@@ -231,11 +254,13 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             // --- STAGE 4.7: ORDER FLOW VERIFICATION (Truth Layer) ---
             if (indicators.cvdDivergence && indicators.cvdDivergence !== 'NONE') {
+                const cvdBoost = TradingConfig.scoring.weights.cvd_divergence_boost;
+
                 if (indicators.cvdDivergence === 'BULLISH' && signalSide === 'LONG') {
-                    totalScore += 20; // Massive Boost: Buying into the dip (Absorption)
+                    totalScore += cvdBoost; // Massive Boost: Buying into the dip (Absorption)
                     reasoning.push("🌊 CVD Divergence: Institutional Absorption Detected");
                 } else if (indicators.cvdDivergence === 'BEARISH' && signalSide === 'SHORT') {
-                    totalScore += 20; // Massive Boost: Selling into the pump (Exhaustion)
+                    totalScore += cvdBoost; // Massive Boost: Selling into the pump (Exhaustion)
                     reasoning.push("🌊 CVD Divergence: Institutional Exhaustion Detected");
                 } else if (
                     (indicators.cvdDivergence === 'BULLISH' && signalSide === 'SHORT') ||
@@ -246,11 +271,96 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
             }
 
-            // --- STAGE 4.8: ADVANCED RISK SIZING (Kelly & Volatility) ---
+            // --- STAGE 4.8: GLOBAL SENTIMENT OVERLAY (The "News" Filter) ---
+            if (globalSentiment) {
+                const sScore = globalSentiment.score; // -1.0 to 1.0
+                const sentimentWeight = TradingConfig.scoring.advisor.contrarian_sentiment;
+
+                // 1. PANIC PROTOCOL (Sentiment < -0.5)
+                if (sScore < -0.5) {
+                    if (signalSide === 'LONG' && (strategyResult.primaryStrategy?.id === 'MEAN_REVERSION' || indicators.rsi < 30)) {
+                        totalScore += sentimentWeight; // Boost for "Buying the Blood"
+                        reasoning.push(`📰 Sentiment: Contrarian Buy in Panic (${sScore.toFixed(2)})`);
+                    } else if (signalSide === 'LONG') {
+                        totalScore -= 10; // Caution: Catching falling knives without reversal logic
+                        reasoning.push(`⚠️ Sentiment: Market in Panic (${sScore.toFixed(2)}) - High Risk`);
+                    }
+                }
+                // 2. EUPHORIA PROTOCOL (Sentiment > 0.5)
+                else if (sScore > 0.5) {
+                    if (signalSide === 'SHORT') {
+                        totalScore += sentimentWeight; // Boost for "Selling the Top"
+                        reasoning.push(`📰 Sentiment: Contrarian Short in Euphoria (${sScore.toFixed(2)})`);
+                    } else if (signalSide === 'LONG') {
+                        totalScore -= 5; // Caution: FOMO Risk
+                        reasoning.push(`⚠️ Sentiment: High Euphoria (${sScore.toFixed(2)}) - FOMO Risk`);
+                    }
+                }
+                // 3. TREND ALIGNMENT (Moderate Sentiment)
+                else {
+                    if ((sScore > 0.2 && signalSide === 'LONG') || (sScore < -0.2 && signalSide === 'SHORT')) {
+                        totalScore += 5; // Small Alignment Boost
+                        reasoning.push(`📰 Sentiment: Aligned with News (${sScore.toFixed(2)})`);
+                    }
+                }
+            }
+
+            // --- STAGE 4.9: ADVANCED RISK SIZING (Kelly & Volatility) ---
             // WinRate approximated from totalScore (e.g. 70 score -> 70% win rate for Kelly)
             const winRate = totalScore / 100;
             const kellySize = calculateKellySize(winRate, 2.5); // Using 2.5 as target RR
             const recommendedLeverage = getVolatilityAdjustedLeverage(indicators.atr, indicators.price, kellySize);
+
+            // --- STAGE 4.10: DORMANT ENGINES ACTIVATION ("God Mode" Integrations) ---
+
+            // A. LIQUIDATION MAGNETS (Hunting the Squeeze)
+            try {
+                // Generate pivots for liquidation estimation
+                const highs = candles.map(c => c.high);
+                const lows = candles.map(c => c.low);
+                const liqClusters = estimateLiquidationClusters(highs, lows, indicators.price);
+
+                if (liqClusters.length > 0) {
+                    const nearestLiq = liqClusters[0]; // Closest cluster
+                    const distPercent = Math.abs((nearestLiq.priceMin - indicators.price) / indicators.price) * 100;
+
+                    if (distPercent < 1.5) { // Within 1.5% range = Magnet Zone
+                        if (nearestLiq.type === 'SHORT_LIQ' && signalSide === 'LONG') {
+                            totalScore += TradingConfig.scoring.weights.liquidation_flutter; // Targeting Shorts
+                            reasoning.push(`🧲 Liq Magnet: Targeting Short Cluster at $${nearestLiq.priceMin.toFixed(2)}`);
+                        } else if (nearestLiq.type === 'LONG_LIQ' && signalSide === 'SHORT') {
+                            totalScore += TradingConfig.scoring.weights.liquidation_flutter; // Targeting Longs
+                            reasoning.push(`🧲 Liq Magnet: Targeting Long Cluster at $${nearestLiq.priceMin.toFixed(2)}`);
+                        }
+                    }
+                }
+            } catch (e) {
+                // Fail silently, engine is supplementary
+            }
+
+            // B. GLOBAL MACRO SHIELD (DXY & Gold Correlation)
+            try {
+                const globalData = await fetchGlobalMarketData();
+
+                // DXY Filter (Strong Dollar = Weak Crypto)
+                if (globalData.dxyIndex > 104 && signalSide === 'LONG') {
+                    totalScore -= 5; // Headwind
+                    reasoning.push(`💵 Macro Headwind: Strong Dollar (DXY ${globalData.dxyIndex.toFixed(1)})`);
+                }
+
+                // Gold Risk-Off Filter
+                if (globalData.goldPrice > 2750 && style === 'MEME_SCALP' && signalSide === 'LONG') {
+                    totalScore -= 10; // Risk-Off Environment
+                    reasoning.push(`🛡️ Macro Risk-Off: Gold Flight detected ($${globalData.goldPrice})`);
+                }
+
+                // BTC Dominance Context
+                if (coin.symbol !== 'BTCUSDT' && globalData.btcDominance > 58 && signalSide === 'LONG') {
+                    // High BTC Dominance sucks liquidity from alts
+                    // moderate penalty unless it's a specific pump
+                    if (totalScore < 80) totalScore -= 5;
+                }
+            } catch (e) { }
 
             // Portfolio Heatmap (Phase 8) 
             // Mocking open positions as empty for now, in live it would pull from active trades
@@ -374,9 +484,18 @@ function applyMacroFilters(
         else if (macro.btcRegime.regime === 'RANGE') adjustedScore *= 0.9;
     }
 
-    // Penalize Shorts in Bull Market
+    // Penalize Shorts in Bull Market (Daily/Weekly) - STRICTER
     if (!isBTC && signalSide === 'SHORT') {
-        if (macro.btcRegime.regime === 'BULL') adjustedScore *= 0.7;
+        const weeklyBullish = macro.btcWeeklyRegime?.regime === 'BULL';
+        const dailyBullish = macro.btcRegime.regime === 'BULL';
+
+        if (weeklyBullish) {
+            adjustedScore -= 30; // Huge penalty for shorting a Weekly Bull Market
+        } else if (dailyBullish) {
+            adjustedScore -= 20;
+        } else if (macro.btcRegime.regime === 'RANGE') {
+            // In range, shorts are okay at resistance, minimal penalty.
+        }
     }
 
     // Liquidity Drain Check
