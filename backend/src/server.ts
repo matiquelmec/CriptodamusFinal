@@ -131,6 +131,18 @@ app.get('/api/v1/market/news', async (req, res) => {
     }
 });
 
+// NEW: Global Macro Endpoint (Restored)
+import { fetchGlobalMarketData } from './services/globalMarketService';
+app.get('/api/macro/global', async (req, res) => {
+    try {
+        const data = await fetchGlobalMarketData();
+        res.json(data);
+    } catch (error) {
+        console.error("Macro Fetch Error:", error);
+        res.status(500).json({ error: 'Failed to fetch global data' });
+    }
+});
+
 
 // Error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
