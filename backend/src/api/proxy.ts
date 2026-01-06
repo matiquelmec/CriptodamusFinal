@@ -6,6 +6,7 @@
 import express, { Request, Response } from 'express';
 import axios from 'axios';
 import NodeCache from 'node-cache';
+import { SmartFetch } from '../core/services/SmartFetch';
 
 const router = express.Router();
 const cache = new NodeCache({ stdTTL: 10 }); // Cache de 10 segundos para proxy
@@ -25,7 +26,8 @@ const ALLOWED_APIS: Record<string, ApiConfig> = {
             '/api/v3/ticker/price',
             '/api/v3/ticker/24hr',
             '/api/v3/klines',
-            '/api/v3/exchangeInfo'
+            '/api/v3/exchangeInfo',
+            '/api/v3/depth'
         ]
     },
     coincap: {
@@ -56,8 +58,7 @@ router.get('/:api/*', async (req: Request, res: Response) => {
         const { api } = req.params;
         const path = '/' + req.params[0];
 
-        // Fix: Use req.query properly or use raw query string (less safe but keeps compat)
-        // In TS, req.query is ParsedQs. We can serialize it.
+        // Fix: Use req.query properly or use raw query string
         const queryString = new URLSearchParams(req.query as any).toString();
 
         // Verificar si la API está permitida
@@ -86,36 +87,23 @@ router.get('/:api/*', async (req: Request, res: Response) => {
             return res.json(cached);
         }
 
-        // Hacer request
-        const response = await axios.get(url, {
-            timeout: 5000,
-            headers: {
-                'User-Agent': 'Criptodamus/1.0'
-            }
-        });
+        // Hacer request via SmartFetch (Blindado)
+        // SmartFetch maneja automáticamente User-Agent, Retries y 451 (Geo-Block)
+        const responseData = await SmartFetch.get<any>(url);
 
         // Guardar en caché
-        cache.set(cacheKey, response.data);
+        cache.set(cacheKey, responseData);
 
         // Añadir headers de caché para el cliente
         res.set('Cache-Control', 'public, max-age=10');
-        res.json(response.data);
+        res.json(responseData);
 
     } catch (error: any) {
-        console.error('Proxy error:', error.message);
-
-        if (error.response) {
-            res.status(error.response.status).json({
-                error: error.response.data || 'External API error',
-                api: req.params.api,
-                path: req.params[0]
-            });
-        } else {
-            res.status(500).json({
-                error: 'Proxy request failed',
-                message: error.message
-            });
-        }
+        console.error('Proxy error:', error.message || error);
+        res.status(500).json({
+            error: 'Proxy request failed',
+            message: error.message || 'Internal Server Error'
+        });
     }
 });
 

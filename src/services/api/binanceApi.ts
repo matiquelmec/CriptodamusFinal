@@ -1,8 +1,12 @@
 import { MarketData, FearAndGreedData } from '../../types';
 import { SmartCache } from './caching/smartCache'; // NEW: Smart Caching Service
 
-// PRIMARY: Binance Vision (CORS friendly for public data)
-const BINANCE_API_BASE = 'https://data-api.binance.vision/api/v3';
+// PRIMARY: Backend Proxy (Shielded from CORS & Geo-Blocks)
+const API_URL = import.meta.env.PROD
+    ? 'https://criptodamusfinal.onrender.com'
+    : 'http://localhost:3001';
+
+const BINANCE_API_BASE = `${API_URL}/api/proxy/binance/api/v3`;
 // Fallback / WebSocket base
 const BINANCE_WS_BASE = 'wss://stream.binance.com:9443/stream?streams=';
 

@@ -37,7 +37,7 @@ export class SmartFetch {
         // Cleanup after completion (success or failure)
         requestPromise.finally(() => {
             this.pendingRequests.delete(dedupKey);
-        });
+        }).catch(() => { }); // Prevent "Unhandled Rejection" from the finally promise chain
 
         return requestPromise;
     }
