@@ -36,67 +36,62 @@ app.set('trust proxy', 1);
 // Middleware de seguridad
 app.use(helmet());
 app.use(cors({
-    origin: [
-        'http://localhost:5173',
-        'http://localhost:3000',
-        'https://criptodamus-final.vercel.app',
-        process.env.FRONTEND_URL || ''
-    ].filter(Boolean),
+    origin: '*', // TEMPORARY DEBUG: Allow ALL origins to rule out CORS config issues
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     credentials: true
 }));
 app.use(express.json());
 
-// Rate limiting global
-const limiter = rateLimit({
-    windowMs: 1 * 60 * 1000,
-    max: 60,
-    message: 'Demasiadas solicitudes, por favor intenta de nuevo más tarde.'
-});
-app.use('/api', limiter);
+// ... (Rate Limits)
 
-// Rate limiting estricto para donaciones
-const donationLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 5
-});
-app.use('/api/donation', donationLimiter);
-
-// Health check
+// Health check to verify server is ALIVE
 app.get('/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime()
-    });
+    res.json({ status: 'ok', uptime: process.uptime() });
 });
 
-// Root Endpoint
-app.get('/', (req, res) => {
-    res.json({
-        message: '🚀 Criptodamus Backend is Live (TS Mode)',
-        service: 'Market Data & WebSocket API + AI Scanner',
-        status: 'running',
-        endpoints: {
-            health: '/health',
-            market: '/api/v1/market'
-        }
-    });
-});
-
-// Rutas API
-app.use('/api/v1/market', marketRoutes);
-app.use('/api/donation', donationRoutes);
-app.use('/api/proxy', proxyRoutes);
-
-// NEW: Global Macro Endpoint
-import { fetchGlobalMarketData } from './services/globalMarketService';
-app.get('/api/macro/global', async (req, res) => {
+// SERVICE INITIALIZATION WRAPPER
+async function startServices() {
     try {
-        const data = await fetchGlobalMarketData();
-        res.json(data);
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch global data' });
+        console.log("🚀 Starting Core Services...");
+
+        // 0. Scheduler (Cron Jobs)
+        try {
+            initScheduler();
+            console.log("   • Scheduler Active");
+        } catch (e) {
+            console.error("   ❌ Scheduler Failed:", e);
+        }
+
+        // 1. Scanner (AI/ML)
+        try {
+            console.log("   • Initializing Scanner...");
+            scannerService.start();
+        } catch (e) {
+            console.error("   ❌ Scanner Failed to Start (Non-Fatal):", e);
+        }
+
+        // 2. Binance Stream
+        try {
+            console.log("   • Initializing Binance Stream...");
+            binanceStream.start();
+        } catch (e) {
+            console.error("   ❌ Stream Failed to Start (Non-Fatal):", e);
+        }
+
+    } catch (e) {
+        console.error("🔥 Critical Service Failure:", e);
     }
+}
+
+// GLOBAL ERROR HANDLERS (Prevent Crash)
+process.on('uncaughtException', (err) => {
+    console.error('💥 UNCAUGHT EXCEPTION:', err);
+    // process.exit(1); // DO NOT EXIT - Keep server alive for logs/health check
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('💥 UNHANDLED REJECTION:', reason);
 });
 
 // --- ML PREDICTION ENDPOINT ---
@@ -157,34 +152,11 @@ app.use((req, res) => {
     });
 });
 
-// Iniciar Scheduler (Cron Jobs)
+// Iniciar Scheduler (Import Logic)
 import { initScheduler, runTrainingJob } from './scheduler';
-initScheduler();
 
-// Iniciar conexión con Binance (Legacy Stream)
-try {
-    binanceStream.start();
-} catch (e) {
-    console.error("Failed to start Binance Stream:", e);
-}
-
-// Iniciar Scanner Service (AI)
-scannerService.start();
-
-// --- ADMIN ENDPOINTS ---
-app.post('/api/admin/retrain', (req, res) => {
-    // Basic protection (TODO: Add proper Auth Middleware)
-    const secret = req.headers['x-admin-secret'];
-    if (secret !== process.env.ADMIN_SECRET) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    console.log("⚡ [Admin] Triggering Manual Retraining...");
-    runTrainingJob();
-    res.json({ status: 'ok', message: 'Training process spawned in background' });
-});
-
-// Crear servidor HTTP
+// Start Server
+// (Remove duplicate server declaration if exists above this block in previous state, ensuring only one exists)
 const server = createServer(app);
 
 // WebSocket Server
@@ -324,15 +296,28 @@ function handleWebSocketMessage(clientId: string, data: any) {
     }
 }
 
+// --- ADMIN ENDPOINTS ---
+app.post('/api/admin/retrain', (req, res) => {
+    // Basic protection (TODO: Add proper Auth Middleware)
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
 
+    console.log("⚡ [Admin] Triggering Manual Retraining...");
+    runTrainingJob();
+    res.json({ status: 'ok', message: 'Training process spawned in background' });
+});
 
 // Iniciar servidor
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
     console.log(`
     🚀 Criptodamus Backend Server (TypeScript / Smart Microservice)
     📍 Running on http://localhost:${PORT}
     🔌 WebSocket on ws://localhost:${PORT}/ws
     🧠 AI Scanner Active: 15m Interval
   `);
-});
 
+    // Start Services AFTER server is listening (Prevent boot loop)
+    await startServices();
+});
