@@ -2,6 +2,7 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import { SmartCache } from '../core/services/api/caching/smartCache';
 import { SmartFetch } from '../core/services/SmartFetch';
+import { fetchRSSFields, fetchRedditPosts, FeedItem } from '../utils/rssUtils';
 
 dotenv.config();
 
@@ -21,112 +22,106 @@ export interface SentimentAnalysis {
     headlineCount: number;
 }
 
-const CRYPTOPANIC_API_KEY = process.env.CRYPTOPANIC_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 export const fetchCryptoSentiment = async (currency: string = 'BTC'): Promise<SentimentAnalysis> => {
     // 1. Check Cache
-    const cacheKey = `sentiment_${currency}`;
+    const cacheKey = `sentiment_hybrid_${currency}`;
     const cached = SmartCache.get<SentimentAnalysis>(cacheKey);
     if (cached) return cached;
 
-    // 2. Fetch Headlines with Resiliency (via SmartFetch)
+    // 2. Fetch Hybrid Data (RSS + Reddit)
     let headlines: string[] = [];
-    if (true || !CRYPTOPANIC_API_KEY) { // FORCE MOCK due to Quota Exceeded
-        console.warn("[NewsService] API Limit Hit/Bypass. Using Mock Data.");
-        headlines = [
-            "Bitcoin stabilizes above key support level",
-            "Market awaits decision from regulators",
-            "Institutional inflow into crypto funds positive for 3rd week"
-        ];
-    } else {
-        const url = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${CRYPTOPANIC_API_KEY}&currencies=${currency}`;
 
-        try {
-            // SmartFetch handles retries, deduplication, and IPv4 agent internally
-            const data = await SmartFetch.get<any>(url);
+    try {
+        const [rssNews, redditPosts] = await Promise.all([
+            fetchRSSFields(),
+            fetchRedditPosts('CryptoCurrency')
+        ]);
 
-            if (data && data.results) {
-                headlines = data.results.map((n: NewsItem) => n.title);
-                console.log(`[SmartFetch] Successfully fetched ${headlines.length} headlines for ${currency}`);
-            }
-        } catch (e: any) {
-            console.error("[NewsService] Failed to fetch news:", e.message);
-            // Fallback to error result if SmartFetch retries exhausted
-            return { score: 0, sentiment: 'NEUTRAL', summary: `Error de conexión: ${e.code || 'UNKNOWN'}`, headlineCount: 0 };
-        }
+        // Combine and filter relevant headlines
+        const combined = [...rssNews, ...redditPosts];
+
+        // Simple keyword filter for specific currency if not BTC (which is general market)
+        const relevant = currency === 'BTC'
+            ? combined
+            : combined.filter(item =>
+                item.title.toLowerCase().includes(currency.toLowerCase()) ||
+                item.content?.toLowerCase().includes(currency.toLowerCase())
+            );
+
+        headlines = relevant.slice(0, 15).map(n => n.title); // Analyze top 15
+        console.log(`[NewsEngine] Analyzed ${headlines.length} items for ${currency} sentiment.`);
+
+    } catch (e) {
+        console.error("[NewsEngine] Failed to aggregate data:", e);
     }
 
     if (headlines.length === 0) {
-        return { score: 0, sentiment: 'NEUTRAL', summary: "No relevant news found", headlineCount: 0 };
-    }
-
-    // 3. Analyze with Gemini or Fallback to Fear & Greed
-    let analysis: SentimentAnalysis;
-
-    // PRIMARY: Try Gemini Analysis of News
-    if (headlines.length > 0 && GEMINI_API_KEY) {
+        // Fallback to fear and greed if absolutely no data (network down)
         try {
-            analysis = await analyzeWithGemini(headlines, currency);
-            return analysis;
-        } catch (e) {
-            console.warn("[NewsService] Gemini Analysis Failed.", e);
+            return await fetchFearAndGreedIndex();
+        } catch {
+            return { score: 0, sentiment: 'NEUTRAL', summary: "Market data unavailable.", headlineCount: 0 };
         }
     }
 
-    // SECONDARY (Real Data Fallback): Fear & Greed Index
-    // If we have no headlines (API Limit) or Gemini failed, use F&G.
-    console.log("[NewsService] Switching to Objective Sentiment (Fear & Greed)...");
-    try {
-        const fng = await fetchFearAndGreedIndex();
-        return fng;
-    } catch (e) {
-        // TERTIARY: Neutral (Last Resort - NO MOCKING)
-        return {
-            score: 0,
-            sentiment: 'NEUTRAL',
-            summary: "Data Unavailable (Real-time feeds offline)",
-            headlineCount: 0
-        };
+    // 3. Analyze with Gemini
+    if (GEMINI_API_KEY) {
+        try {
+            const analysis = await analyzeWithGemini(headlines, currency);
+            // Cache result for 15 minutes
+            SmartCache.set(cacheKey, analysis, 60 * 15);
+            return analysis;
+        } catch (e) {
+            console.warn("[NewsEngine] Gemini Analysis Failed.", e);
+        }
     }
+
+    // Fallback to F&G
+    return await fetchFearAndGreedIndex();
 };
 
 export const fetchMarketNews = async (currency: string = 'BTC'): Promise<NewsItem[]> => {
-    // ... (Keep existing fetchMarketNews implementation, but remove mock fallback if desire, 
-    // strictly speaking user asked for NO SIMULATION in the decision engine. 
-    // The UI might still need something to show, but let's prioritize the engine logic first.)
-
-    // For now, leaving fetchMarketNews as is for UI, but fetchCryptoSentiment is the critical one for the Scanner.
-    // Actually, let's clean up fetchMarketNews mock too to be consistent.
-
-    const cacheKey = `raw_news_${currency}`;
+    const cacheKey = `hybrid_news_${currency}`;
     const cached = SmartCache.get<NewsItem[]>(cacheKey);
     if (cached) return cached;
 
-    if (!CRYPTOPANIC_API_KEY) return [];
-
-    const url = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${CRYPTOPANIC_API_KEY}&currencies=${currency}`;
     try {
-        const data = await SmartFetch.get<any>(url);
-        if (data && data.results && data.results.length > 0) {
-            const results = (data.results as any[]).map(item => ({
-                ...item,
-                url: item.url || `https://cryptopanic.com/news/${item.id}/${item.slug || ''}`,
-                source: item.source || { title: 'CryptoPanic' },
-                currencies: item.currencies || []
-            })) as NewsItem[];
-            SmartCache.set(cacheKey, results, SmartCache.TTL.SHORT);
-            return results;
-        }
-    } catch (e: any) {
-        console.warn(`[NewsService] Error fetching news for ${currency}: ${e.message}`);
-    }
+        const rssNews = await fetchRSSFields();
+        const redditPosts = await fetchRedditPosts('CryptoCurrency');
 
-    // NO MOCK DATA - Return Empty if real data fails
-    return [];
+        // Transform to standard NewsItem format
+        let allItems: NewsItem[] = [...rssNews, ...redditPosts].map((item, index) => ({
+            id: Date.now() + index,
+            title: item.title,
+            published_at: item.pubDate,
+            source: { title: item.source },
+            url: item.link,
+            currencies: [] // We don't have explicit tags from RSS, but that's okay
+        }));
+
+        // Filter
+        if (currency !== 'ALL' && currency !== 'BTC') {
+            allItems = allItems.filter(item =>
+                item.title.toLowerCase().includes(currency.toLowerCase())
+            );
+        }
+
+        // Sort by newest
+        allItems.sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
+
+        // Cache for 5 minutes
+        SmartCache.set(cacheKey, allItems, 300);
+        return allItems;
+
+    } catch (e: any) {
+        console.error(`[NewsEngine] Error fetching news: ${e.message}`);
+        return [];
+    }
 };
 
-// --- REAL DATA SOURCES ---
+// --- HELPERS ---
 
 async function fetchFearAndGreedIndex(): Promise<SentimentAnalysis> {
     try {
@@ -134,18 +129,13 @@ async function fetchFearAndGreedIndex(): Promise<SentimentAnalysis> {
         const data = await SmartFetch.get<any>(url);
 
         if (data && data.data && data.data.length > 0) {
-            const value = parseInt(data.data[0].value); // 0 (Fear) to 100 (Greed)
+            const value = parseInt(data.data[0].value);
             const classification = data.data[0].value_classification;
-
-            // Normalize 0-100 to -1.0 to 1.0
-            // 0 -> -1.0
-            // 50 -> 0.0
-            // 100 -> 1.0
             const normalizedScore = (value - 50) / 50;
 
             let sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
-            if (value > 60) sentiment = 'BULLISH'; // Greed
-            if (value < 40) sentiment = 'BEARISH'; // Fear
+            if (value > 60) sentiment = 'BULLISH';
+            if (value < 40) sentiment = 'BEARISH';
 
             return {
                 score: normalizedScore,
@@ -157,27 +147,26 @@ async function fetchFearAndGreedIndex(): Promise<SentimentAnalysis> {
     } catch (e) {
         console.error("[NewsService] F&G Fetch Failed", e);
     }
-    throw new Error("F&G Unavailable");
+    return { score: 0, sentiment: 'NEUTRAL', summary: "Unavailable", headlineCount: 0 };
 }
 
 async function analyzeWithGemini(headlines: string[], currency: string): Promise<SentimentAnalysis> {
     const prompt = `
     You are an expert crypto market sentiment analyst. 
-    Analyze these headlines for ${currency} and determine the overall market mood/sentiment score from -1.0 (Extreme Bearish/Panic) to +1.0 (Extreme Bullish/Euphoria).
+    Analyze these latest headlines/posts for ${currency} and determine the overall market mood.
     
-    Headlines:
+    Data Source:
     ${headlines.map(h => `- ${h}`).join('\n')}
 
     Return JSON ONLY:
     {
-        "score": number,
+        "score": number, // -1.0 (Panic) to 1.0 (Euphoria)
         "sentiment": "BULLISH" | "BEARISH" | "NEUTRAL",
-        "summary": "1 sentence explanation"
+        "summary": "Concise 1-sentence market summary based on these specific headlines."
     }
     `;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
-    // ... (rest of Gemini logic)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`;
 
     const payload = {
         contents: [{ parts: [{ text: prompt }] }]
@@ -198,5 +187,3 @@ async function analyzeWithGemini(headlines: string[], currency: string): Promise
         headlineCount: headlines.length
     };
 }
-// Removed analyzeKeywords as it's no longer the primary fallback
-
