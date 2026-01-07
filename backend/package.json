@@ -7,6 +7,7 @@
   "scripts": {
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
+    "monitor": "tsx src/scripts/monitor.ts",
     "build": "tsc"
   },
   "dependencies": {
