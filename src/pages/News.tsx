@@ -86,6 +86,16 @@ const News: React.FC = () => {
                             <p className="text-danger/80 text-sm">{error}</p>
                         </div>
                     </div>
+                ) : news.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-64 text-center p-6 border border-border dashed rounded-xl">
+                        <div className="p-4 bg-surface rounded-full mb-3">
+                            <Newspaper className="text-secondary opacity-50" size={32} />
+                        </div>
+                        <h3 className="text-secondary font-bold">Sin Noticias Disponibles</h3>
+                        <p className="text-xs text-secondary/70 mt-1 max-w-xs">
+                            No se pudieron recuperar titulares en este momento. Las fuentes pueden estar limitando el acceso temporalmente.
+                        </p>
+                    </div>
                 ) : (
                     <div className="space-y-4 pb-24">
                         {news.map((item) => (

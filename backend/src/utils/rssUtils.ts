@@ -21,8 +21,13 @@ export async function fetchRSSFields(): Promise<FeedItem[]> {
     // Process all feeds in parallel
     const feedPromises = RSS_SOURCES.map(async (source) => {
         try {
-            // Fetch raw XML
-            const xml = await SmartFetch.get<string>(source.url);
+            // Fetch raw XML with browser headers to avoid 403/Cloudflare
+            const xml = await SmartFetch.get<string>(source.url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8'
+                }
+            });
             if (!xml) return [];
 
             const items: FeedItem[] = [];

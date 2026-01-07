@@ -82,7 +82,7 @@ export const streamMarketAnalysis = async function* (
                 : 'http://localhost:3001';
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000);
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
 
             // Parallel Pre-fetch (ML + News)
             const [mlRes, newsRes] = await Promise.all([
