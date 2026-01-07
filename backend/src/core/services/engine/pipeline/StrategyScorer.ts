@@ -95,6 +95,38 @@ export class StrategyScorer {
             }
         }
 
+        // 5.5 Fair Value Gaps (The Magnet) - NEW CONNECTED FEATURE
+        if (indicators.fairValueGaps?.bullish) {
+            // Find FVG we are inside or just above
+            const activeFVG = indicators.fairValueGaps.bullish.find(fvg =>
+                indicators.price >= fvg.bottom && indicators.price <= (fvg.top * 1.01) // Inside or 1% above
+            );
+            if (activeFVG) {
+                score += weights.order_block_retest; // Similar weight to OB retest
+                reasoning.push(`🧲 FVG Support: Retesting Bullish Imbalance (+${weights.order_block_retest})`);
+            }
+        }
+
+        // 5.6 Volume Profile (The Value) - NEW CONNECTED FEATURE
+        if (indicators.volumeProfile) {
+            const pocDist = Math.abs(indicators.price - indicators.volumeProfile.poc) / indicators.price;
+            if (pocDist < 0.01 && indicators.price > indicators.volumeProfile.poc) {
+                score += 10;
+                reasoning.push(`📊 Volume Profile: Retesting POC as Support`);
+            }
+        }
+
+        // 5.7 Ichimoku Cloud (The Trend) - NEW CONNECTED FEATURE
+        if (indicators.ichimokuData) {
+            const cloudTop = Math.max(indicators.ichimokuData.senkouA, indicators.ichimokuData.senkouB);
+            if (indicators.price > cloudTop && indicators.ichimokuData.chikouSpanFree) {
+                score += 15;
+                reasoning.push(`☁️ Ichimoku: Full Kumo Breakout (Strong Trend)`);
+            }
+        }
+
+
+
         // 5.4 Harmonic Precision
         if (indicators.harmonicPatterns && indicators.harmonicPatterns.length > 0) {
             const pattern = indicators.harmonicPatterns[0];

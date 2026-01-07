@@ -244,6 +244,8 @@ export interface TechnicalIndicators {
 
     ichimokuData?: IchimokuCloud;
 
+
+
     // NEW: Session Expert Analysis
     // REMOVED FOR CORE PORTABILITY (Or stubbed if needed)
     sessionAnalysis?: any; // import('../../services/sessionExpert').SessionAnalysis;

@@ -22,9 +22,13 @@ export interface OrderBlockData {
 }
 
 export interface FairValueGapData {
+    top: number;
+    bottom: number;
     midpoint: number;
+    type: 'BULLISH' | 'BEARISH';
     size: number;
     filled: boolean;
+    timestamp?: number;
 }
 
 export interface POIData {
