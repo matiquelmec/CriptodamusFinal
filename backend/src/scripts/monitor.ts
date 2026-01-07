@@ -1,5 +1,6 @@
 import { fetchCryptoData } from '../core/services/api/binanceApi';
 import { TradingConfig } from '../core/config/tradingConfig';
+import { MarketSession } from '../core/services/engine/MarketSession';
 
 /**
  * Criptodamus Operations Monitor
@@ -26,6 +27,9 @@ async function runSystemMonitor() {
 
     if (minAdx >= 20) console.log(`   ✅ Trend Requirement: ACTIVE (ADX > ${minAdx})`);
     else { console.log(`   ❌ Trend Requirement: NONE (Current: ${minAdx})`); allSystemsGo = false; }
+
+    const sessionState = MarketSession.analyzeSession();
+    console.log(`   ✅ Time Awareness: ${sessionState.activeSessions.join(' + ') || 'QUIET'} (${sessionState.isKillZone ? '⚠️ KILL ZONE' : 'SAFE ZONE'})`);
 
     // 2. DATA FEED CHECK
     console.log(`\n📡 MARKET DATA FEED (Binance/CoinCap)`);

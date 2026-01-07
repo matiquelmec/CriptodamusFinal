@@ -17,6 +17,7 @@ import { IndicatorCalculator } from './pipeline/IndicatorCalculator';
 import { AdvancedAnalyzer } from './pipeline/AdvancedAnalyzer';
 import { StrategyRunner } from './pipeline/StrategyRunner';
 import { StrategyScorer } from './pipeline/StrategyScorer';
+import { MarketSession } from './MarketSession'; // NEW: Dynamic Time Logic
 import { FilterEngine } from './pipeline/FilterEngine';
 
 // --- SERVICES ---
@@ -125,6 +126,13 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
             let totalScore = baseScoreResult.score + (strategyResult.primaryStrategy?.score || 0) + strategyResult.scoreBoost;
             let reasoning = [...baseScoreResult.reasoning, ...strategyResult.details];
+
+            // --- PHASE 0: MARKET SESSION & TIME AWARENESS ---
+            const sessionState = MarketSession.analyzeSession();
+            const sessionLabel = sessionState.activeSessions.join(' + ') || 'QUIET_HOURS';
+
+            // Log once per scan cycle
+            // console.log(`⏰ Session: ${sessionLabel} ${sessionState.isKillZone ? `(⚠️ KILL ZONE: ${sessionState.killZoneReason})` : ''}`);
 
             // Apply Macro Filters (Context Awareness)
             if (macroContext) {
@@ -311,6 +319,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const kellySize = calculateKellySize(winRate, 2.5); // Using 2.5 as target RR
             const recommendedLeverage = getVolatilityAdjustedLeverage(indicators.atr, indicators.price, kellySize);
 
+            // Session Kill Zone Penalty
+            if (sessionState.isKillZone) {
+                totalScore -= 20; // Reduce confidence significantly
+                reasoning.push(`⚠️ Reduced Confidence: ${sessionState.killZoneReason} (-20)`);
+            }
+
             // --- STAGE 4.10: DORMANT ENGINES ACTIVATION ("God Mode" Integrations) ---
 
             // A. LIQUIDATION MAGNETS (Hunting the Squeeze)
@@ -371,7 +385,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 symbol: coin.symbol,
                 timestamp: Date.now(),
                 timeframe: interval,
-                session: "GLOBAL", // Fallback until session context is strictly typed
+                session: sessionLabel, // DYNAMIC: "LONDON + NEW_YORK", etc.
                 riskRewardRatio: 2.5, // Calc dynamically if possible
                 strategy: strategyResult.primaryStrategy?.id || baseScoreResult.strategies[0] || 'hybrid_algo',
                 side: signalSide,
