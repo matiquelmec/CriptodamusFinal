@@ -9,6 +9,7 @@ export interface FeedItem {
 }
 
 export const RSS_SOURCES = [
+    { name: 'Google News', url: 'https://news.google.com/rss/search?q=cryptocurrency+when:1d&hl=en-US&gl=US&ceid=US:en' },
     { name: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/' },
     { name: 'Cointelegraph', url: 'https://cointelegraph.com/rss' },
     { name: 'The Block', url: 'https://www.theblock.co/rss' },
@@ -33,26 +34,30 @@ export async function fetchRSSFields(): Promise<FeedItem[]> {
             const items: FeedItem[] = [];
 
             // Robust Regex for basic RSS items
-            // Matches <item>...</item> content
-            const itemRegex = /<item(?:\s+[^>]*)?>([\s\S]*?)<\/item>/gi;
+            // Matches <item>...</item> content, handling newlines and attributes
+            // Improved: [\s\S]*? lazy match for content
+            const itemRegex = /<item[\s\S]*?>([\s\S]*?)<\/item>/gi;
             let match;
 
             while ((match = itemRegex.exec(xml)) !== null) {
                 const itemContent = match[1];
 
-                // Extract fields safely
+                // Extract fields safely (Case insensitive, handles attributes)
                 const title = extractTag(itemContent, 'title');
                 const link = extractTag(itemContent, 'link');
                 const pubDate = extractTag(itemContent, 'pubDate');
-                // const description = extractTag(itemContent, 'description'); // Optional
+
+                // Google News often puts the source in <source url="...">Name</source>
+                const sourceTag = extractTag(itemContent, 'source');
+                const finalSource = sourceTag || source.name;
 
                 if (title && link) {
                     items.push({
                         title: decodeHtmlEntities(title),
                         link: link,
                         pubDate: pubDate || new Date().toISOString(),
-                        source: source.name,
-                        content: '' // Description often has HTML, skip for now to be clean
+                        source: finalSource,
+                        content: ''
                     });
                 }
             }
@@ -72,10 +77,18 @@ export async function fetchRSSFields(): Promise<FeedItem[]> {
 }
 
 // Helper to extract content between <tag>...</tag>
+// Improved: Handles attributes like <link href="..."> or <title>...
 function extractTag(xml: string, tag: string): string | null {
-    const regex = new RegExp(`<${tag}[^>]*>(?:\s*<!\[CDATA\[)?(.*?)(?:\]\]>\s*)?<\/${tag}>`, 'i');
-    const match = regex.exec(xml);
-    return match ? match[1].trim() : null;
+    // 1. Try standard <tag>Value</tag> (or <tag attr="...">Value</tag>)
+    // Improved: [\s\S]*? matches newlines (dotAll equivalent)
+    // DOUBLE ESCAPE backslashes for string constructor!
+    const regex = new RegExp(`<${tag}[^>]*>(?:\\s*<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>\\s*)?<\\/${tag}>`, 'i');
+    let match = regex.exec(xml);
+    if (match) return match[1].trim();
+
+    // 2. Special case for <link> in Atom or some RSS which might be self-closing <link href="..." />
+    // simple extraction for href if body is empty? RSS 2.0 usually has body.
+    return null;
 }
 
 function decodeHtmlEntities(text: string): string {
