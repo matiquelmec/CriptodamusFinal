@@ -43,6 +43,11 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// --- RAW ROUTES MOUNTING (Restored) ---
+app.use('/api/market', marketRoutes);
+app.use('/api/donation', donationRoutes);
+app.use('/api/proxy', proxyRoutes);
+
 // ... (Rate Limits)
 
 // Health check to verify server is ALIVE
