@@ -36,6 +36,11 @@ export const TradingConfig = {
         protection: {
             max_daily_drawdown: 0.05, // 5% Daily Stop
             max_total_exposure: 0.25  // 25% Portfolio Exposure limit
+        },
+        // NEW: Macro Environment Thresholds
+        macro: {
+            dxy_risk: 104.0,       // DXY Index Level considered "Risk Off"
+            gold_risk_off: 2750.0  // Gold Price ($) indicating Flight to Safety
         }
     },
 

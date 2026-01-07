@@ -11,7 +11,8 @@ import {
     calculateAutoFibs, calculateStochRSI, calculateIchimokuCloud,
     calculateFractals, detectNPattern, calculateBoxTheory,
     detectBullishDivergence, calculateEMA,
-    calculateCVD, detectCVDDivergence // NEW: Order Flow
+    calculateCVD, detectCVDDivergence, // NEW: Order Flow
+    calculateADX, calculateCumulativeVWAP, calculatePivotPoints, calculateRSIArray // NEW: God Mode Imports
 } from '../../mathUtils';
 import { detectChartPatterns } from '../../chartPatterns';
 import { TradingConfig } from '../../../config/tradingConfig';
@@ -59,6 +60,11 @@ export class IndicatorCalculator {
         const zScore = calculateZScore(closes, bb.sma, 20); // Using BB SMA (20) as baseline for Z
         const emaSlope = calculateSlope(closes, 10); // 10-period slope
 
+        // GOD MODE: Activated Real Calculations
+        const adx = calculateADX(highs, lows, closes, 14);
+        const vwap = calculateCumulativeVWAP(highs, lows, closes, volumes);
+        const pivots = calculatePivotPoints(highs, lows, closes);
+
         // 3. Institutional Levels (Fibs, Order Blocks - approximated via Fractal Highs/Lows)
         // Note: Full Order Block detection requires the volumeExpertService, which is a separate pipeline stage.
         // Here we calculate the "Auto Fibs" which are fractal-based.
@@ -92,13 +98,12 @@ export class IndicatorCalculator {
         const isDeathState = ema50 < ema200;
 
 
+
         // Divergence Check (Heavy)
-        // Need RSI Array for divergence, calculateRSI returns single value, 
-        // need to refactor or use internal helper if we want array.
-        // Assuming mathUtils has a helper or we re-calc implementation:
-        // For now, we use the detected flag from a specialized check if available.
-        // Let's implement a quick RSI array generator for divergence check
-        // Note: compute() should stay relatively fast.
+        // Need RSI Array for divergence
+        const rsiArray = calculateRSIArray(closes, 14);
+        const rsiDivergence: TechnicalIndicators['rsiDivergence'] = detectBullishDivergence(closes, rsiArray, lows) ?
+            { type: 'BULLISH', strength: 0.8, description: 'RSI Bullish Divergence' } as any : null; // Cast as any then type check implicitly via variable type
 
         // Note: compute() should stay relatively fast.
 
@@ -125,12 +130,10 @@ export class IndicatorCalculator {
                 middle: bb.sma,
                 bandwidth: bb.bandwidth // approx
             },
-            pivots: { // Renamed from pivotPoints
-                p: 0, r1: 0, s1: 0, r2: 0, s2: 0 // Ideally calculated from Daily candles, might be missing here if only providing 4h/1h
-            },
-            adx: 0, // Expensive, enable if needed
+            pivots: pivots, // ACTIVATED
+            adx: adx,       // ACTIVATED
             atr,
-            vwap: 0, // Requires clean session data
+            vwap: vwap,     // ACTIVATED
             ema20,
             ema50,
             ema100,
@@ -155,12 +158,14 @@ export class IndicatorCalculator {
                 tkSeparation: 0
             },
 
+
             // Custom additions for our pipeline
             nPattern,
             boxTheory,
             chartPatterns, // NEW: Active
             cvd: cvdLine, // NEW
-            cvdDivergence // NEW
+            cvdDivergence, // NEW
+            rsiDivergence // Direct injection 
         }; // Casting valid by structure now
     }
 }

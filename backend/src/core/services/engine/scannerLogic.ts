@@ -343,13 +343,13 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const globalData = await fetchGlobalMarketData();
 
                 // DXY Filter (Strong Dollar = Weak Crypto)
-                if (globalData.dxyIndex > 104 && signalSide === 'LONG') {
+                if (globalData.dxyIndex > TradingConfig.risk.macro.dxy_risk && signalSide === 'LONG') {
                     totalScore -= 5; // Headwind
                     reasoning.push(`💵 Macro Headwind: Strong Dollar (DXY ${globalData.dxyIndex.toFixed(1)})`);
                 }
 
                 // Gold Risk-Off Filter
-                if (globalData.goldPrice > 2750 && style === 'MEME_SCALP' && signalSide === 'LONG') {
+                if (globalData.goldPrice > TradingConfig.risk.macro.gold_risk_off && style === 'MEME_SCALP' && signalSide === 'LONG') {
                     totalScore -= 10; // Risk-Off Environment
                     reasoning.push(`🛡️ Macro Risk-Off: Gold Flight detected ($${globalData.goldPrice})`);
                 }
@@ -403,6 +403,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     isSqueeze: indicators.isSqueeze,
                     volumeExpert: volumeAnalysis, // NEW: Populated from Backend Service
                     macdDivergence: indicators.macdDivergence?.type || undefined,
+                    rsiDivergence: indicators.rsiDivergence?.type || undefined, // NEW: Mapped
                     fractalAnalysis: macroCompass ? {
                         trend_4h: macroCompass.trend4h,
                         ema200_4h: macroCompass.ema200_4h,

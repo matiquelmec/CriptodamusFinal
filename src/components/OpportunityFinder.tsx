@@ -1,21 +1,18 @@
-
 import React, { useEffect, useState } from 'react';
-import { AIOpportunity, TradingStyle, MarketRisk } from '../types';
+import { AIOpportunity, MarketRisk } from '../types';
 import { useSocket } from '../hooks/useSocket';
-import { STRATEGIES } from '../services/strategyContext';
-import { Crosshair, RefreshCw, BarChart2, ArrowRight, Target, Shield, Zap, TrendingUp, TrendingDown, Layers, AlertTriangle, Cloud, Cpu, Rocket, Eye, BookOpen, X, Calculator, Activity, Database, Lightbulb, Clock, Globe, Hexagon, Triangle } from 'lucide-react';
-import { Tooltip } from 'react-tooltip';
-import { GLOSSARY } from '../constants/glossary';
-import { useOpportunityCache } from '../hooks/useOpportunityCache';
-import ProgressIndicator from './ProgressIndicator';
+import { RefreshCw, Shield, AlertTriangle, Target, Cpu, Activity, Database, Eye } from 'lucide-react';
 import { LiquidationFeed } from './LiquidationFeed';
+import ProgressIndicator from './ProgressIndicator';
+import SignalCard from './opportunities/SignalCard';
+import EducationalModal from './opportunities/EducationalModal';
 
 interface OpportunityFinderProps {
     onSelectOpportunity: (symbol: string) => void;
 }
 
 const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportunity }) => {
-    // State Definitions (Restored for UI compatibility)
+    // State Definitions
     const [opportunities, setOpportunities] = useState<AIOpportunity[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -40,8 +37,6 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
             if (aiOpportunities[0].strategy) {
                 setDetectedRegime(aiOpportunities[0].strategy);
             }
-            // Reset risk if valid data comes in (or we need risk event from socket)
-            // For now, assume good data = low risk or risk included in opps
         }
     }, [aiOpportunities]);
 
@@ -50,20 +45,14 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
         if (isConnected) {
             setLoading(false);
             setError(null);
-        } else {
-            // Optional: Show connecting state
-            // setLoading(true); 
         }
     }, [isConnected]);
 
-    // Manual scan is NO LONGER POSSIBLE (Backend Controlled)
-    // We change this to a "Status" check or removed entirely.
     const handleRefresh = () => {
-        // In future: emit('request_scan') via socket
         alert("El escáner opera automáticamente en el servidor (Intervalo: 15min)");
     };
 
-    // Alias for backward compatibility with JSX
+    // Alias for backward compatibility
     const scan = handleRefresh;
 
     return (
@@ -140,7 +129,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                     </span>
                                 </div>
                             )}
-                            {/* NEW: Cache Indicator */}
+                            {/* Cache Indicator */}
                             {isFromCache && cacheAge && (
                                 <div className="flex items-center gap-1.5 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">
                                     <Database size={12} className="text-amber-400" />
@@ -173,7 +162,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         </button>
                     </div>
                 ) : opportunities.length === 0 ? (
-                    // SMART EMPTY STATE: Check if empty because of RISK or just NO SETUPS
+                    // SMART EMPTY STATE
                     (currentRisk?.level === 'HIGH' || currentRisk?.riskType === 'MANIPULATION') ? (
                         <div className="h-full flex flex-col items-center justify-center text-secondary gap-4 px-6 max-w-2xl mx-auto animate-pulse">
                             <div className="p-4 bg-danger/10 rounded-full border border-danger/20">
@@ -244,614 +233,14 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
 
             {/* EDUCATIONAL MODAL */}
             {selectedSignal && (
-                <div className="absolute inset-0 bg-background/95 backdrop-blur-md z-50 p-6 flex flex-col animate-in fade-in zoom-in-95 duration-200">
-                    <div className="flex justify-between items-start mb-6 border-b border-border pb-4">
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <BookOpen size={18} className="text-accent" />
-                                <h3 className="text-lg font-mono font-bold text-white uppercase">Análisis Táctico: {selectedSignal.symbol}</h3>
-                            </div>
-                            <p className="text-xs text-secondary">Desglose educativo de la señal detectada</p>
-                        </div>
-                        <button
-                            onClick={() => setSelectedSignal(null)}
-                            className="p-2 bg-surface hover:bg-white/10 rounded-full transition-colors"
-                        >
-                            <X size={20} className="text-secondary" />
-                        </button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
-                        {/* 1. STRATEGY CONTEXT */}
-                        <div className="bg-surface rounded-xl p-5 border border-border">
-                            <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
-                                <Activity size={14} /> La Estrategia Usada
-                            </h4>
-                            <div className="space-y-2">
-                                <p className="text-sm font-mono font-bold text-primary">
-                                    {STRATEGIES.find(s => s.id === selectedSignal.strategy.toLowerCase())?.name || selectedSignal.strategy}
-                                </p>
-                                <p className="text-xs text-secondary leading-relaxed border-l-2 border-accent/50 pl-3">
-                                    {STRATEGIES.find(s => s.id === selectedSignal.strategy.toLowerCase())?.description || "Algoritmo de detección de patrones matemáticos avanzados."}
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* 1.5. ML BRAIN DIAGNOSIS (NEW) */}
-                        {selectedSignal.mlPrediction && (
-                            <div className="bg-surface rounded-xl p-5 border border-border">
-                                <h4 className="text-xs font-bold text-blue-400 uppercase mb-3 flex items-center gap-2">
-                                    <Cpu size={14} /> Diagnóstico Neuronal (LSTM)
-                                </h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-secondary uppercase font-bold">Predicción</span>
-                                        <div className={`text-lg font-mono font-bold ${selectedSignal.mlPrediction.signal === 'BULLISH' ? 'text-success' : selectedSignal.mlPrediction.signal === 'BEARISH' ? 'text-danger' : 'text-secondary'
-                                            }`}>
-                                            {selectedSignal.mlPrediction.signal}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1 text-right">
-                                        <span className="text-[10px] text-secondary uppercase font-bold">Probabilidad</span>
-                                        <div className="text-lg font-mono font-bold text-primary">
-                                            {selectedSignal.mlPrediction.probability.toFixed(1)}%
-                                        </div>
-                                    </div>
-                                    <div className="col-span-2 pt-2 border-t border-border/50">
-                                        <p className="text-[10px] text-secondary leading-relaxed italic">
-                                            "El modelo analiza patrones no-lineales en las últimas 50 velas. Un score superior al 60% indica alta confianza estadística."
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 2. THE TRIGGER (WHY?) */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-surface rounded-xl p-5 border border-border col-span-2 md:col-span-1">
-                                <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
-                                    <Calculator size={14} /> El Gatillo (Datos Duros)
-                                </h4>
-                                {selectedSignal.metrics ? (
-                                    <div className="space-y-3 font-mono text-xs">
-                                        <div className="flex justify-between border-b border-border/50 pb-1">
-                                            <span className="text-secondary">Disparador:</span>
-                                            <span className="text-accent font-bold text-right">{selectedSignal.metrics.specificTrigger}</span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-border/50 pb-1">
-                                            <span className="text-secondary">RSI:</span>
-                                            <span className={selectedSignal.metrics.rsi > 70 || selectedSignal.metrics.rsi < 30 ? 'text-warning font-bold' : 'text-primary'}>
-                                                {selectedSignal.metrics.rsi}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-border/50 pb-1">
-                                            <span className="text-secondary">Volumen (RVOL):</span>
-                                            <span className={selectedSignal.metrics.rvol > 1.5 ? 'text-success font-bold' : 'text-primary'}>
-                                                {selectedSignal.metrics.rvol}x
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-border/50 pb-1">
-                                            <span className="text-secondary">Estructura:</span>
-                                            <span className="text-primary">{selectedSignal.metrics.structure}</span>
-                                        </div>
-                                        {/* NEW: Freeze Details */}
-                                        {selectedSignal.freezeSignal?.active && (
-                                            <div className="flex justify-between border-b border-border/50 pb-1 bg-cyan-500/10 p-1 rounded">
-                                                <span className="text-cyan-400 font-bold">❄️ Config:</span>
-                                                <span className="text-cyan-100 text-[10px] text-right">{selectedSignal.freezeSignal.reason.join(' + ')}</span>
-                                            </div>
-                                        )}
-                                        {selectedSignal.chartPatterns && selectedSignal.chartPatterns.length > 0 && (
-                                            <div className="flex justify-between border-b border-border/50 pb-1">
-                                                <span className="text-secondary">Patrón Gráfico:</span>
-                                                <span className="text-pink-400 font-bold">{selectedSignal.chartPatterns[0].type}</span>
-                                            </div>
-                                        )}
-                                        {selectedSignal.metrics.zScore !== undefined && (
-                                            <div className="flex justify-between border-b border-border/50 pb-1">
-                                                <span className="text-secondary">Z-Score (Desviación):</span>
-                                                <span className={Math.abs(selectedSignal.metrics.zScore) > 2 ? 'text-accent font-bold' : 'text-primary'}>
-                                                    {selectedSignal.metrics.zScore}σ
-                                                </span>
-                                            </div>
-                                        )}
-                                        {selectedSignal.metrics.emaSlope !== undefined && (
-                                            <div className="flex justify-between border-b border-border/50 pb-1">
-                                                <span className="text-secondary">Fuerza Tendencia (Slope):</span>
-                                                <span className={Math.abs(selectedSignal.metrics.emaSlope) > 0.5 ? 'text-success font-bold' : 'text-secondary'}>
-                                                    {selectedSignal.metrics.emaSlope}°
-                                                </span>
-                                            </div>
-                                        )}
-                                        {selectedSignal.metrics.rsiExpert?.target && (
-                                            <div className="flex justify-between border-b border-border/50 pb-1">
-                                                <span className="text-secondary">🎯 RSI Target (Cardwell):</span>
-                                                <span className="text-accent font-bold">
-                                                    ${selectedSignal.metrics.rsiExpert.target.toLocaleString()}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {selectedSignal.metrics.rsiExpert?.range && (
-                                            <div className="flex justify-between border-b border-border/50 pb-1">
-                                                <span className="text-secondary">Rango RSI:</span>
-                                                <span className={selectedSignal.metrics.rsiExpert.range.includes('SUPER') ? 'text-accent font-bold' : 'text-primary'}>
-                                                    {selectedSignal.metrics.rsiExpert.range.replace('_', ' ')}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {/* NEW: RSI Break */}
-                                        {selectedSignal.metrics.rsiExpert?.trendlineBreak?.detected && (
-                                            <div className="flex justify-between border-b border-border/50 pb-1">
-                                                <span className="text-secondary">Ruptura RSI:</span>
-                                                <span className="text-success font-bold animate-pulse">
-                                                    {selectedSignal.metrics.rsiExpert.trendlineBreak.direction} BREAKOUT
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <p className="text-xs text-secondary italic">Métricas detalladas no disponibles para este tick.</p>
-                                )}
-                            </div>
-
-                            {/* 2.5. INSTITUTIONAL VOLUME & FLOW (NEW) */}
-                            {selectedSignal.metrics?.volumeExpert && (
-                                <div className="bg-surface rounded-xl p-5 border border-border col-span-2 md:col-span-1">
-                                    <h4 className="text-xs font-bold text-purple-400 uppercase mb-3 flex items-center gap-2">
-                                        <TrendingUp size={14} /> Flujo Institucional (Smart Money)
-                                    </h4>
-                                    <div className="space-y-3 font-mono text-xs">
-                                        <div className="flex justify-between border-b border-border/50 pb-1">
-                                            <span className="text-secondary">Coinbase Premium:</span>
-                                            <span className={selectedSignal.metrics.volumeExpert.coinbasePremium.signal === 'INSTITUTIONAL_BUY' ? 'text-success font-bold' : selectedSignal.metrics.volumeExpert.coinbasePremium.signal === 'INSTITUTIONAL_SELL' ? 'text-danger font-bold' : 'text-primary'}>
-                                                {selectedSignal.metrics.volumeExpert.coinbasePremium.gapPercent.toFixed(3)}%
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-border/50 pb-1">
-                                            <span className="text-secondary">Funding Rate:</span>
-                                            <span className={Math.abs(selectedSignal.metrics.volumeExpert.derivatives.fundingRate) > 0.01 ? 'text-warning font-bold' : 'text-primary'}>
-                                                {selectedSignal.metrics.volumeExpert.derivatives.fundingRate.toFixed(4)}%
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-border/50 pb-1">
-                                            <span className="text-secondary">CVD Sintético:</span>
-                                            <span className={selectedSignal.metrics.volumeExpert.cvd.trend === 'BULLISH' ? 'text-success font-bold' : selectedSignal.metrics.volumeExpert.cvd.trend === 'BEARISH' ? 'text-danger font-bold' : 'text-secondary'}>
-                                                {selectedSignal.metrics.volumeExpert.cvd.trend}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-border/50 pb-1">
-                                            <span className="text-secondary">Open Interest:</span>
-                                            <span className="text-primary font-bold">
-                                                ${(selectedSignal.metrics.volumeExpert.derivatives.openInterestValue / 1000000).toFixed(1)}M
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* 3. INTERPRETATION */}
-                            <div className="bg-blue-500/5 rounded-xl p-5 border border-blue-500/20 col-span-2 md:col-span-1 flex flex-col justify-center">
-                                <h4 className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center gap-2">
-                                    <Cpu size={14} /> Interpretación Institucional
-                                </h4>
-                                <p className="text-xs text-secondary leading-relaxed">
-                                    "{selectedSignal.technicalReasoning}"
-                                </p>
-                                <p className="text-[10px] text-blue-300/60 mt-2 italic">
-                                    *El algoritmo detectó esta oportunidad porque la confluencia matemática supera el 70% de probabilidad.*
-                                </p>
-                            </div>
-
-                            {/* 3.5 LIQUIDATION & DEPTH PROFILE (GOD TIER) */}
-                            {selectedSignal.metrics?.volumeExpert?.liquidity?.liquidationClusters && (
-                                <div className="bg-surface rounded-xl p-5 border border-border col-span-2">
-                                    <h4 className="text-xs font-bold text-pink-400 uppercase mb-3 flex items-center gap-2">
-                                        <Target size={14} /> Mapa de Liquidaciones (Imanes)
-                                    </h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <span className="text-[10px] text-secondary uppercase font-bold">Top Clústeres (Riesgo Alto)</span>
-                                            {selectedSignal.metrics.volumeExpert.liquidity.liquidationClusters.slice(0, 3).map((cluster, i) => (
-                                                <div key={i} className="flex justify-between items-center text-xs p-2 bg-background rounded border border-border/50">
-                                                    <span className={cluster.type === 'SHORT_LIQ' ? 'text-danger' : 'text-success'}>
-                                                        {cluster.type === 'SHORT_LIQ' ? 'Shorts' : 'Longs'} {cluster.strength}x
-                                                    </span>
-                                                    <span className="font-mono text-primary font-bold">
-                                                        ${formatPrice(cluster.priceMin)} - ${formatPrice(cluster.priceMax)}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="space-y-2">
-                                            <span className="text-[10px] text-secondary uppercase font-bold">Muros Detectados (Orderbook)</span>
-                                            {selectedSignal.metrics.volumeExpert.liquidity.orderBook?.bidWall ? (
-                                                <div className="flex justify-between items-center text-xs p-2 bg-success/10 rounded border border-success/20">
-                                                    <span className="text-success font-bold">Muro Compra</span>
-                                                    <span className="font-mono text-primary">${formatPrice(selectedSignal.metrics.volumeExpert.liquidity.orderBook.bidWall.price)}</span>
-                                                </div>
-                                            ) : <div className="text-xs text-secondary italic p-2">Sin muros de compra relevantes</div>}
-
-                                            {selectedSignal.metrics.volumeExpert.liquidity.orderBook?.askWall ? (
-                                                <div className="flex justify-between items-center text-xs p-2 bg-danger/10 rounded border border-danger/20">
-                                                    <span className="text-danger font-bold">Muro Venta</span>
-                                                    <span className="font-mono text-primary">${formatPrice(selectedSignal.metrics.volumeExpert.liquidity.orderBook.askWall.price)}</span>
-                                                </div>
-                                            ) : <div className="text-xs text-secondary italic p-2">Sin muros de venta relevantes</div>}
-                                        </div>
-                                    </div>
-                                    ```
-                                </div>
-                            )}
-
-                        </div>
-
-                        {/* 4. RISK MANAGEMENT (PHASE 8) */}
-                        <div className="bg-surface rounded-xl p-5 border border-border">
-                            <h4 className="text-xs font-bold text-orange-400 uppercase mb-3 flex items-center gap-2">
-                                <Shield size={14} /> Ingeniería de Riesgo (Kelly & Volatility)
-                            </h4>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <div className="bg-background p-3 rounded border border-border">
-                                    <span className="block text-[10px] text-secondary uppercase mb-1">Entrada Óptima</span>
-                                    <span className="font-mono font-bold text-primary">${selectedSignal.entryZone.min}</span>
-                                </div>
-                                <div className="bg-danger/10 p-3 rounded border border-danger/20">
-                                    <span className="block text-[10px] text-danger uppercase mb-1">Stop Loss</span>
-                                    <span className="font-mono font-bold text-danger">${selectedSignal.stopLoss}</span>
-                                </div>
-                                <div className="bg-accent/10 p-3 rounded border border-accent/20">
-                                    <span className="block text-[10px] text-accent uppercase mb-1">Kelly Size</span>
-                                    <span className="font-mono font-bold text-accent">{(selectedSignal.kellySize! * 100).toFixed(2)}%</span>
-                                </div>
-                                {selectedSignal.recommendedLeverage && (
-                                    <div className="bg-blue-500/10 p-3 rounded border border-blue-500/20">
-                                        <span className="block text-[10px] text-blue-400 uppercase mb-1">Palancaje (ATR)</span>
-                                        <span className="font-mono font-bold text-blue-400">{selectedSignal.recommendedLeverage.toFixed(1)}x</span>
-                                    </div>
-                                )}
-                                {selectedSignal.correlationRisk && (
-                                    <div className={`p-3 rounded border col-span-2 ${selectedSignal.correlationRisk.recommendation === 'BLOCK' ? 'bg-danger/20 border-danger/30 text-danger' :
-                                        selectedSignal.correlationRisk.recommendation === 'REDUCE' ? 'bg-warning/20 border-warning/30 text-warning' :
-                                            'bg-success/20 border-success/30 text-success'
-                                        }`}>
-                                        <span className="block text-[10px] uppercase mb-1 font-bold">Heatmap de Correlación</span>
-                                        <span className="font-mono text-[10px]">{selectedSignal.correlationRisk.recommendation}: Riesgo {(selectedSignal.correlationRisk.score * 100).toFixed(0)}%</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mt-6 pt-4 border-t border-border flex justify-end">
-                        <button
-                            onClick={() => {
-                                onSelectOpportunity(selectedSignal.symbol.split('/')[0]);
-                                setSelectedSignal(null);
-                            }}
-                            className="px-6 py-2 bg-accent hover:bg-accentHover text-white rounded font-bold text-xs font-mono uppercase transition-colors"
-                        >
-                            Ver Gráfico en Vivo
-                        </button>
-                    </div>
-                </div>
+                <EducationalModal
+                    selectedSignal={selectedSignal}
+                    onClose={() => setSelectedSignal(null)}
+                    onSelectOpportunity={onSelectOpportunity}
+                />
             )}
         </div>
     );
 };
-
-// Helper for clean price formatting
-const formatPrice = (price: number) => {
-    if (!price) return '0.00';
-    if (price < 0.01) return price.toFixed(8);
-    if (price < 1) return price.toFixed(5); // Crypto penny stocks
-    if (price < 10) return price.toFixed(4);
-    if (price < 1000) return price.toFixed(2);
-    return price.toLocaleString('en-US', { maximumFractionDigits: 2 });
-};
-
-// Helper for strategy context
-const getStrategyReason = (id: string) => {
-    const strategy = id.toLowerCase();
-
-    // 1. Regímenes de Mercado (Auto-Pilot)
-    if (strategy.includes('trending')) return "Tendencia fuerte detectada (ADX > 25). Buscamos continuidad del movimiento.";
-    if (strategy.includes('ranging')) return "Mercado lateral. Operamos reversión a la media en extremos del rango.";
-    if (strategy.includes('volatile')) return "Expansión de volatilidad. Buscamos rupturas explosivas (Breakouts).";
-    if (strategy.includes('extreme')) return "Condiciones extremas (Sobrecompra/Venta). Buscamos reversiones.";
-
-    // 2. Estrategias Específicas
-    if (strategy.includes('breakout')) return "Mercado con momentum. Buscamos rupturas de niveles clave.";
-    if (strategy.includes('swing')) return "Mercado en rango/reversión. Buscamos rebotes en zonas de valor.";
-    if (strategy.includes('meme')) return "Alta volatilidad especulativa. Aprovechando hype y volumen.";
-    if (strategy.includes('scalp')) return "Micro-estructuras de corto plazo. Entradas y salidas rápidas.";
-    if (strategy.includes('smc')) return "Smart Money Concepts. Cazando liquidez institucional y Order Blocks.";
-    if (strategy.includes('ichimoku')) return "Equilibrio de mercado. Confirmación de tendencia con Nube Ichimoku.";
-    if (strategy.includes('quant')) return "Análisis cuantitativo. Explotando ineficiencias matemáticas.";
-    if (strategy.includes('divergence')) return "Agotamiento de momentum detectado. Reversión probable en zona clave.";
-
-    // 3. Fallback
-    return "Patrón de alta probabilidad estadística validado por el algoritmo.";
-};
-
-// Sub-component for the "Signal Ticket" look
-const SignalCard: React.FC<{ data: AIOpportunity, onSelect: () => void, onShowDetails: () => void }> = ({ data, onSelect, onShowDetails }) => {
-    const isLong = data.side === 'LONG';
-    const mainColor = isLong ? 'text-success' : 'text-danger';
-    const bgColor = isLong ? 'bg-success/5' : 'bg-danger/5';
-    const borderColor = isLong ? 'border-success/20' : 'border-danger/20';
-
-    return (
-        <div className={`relative bg-surface border ${borderColor} rounded-xl overflow-hidden hover:shadow-lg transition-all group flex flex-col`}>
-            {/* Header Ticket */}
-            <div className={`p-4 ${bgColor} border-b ${borderColor} flex justify-between items-start`}>
-                <div className="flex gap-3">
-                    <div className={`p-2 rounded-lg bg-surface border ${borderColor} ${mainColor}`}>
-                        {isLong ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
-                    </div>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-lg font-mono tracking-tight text-primary">{data.symbol}</h3>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${borderColor} ${mainColor} uppercase`}>
-                                {data.side}
-                            </span>
-                        </div>
-                        <p className="text-[10px] text-secondary mt-0.5 font-mono">
-                            {new Date(data.timestamp).toLocaleTimeString()} • Score: <span className="text-accent">{data.confidenceScore}%</span>
-                        </p>
-                    </div>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                    <div className="flex flex-col items-end">
-                        <span className="text-[9px] text-secondary uppercase tracking-widest mb-1">Estrategia</span>
-                        <span className="text-[10px] font-mono font-bold text-primary bg-background px-2 py-1 rounded border border-border">
-                            {data.strategy.split('_')[0]}
-                        </span>
-                    </div>
-
-                    {/* NEW: TIER BADGE */}
-                    {data.tier && (
-                        <div className={`mt-1 px-2 py-0.5 rounded border text-[10px] font-bold font-mono flex items-center gap-1
-                            ${data.tier === 'S' ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500' :
-                                data.tier === 'A' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' :
-                                    data.tier === 'C' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
-                                        'bg-gray-500/10 border-gray-500/30 text-gray-400'
-                            }`}
-                            title={`Fundamental Tier: ${data.tier} (Risk Assessment)`}
-                        >
-                            {data.tier === 'S' && <Shield size={10} />}
-                            {data.tier === 'C' && <AlertTriangle size={10} />}
-                            TIER {data.tier}
-                        </div>
-                    )}
-
-                    {/* INFO BUTTON */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onShowDetails(); }}
-                        className="mt-1 p-1 text-secondary hover:text-accent transition-colors"
-                        title="Ver Explicación Educativa"
-                    >
-                        <BookOpen size={14} />
-                    </button>
-                </div>
-            </div>
-
-            {/* Institutional Metadata Bar */}
-            <div className="flex items-center gap-4 px-5 py-2 bg-background/50 border-b border-border/50 text-[10px] text-secondary font-mono uppercase tracking-tight">
-                <div className="flex items-center gap-1.5" title="Timeframe Analizado">
-                    <Clock size={12} className="text-secondary/70" />
-                    <span>{data.timeframe || '15m'}</span>
-                </div>
-                <div className="flex items-center gap-1.5 border-l border-border/50 pl-4" title="Sesión de Mercado">
-                    <Globe size={12} className="text-secondary/70" />
-                    <span>{data.session || 'GLOBAL'}</span>
-                </div>
-                {/* NEW: Macro Compass Badge */}
-                {data.metrics?.fractalAnalysis && (
-                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4" title="Macro Tendencia (4H)">
-                        {data.metrics.fractalAnalysis.trend_4h === (data.side === 'LONG' ? 'BULLISH' : 'BEARISH') ? (
-                            <span className="flex items-center gap-1 text-success font-bold animate-pulse">
-                                <Layers size={12} /> 4H ALIGNED
-                            </span>
-                        ) : (
-                            <span className="flex items-center gap-1 text-warning font-bold">
-                                <Layers size={12} /> 4H NEUTRAL
-                            </span>
-                        )}
-                    </div>
-                )}
-                <div className="flex items-center gap-1.5 border-l border-border/50 pl-4" title="Ratio Riesgo:Beneficio (vs TP3)">
-                    <Target size={12} className="text-secondary/70" />
-                    <span className={data.riskRewardRatio && data.riskRewardRatio >= 3 ? "text-success font-bold" : "text-primary"}>
-                        R:R 1:{data.riskRewardRatio || 'N/A'}
-                    </span>
-                </div>
-                {/* NEW: Freeze Badge */}
-                {data.freezeSignal?.active && (
-                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-cyan-400 animate-pulse">
-                        <span className="text-sm">❄️</span>
-                        <span className="font-bold">SMART FREEZE</span>
-                    </div>
-                )}
-                {/* NEW: Harmonic Badge */}
-                {data.harmonicPatterns && data.harmonicPatterns.length > 0 && (
-                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-purple-400 animate-pulse">
-                        <Hexagon size={12} />
-                        <span className="font-bold">{data.harmonicPatterns[0].type}</span>
-                    </div>
-                )}
-                {/* NEW: Squeeze Badge */}
-                {data.metrics?.isSqueeze && (
-                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-warning animate-pulse">
-                        <Zap size={12} />
-                        <span className="font-bold">TTM SQUEEZE</span>
-                    </div>
-                )}
-                {/* NEW: MACD Div Badge */}
-                {data.metrics?.macdDivergence && (
-                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-cyan-400">
-                        <Target size={12} />
-                        <span className="font-bold">DIV MACD</span>
-                    </div>
-                )}
-                {/* NEW: Chart Pattern Badge */}
-                {data.chartPatterns && data.chartPatterns.length > 0 && (
-                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-pink-400 animate-pulse">
-                        <Triangle size={12} className="rotate-180" />
-                        <span className="font-bold">{data.chartPatterns[0].type.replace('_', ' ')}</span>
-                    </div>
-                )}
-                {/* NEW: Whale Alert Badge */}
-                {data.metrics?.volumeExpert?.cvd?.divergence?.includes('ABSORPTION') && (
-                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-cyan-400 animate-pulse">
-                        <Database size={12} />
-                        <span className="font-bold">WHALE ALERT</span>
-                    </div>
-                )}
-                {/* NEW: RSI Break Badge */}
-                {data.metrics?.rsiExpert?.trendlineBreak?.detected && (
-                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-orange-400">
-                        <Zap size={12} />
-                        <span className="font-bold">RSI BREAK</span>
-                    </div>
-                )}
-                {/* NEW: Liquidation Magnet Badge */}
-                {data.metrics?.volumeExpert?.liquidity?.liquidationClusters && data.metrics.volumeExpert.liquidity.liquidationClusters.length > 0 && (
-                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-pink-500 animate-pulse">
-                        <Target size={12} />
-                        <span className="font-bold">MAGNET</span>
-                    </div>
-                )}
-                {/* NEW: Wall Badge */}
-                {data.metrics?.volumeExpert?.liquidity?.orderBook && (data.metrics.volumeExpert.liquidity.orderBook.bidWall || data.metrics.volumeExpert.liquidity.orderBook.askWall) && (
-                    <div className="flex items-center gap-1.5 border-l border-border/50 pl-4 text-yellow-500">
-                        <Layers size={12} />
-                        <span className="font-bold">WALL</span>
-                    </div>
-                )}
-                {/* NEW: ML Brain Badge */}
-                {data.mlPrediction && (
-                    <div className={`flex items-center gap-1.5 border-l border-border/50 pl-4 ${data.mlPrediction.signal === 'BULLISH' ? 'text-success' : data.mlPrediction.signal === 'BEARISH' ? 'text-danger' : 'text-secondary/70'
-                        } animate-pulse`} title={`Predicción Neuronal: ${data.mlPrediction.signal} (${data.mlPrediction.probability.toFixed(1)}%)`}>
-                        <Cpu size={12} />
-                        <span className="font-bold">AI: {data.mlPrediction.signal}</span>
-                    </div>
-                )}
-            </div>
-
-            {/* Signal Body */}
-            <div className="p-5 flex-1 space-y-5">
-
-                {/* Strategy Context (New) */}
-                <div className="flex items-start gap-2 p-2 bg-background border border-border rounded-lg">
-                    <Activity size={14} className="text-accent mt-0.5 shrink-0" />
-                    <div>
-                        <span className="block text-[9px] text-secondary uppercase font-bold">¿Por qué esta estrategia?</span>
-                        <p className="text-[10px] text-primary leading-tight">
-                            {getStrategyReason(data.strategy)}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Entry & DCA (New Educational Layout) */}
-                <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                        <label className="text-[10px] text-secondary uppercase font-bold flex items-center gap-1">
-                            <Layers size={10} /> Plan de Entrada Institucional (DCA)
-                        </label>
-                        <span className="text-[9px] text-accent/80 italic">Promediación Inteligente</span>
-                    </div>
-
-                    {data.dcaPlan ? (
-                        <div className="grid grid-cols-3 gap-2">
-                            {/* Entry 1 */}
-                            <div className="p-2 bg-background border border-border rounded flex flex-col items-center group/entry hover:border-primary/30 transition-colors cursor-help" title="Entrada Inicial: 40% del capital asignado">
-                                <span className="text-[9px] text-secondary uppercase mb-0.5">Inicial (40%)</span>
-                                <span className="font-mono text-xs font-bold text-primary">${formatPrice(data.dcaPlan.entries[0].price)}</span>
-                            </div>
-                            {/* Entry 2 */}
-                            <div className="p-2 bg-background border border-border rounded flex flex-col items-center group/entry hover:border-primary/30 transition-colors cursor-help" title="DCA 1: 30% del capital. Zona de soporte intermedio.">
-                                <span className="text-[9px] text-secondary uppercase mb-0.5">DCA 1 (30%)</span>
-                                <span className="font-mono text-xs font-bold text-primary">${formatPrice(data.dcaPlan.entries[1].price)}</span>
-                            </div>
-                            {/* Entry 3 */}
-                            <div className="p-2 bg-background border border-border rounded flex flex-col items-center group/entry hover:border-accent/50 transition-colors cursor-help" title="DCA 2: 30% del capital. Zona de 'Golden Pocket' o soporte mayor.">
-                                <span className="text-[9px] text-secondary uppercase mb-0.5">DCA 2 (30%)</span>
-                                <span className="font-mono text-xs font-bold text-accent">${formatPrice(data.dcaPlan.entries[2].price)}</span>
-                            </div>
-                        </div>
-                    ) : (
-                        // Fallback for old signals or errors
-                        <div className="p-2 bg-background border border-border rounded font-mono text-xs text-primary text-center">
-                            ${data.entryZone.min} - ${data.entryZone.max}
-                        </div>
-                    )}
-                </div>
-
-                {/* TP Stack */}
-                <div className="space-y-2">
-                    <label className="text-[10px] text-secondary uppercase font-bold">Objetivos (Take Profit)</label>
-                    <div className="grid grid-cols-3 gap-2">
-                        <div className="text-center p-2 rounded bg-success/5 border border-success/10">
-                            <span className="block text-[9px] text-success/70 font-bold">TP 1</span>
-                            <span className="block text-xs font-mono text-success font-bold">${data.takeProfits.tp1}</span>
-                        </div>
-                        <div className="text-center p-2 rounded bg-success/10 border border-success/20">
-                            <span className="block text-[9px] text-success/70 font-bold">TP 2</span>
-                            <span className="block text-xs font-mono text-success font-bold">${data.takeProfits.tp2}</span>
-                        </div>
-                        <div className="text-center p-2 rounded bg-success/20 border border-success/30 relative overflow-hidden">
-                            <span className="block text-[9px] text-success/70 font-bold">TP 3</span>
-                            <span className="block text-xs font-mono text-success font-bold">${data.takeProfits.tp3}</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* SL & Risk Engineering Bar (New) */}
-                <div className="flex gap-4">
-                    <div className="flex-1 space-y-1">
-                        <label className="text-[9px] text-secondary uppercase font-bold">Stop Loss</label>
-                        <div className="p-2 bg-danger/5 border border-danger/10 rounded font-mono text-xs text-danger font-bold text-center">
-                            ${data.stopLoss}
-                        </div>
-                    </div>
-                    {data.kellySize && (
-                        <div className="flex-1 space-y-1">
-                            <label className="text-[9px] text-accent uppercase font-bold">Kelly (Size)</label>
-                            <div className="p-2 bg-accent/5 border border-accent/10 rounded font-mono text-xs text-accent font-bold text-center">
-                                {(data.kellySize * 100).toFixed(1)}%
-                            </div>
-                        </div>
-                    )}
-                    {data.recommendedLeverage && (
-                        <div className="flex-1 space-y-1">
-                            <label className="text-[9px] text-blue-400 uppercase font-bold">Leverage</label>
-                            <div className="p-2 bg-blue-500/5 border border-blue-500/10 rounded font-mono text-xs text-blue-400 font-bold text-center">
-                                {data.recommendedLeverage.toFixed(1)}x
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Algorithm Reasoning Summary */}
-                <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg">
-                    <p className="text-[10px] text-secondary italic leading-relaxed line-clamp-2">
-                        <span className="text-blue-400 not-italic font-bold mr-1">[ALGORITMO]:</span>
-                        {data.technicalReasoning}
-                    </p>
-                </div>
-            </div>
-
-            {/* Action */}
-            <div className="p-4 pt-0">
-                <button
-                    onClick={onSelect}
-                    className="w-full py-3 rounded-lg bg-primary hover:bg-white text-background font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 group-hover:scale-[1.02]"
-                >
-                    Ver en Gráfico <ArrowRight size={14} />
-                </button>
-            </div>
-        </div>
-    )
-}
 
 export default OpportunityFinder;
