@@ -347,6 +347,8 @@ export interface AIOpportunity {
     reasoning?: string[]; // NEW: Structured reasoning for Telegram/UI bullet points
     invalidated: boolean;
     metrics?: {
+        adx?: number; // NEW: Trend Strength for filtering
+        volume24h?: number; // NEW: Liquidity filter
         rvol: number;
         rsi: number;
         vwapDist: number; // Distance to VWAP %

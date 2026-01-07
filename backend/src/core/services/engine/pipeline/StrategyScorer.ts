@@ -61,11 +61,48 @@ export class StrategyScorer {
             reasoning.push(`💎 RSI Divergence Detected (+${weights.rsi_divergence})`);
         }
 
-        // 5. Institutional Flow
+        // 5. Institutional Flow (God Tier)
         if (indicators.zScore < -2) {
-            score += TradingConfig.scoring.advisor.z_score_extreme; // Mean Reversion Potential
+            score += TradingConfig.scoring.advisor.z_score_extreme;
             strategies.push('MEAN_REVERSION');
             reasoning.push(`📉 Z-Score Extreme Oversold (-2 StdDev) (+${TradingConfig.scoring.advisor.z_score_extreme})`);
+        }
+
+        // 5.1 Smart Money Footprint (CVD)
+        if (indicators.cvdDivergence === 'BULLISH') {
+            score += weights.cvd_divergence_boost;
+            reasoning.push(`🐋 CVD Divergence (Whale Accumulation) (+${weights.cvd_divergence_boost})`);
+        } else if (indicators.volumeExpert?.cvd?.divergence?.includes('ABSORPTION')) {
+            score += weights.cvd_divergence_boost;
+            reasoning.push(`🧱 Passive Absorption Detected (Smart Money) (+${weights.cvd_divergence_boost})`);
+        }
+
+        // 5.2 Liquidation Fuel
+        if (indicators.volumeExpert?.liquidity?.liquidationClusters?.[0]) {
+            // Logic: If close to liquidation cluster, it's a magnet/fuel
+            // Simplified: If trend is favorable and liquidation nearby
+            score += weights.liquidation_flutter;
+            reasoning.push(`💧 Liquidation Cluster Fuel (+${weights.liquidation_flutter})`);
+        }
+
+        // 5.3 Order Block Support
+        if (indicators.volumeExpert?.liquidity?.orderBook?.bidWall) {
+            const wall = indicators.volumeExpert.liquidity.orderBook.bidWall;
+            const dist = Math.abs(indicators.price - wall.price) / indicators.price;
+            if (dist < 0.02) { // 2% Proximity
+                score += weights.order_block_retest;
+                reasoning.push(`🛡️ Institutional Buy Wall Support (+${weights.order_block_retest})`);
+            }
+        }
+
+        // 5.4 Harmonic Precision
+        if (indicators.harmonicPatterns && indicators.harmonicPatterns.length > 0) {
+            const pattern = indicators.harmonicPatterns[0];
+            if (pattern.direction === 'BULLISH') {
+                score += weights.harmonic_pattern;
+                strategies.push(`HARMONIC_${pattern.type}`);
+                reasoning.push(`✨ ${pattern.type} Harmonic Pattern (+${weights.harmonic_pattern})`);
+            }
         }
 
         // 6. "God Mode" / Golden Ticket

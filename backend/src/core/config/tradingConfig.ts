@@ -46,8 +46,12 @@ export const TradingConfig = {
 
     // --- SCORING MATRIX ---
     scoring: {
-        min_score_entry: 60, // ADJUSTED: Tuned for Quality > Quantity
+        min_score_entry: 75, // UPGRADED: Institutional Grade (Was 60)
         god_mode_threshold: 90,
+        filters: { // NEW: Hard Filters
+            min_adx: 20, // Avoid Chop
+            min_volume_24h: 5000000 // $5M Liquidity Floor
+        },
         weights: {
             // Trend Following
             ema_alignment_bullish: 15,
@@ -59,11 +63,12 @@ export const TradingConfig = {
             rsi_divergence: 20,
 
             // Volume / Institutional (BOOSTED)
-            volume_spike: 20, // Was 10
-            order_block_retest: 20, // Was 15
-            liquidation_flutter: 20, // Was 10
-            cvd_divergence_boost: 25, // NEW: Smart Money Footprint
-            ml_confidence_max: 30, // NEW: Centralized ML Boost Limit
+            volume_spike: 20,
+            order_block_retest: 20, // Institutional Pivot
+            liquidation_flutter: 20, // Fuel
+            cvd_divergence_boost: 25, // Smart Money Footprint
+            ml_confidence_max: 30,
+            harmonic_pattern: 20, // NEW: Geometric Confluence
 
             // Patterns
             chart_pattern_breakout: 15,

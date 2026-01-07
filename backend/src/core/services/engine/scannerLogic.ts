@@ -393,6 +393,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 reasoning: reasoning, // NEW: Pass full array
                 invalidated: false,
                 metrics: {
+                    adx: indicators.adx, // NEW: For filtering
+                    volume24h: parseFloat(coin.volume), // NEW: For filtering (Parse string to float)
                     rvol: indicators.rvol,
                     rsi: indicators.rsi,
                     vwapDist: ((indicators.price - indicators.vwap) / indicators.vwap) * 100,
