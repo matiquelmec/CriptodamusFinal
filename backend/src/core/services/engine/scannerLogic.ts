@@ -394,7 +394,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 invalidated: false,
                 metrics: {
                     adx: indicators.adx, // NEW: For filtering
-                    volume24h: parseFloat(coin.volume), // NEW: For filtering (Parse string to float)
+                    volume24h: coin.rawVolume || 0, // FIXED: Use raw numeric volume
                     rvol: indicators.rvol,
                     rsi: indicators.rsi,
                     vwapDist: ((indicators.price - indicators.vwap) / indicators.vwap) * 100,

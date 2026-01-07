@@ -6,6 +6,7 @@ export interface MarketData {
     change24h: number;
     rsi: number;
     volume: string;
+    rawVolume?: number; // NEW: Raw numeric volume for filtering
     trend: 'bullish' | 'bearish' | 'neutral';
     tier?: FundamentalTier; // NEW: Fundamental Classification
 }

@@ -131,6 +131,7 @@ const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
                 change24h: parseFloat(ticker.priceChangePercent),
                 rsi: 50, // Placeholder, calculated properly in detailed analysis
                 volume: formatVolume(parseFloat(ticker.quoteVolume)),
+                rawVolume: parseFloat(ticker.quoteVolume), // NEW: Raw number
                 trend: (parseFloat(ticker.priceChangePercent) > 0.5 ? 'bullish' : 'bearish') as 'bullish' | 'bearish'
             };
         });
@@ -163,6 +164,7 @@ const fetchCoinCapMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
             change24h: parseFloat(asset.changePercent24Hr),
             rsi: 50,
             volume: formatVolume(parseFloat(asset.volumeUsd24Hr)),
+            rawVolume: parseFloat(asset.volumeUsd24Hr), // NEW: Raw number
             trend: (parseFloat(asset.changePercent24Hr) > 0.5 ? 'bullish' : 'bearish') as 'bullish' | 'bearish'
         }));
     } catch (e) {
