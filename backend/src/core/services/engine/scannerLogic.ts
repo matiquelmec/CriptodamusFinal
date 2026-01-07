@@ -393,16 +393,16 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 reasoning: reasoning, // NEW: Pass full array
                 invalidated: false,
                 metrics: {
-                    adx: indicators.adx, // NEW: For filtering
+                    adx: indicators.adx || 0, // NEW: For filtering
                     volume24h: coin.rawVolume || 0, // FIXED: Use raw numeric volume
-                    rvol: indicators.rvol,
-                    rsi: indicators.rsi,
-                    vwapDist: ((indicators.price - indicators.vwap) / indicators.vwap) * 100,
+                    rvol: indicators.rvol || 0,
+                    rsi: indicators.rsi || 50,
+                    vwapDist: indicators.vwap ? ((indicators.price - indicators.vwap) / indicators.vwap) * 100 : 0, // SAFE: Prevent / 0
                     structure: indicators.trendStatus.emaAlignment,
                     specificTrigger: strategyResult.primaryStrategy?.reason || baseScoreResult.reasoning[0] || "Technical Setup",
-                    zScore: indicators.zScore,
-                    emaSlope: indicators.emaSlope,
-                    isSqueeze: indicators.isSqueeze,
+                    zScore: indicators.zScore || 0,
+                    emaSlope: indicators.emaSlope || 0,
+                    isSqueeze: !!indicators.isSqueeze,
                     volumeExpert: volumeAnalysis, // NEW: Populated from Backend Service
                     macdDivergence: indicators.macdDivergence?.type || undefined,
                     rsiDivergence: indicators.rsiDivergence?.type || undefined, // NEW: Mapped
