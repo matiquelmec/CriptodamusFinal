@@ -1,6 +1,7 @@
 import { fetchCryptoData } from '../core/services/api/binanceApi';
 import { TradingConfig } from '../core/config/tradingConfig';
 import { MarketSession } from '../core/services/engine/MarketSession';
+import { predictNextMove } from '../ml/inference';
 
 /**
  * Criptodamus Operations Monitor
@@ -63,6 +64,21 @@ async function runSystemMonitor() {
     } catch (e: any) {
         console.log(`   ❌ Connection: FAILED ("${e.message}")`);
         allSystemsGo = false;
+    }
+
+
+    // 4. ML BRAIN CHECK (TensorFlow)
+    console.log(`\n🧠 ARTIFICIAL INTELLIGENCE (TensorFlow)`);
+    try {
+        const mlResult = await predictNextMove('BTCUSDT');
+        if (mlResult) {
+            console.log(`   ✅ Brain Status: ACTIVE`);
+            console.log(`   🔮 Prediction: ${mlResult.signal} (${(mlResult.probabilityUp * 100).toFixed(1)}% Bullish)`);
+        } else {
+            console.log(`   ⚠️ Brain Status: DORMANT (Model missing or not loaded)`);
+        }
+    } catch (e: any) {
+        console.log(`   ❌ Brain Error: "${e.message}"`);
     }
 
     // CONCLUSION
