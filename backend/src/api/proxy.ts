@@ -110,23 +110,27 @@ router.get('/:api/*', async (req: Request, res: Response) => {
 
     } catch (error: any) {
         const upstreamStatus = error.response?.status;
-        const msg = error.message || 'Internal Server Error';
+        const upstreamMessage = error.response?.data?.msg || error.message;
+        const errorCode = error.code; // E.g., ETIMEDOUT, ECONNREFUSED
 
-        console.error(`[Proxy] Error forwarding to ${req.params.api}: ${msg} (Status: ${upstreamStatus})`);
+        console.error(`[Proxy] Error forwarding to ${req.params.api}: ${upstreamMessage} (Status: ${upstreamStatus}, Code: ${errorCode})`);
 
         // Detect Geo-Block
         if (upstreamStatus === 451 || upstreamStatus === 403) {
             return res.status(503).json({
                 error: 'Geo-Blocked',
                 message: 'Your server IP is blocked by Binance Futures (likely US Region). Please deploy to a non-US region (e.g. Frankfurt, Singapore).',
-                upstreamStatus
+                upstreamStatus,
+                errorCode
             });
         }
 
         res.status(upstreamStatus || 500).json({
             error: 'Proxy request failed',
-            message: msg,
-            upstreamStatus
+            message: upstreamMessage || 'Internal Server Error',
+            upstreamStatus,
+            errorCode,
+            details: error.response?.data
         });
     }
 });
