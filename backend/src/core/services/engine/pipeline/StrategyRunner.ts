@@ -70,26 +70,14 @@ export class StrategyRunner {
                         name = "Breakout Momentum";
                         break;
                     case 'smc_liquidity':
-                        // Ensure orderBlocks structure is compatible, logic expects { bullishOB, bearishOB } 
-                        // Our types: { bullish, bearish }. Need to check if analyzeSwingSignal handles this or if we map.
-                        // analyzeSwingSignal expects: { bullishOB: ..., bearishOB: ... }
-                        // indicators.orderBlocks comes from AdvancedAnalyzer: { bullish: ..., bearish: ... }
-                        // Mapping needed.
-                        const compatibleOBs = indicators.orderBlocks ? {
-                            bullishOB: indicators.orderBlocks.bullish,
-                            bearishOB: indicators.orderBlocks.bearish
-                        } : undefined;
-
+                        // V2: Pass full indicators object to access Fractals, CVD, etc.
                         result = analyzeSwingSignal(
                             prices,
                             highs,
                             lows,
-                            indicators.fibonacci,
-                            volumes,
-                            compatibleOBs,
-                            indicators.confluenceAnalysis // Pass full Confluence Analysis
+                            indicators
                         );
-                        name = "SMC Liquidity";
+                        name = "SMC Liquidity (Pro)";
                         break;
                     case 'quant_volatility':
                         // Maps to Scalp Strategy in legacy logic
@@ -127,10 +115,7 @@ export class StrategyRunner {
                             prices,
                             highs,
                             lows,
-                            indicators.fibonacci,
-                            volumes,
-                            undefined, // No specific SMC Order Blocks needed for pure mean reversion, or pass if available
-                            indicators.confluenceAnalysis
+                            indicators
                         );
                         name = "Mean Reversion (Range)";
                         break;

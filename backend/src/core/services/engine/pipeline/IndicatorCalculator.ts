@@ -66,13 +66,9 @@ export class IndicatorCalculator {
         const pivots = calculatePivotPoints(highs, lows, closes);
 
         // 3. Institutional Levels (Fibs, Order Blocks - approximated via Fractal Highs/Lows)
-        // Note: Full Order Block detection requires the volumeExpertService, which is a separate pipeline stage.
-        // Here we calculate the "Auto Fibs" which are fractal-based.
-        const fibLevels = calculateAutoFibs(highs, lows, bb.sma); // Passing SMA/EMA approximation 
+        const fibLevels = calculateAutoFibs(highs, lows, bb.sma);
 
         // 4. Pattern Detection
-
-        // Simple Chart Pattern logic (e.g. N-Pattern)
         const nPattern = detectNPattern(highs, lows, closes);
         const boxTheory = calculateBoxTheory(highs, lows, closes);
 
@@ -89,83 +85,88 @@ export class IndicatorCalculator {
         else if (ema20 < ema50 && ema50 < ema100 && ema100 < ema200) emaAlignment = 'BEARISH';
 
         // Crosses (using current candle values)
-        const goldenCross = ema50 > ema200 && (closes.length > 1 ? calculateEMA(closes.slice(0, -1), 50) <= calculateEMA(closes.slice(0, -1), 200) : false);
-        const deathCross = ema50 < ema200 && (closes.length > 1 ? calculateEMA(closes.slice(0, -1), 50) >= calculateEMA(closes.slice(0, -1), 200) : false);
-        // Note: Full historical cross check requires arrays, here we check simple current state or immediate cross if we had previous values. 
-        // For efficiency, we simplistically flag if 50 > 200 as Gold-ish state or rely on dedicated crossover detector if needed. 
-        // Let's stick to state:
         const isGoldenState = ema50 > ema200;
         const isDeathState = ema50 < ema200;
-
+        const goldenCross = ema50 > ema200 && (closes.length > 1 ? calculateEMA(closes.slice(0, -1), 50) <= calculateEMA(closes.slice(0, -1), 200) : false);
+        const deathCross = ema50 < ema200 && (closes.length > 1 ? calculateEMA(closes.slice(0, -1), 50) >= calculateEMA(closes.slice(0, -1), 200) : false);
 
 
         // Divergence Check (Heavy)
-        // Need RSI Array for divergence
         const rsiArray = calculateRSIArray(closes, 14);
         const rsiDivergence: TechnicalIndicators['rsiDivergence'] = detectBullishDivergence(closes, rsiArray, lows) ?
-            { type: 'BULLISH', strength: 0.8, description: 'RSI Bullish Divergence' } as any : null; // Cast as any then type check implicitly via variable type
+            { type: 'BULLISH', strength: 0.8, description: 'RSI Bullish Divergence' } as any : null;
 
-        // Note: compute() should stay relatively fast.
-
-        // 6. ORDER FLOW (CVD)
-        const cvdLine = calculateCVD(volumes, takerBuyVolumes);
-        const cvdDivergence = detectCVDDivergence(closes, cvdLine, lows, highs);
+        // 6. ORDER FLOW (CVD) & STRUCTURE
+        const cvd = calculateCVD(volumes, takerBuyVolumes);
+        const cvdDivergence = detectCVDDivergence(closes, cvd, lows, highs);
+        const fractals = calculateFractals(highs, lows, 5);
 
         return {
-            symbol: symbol,
-            price: closes[closes.length - 1],
-            rvol: calculateRVOL(volumes, 20), // Validated Fix for MemeStrategy
-            technicalReasoning: "",
-            invalidated: false,
-            trendStatus: {
-                emaAlignment,
-                goldenCross: isGoldenState, // Simplified for state
-                deathCross: isDeathState
-            },
+            // --- Basic ---
             rsi,
+            adx,
+            volume: volumes[volumes.length - 1],
+            ema: { ema9: calculateEMA(closes, 9), ema20, ema50, ema200 },
             macd,
-            bollinger: { // Renamed from bollingerBands
+            bollinger: {
                 upper: bb.upper,
                 lower: bb.lower,
                 middle: bb.sma,
-                bandwidth: bb.bandwidth // approx
+                bandwidth: bb.bandwidth
             },
-            pivots: pivots, // ACTIVATED
-            adx: adx,       // ACTIVATED
+
+            // --- Detailed Moving Averages ---
+            sma5: calculateEMA(closes, 5),
+            sma10: calculateEMA(closes, 10),
+            sma30: calculateEMA(closes, 30),
+
+            // --- Advanced ---
             atr,
-            vwap: vwap,     // ACTIVATED
-            ema20,
-            ema50,
-            ema100,
-            ema200,
-            stochRsi,
             zScore,
             emaSlope,
+            vwap,
+            pivots,
+            fibonacci: fibLevels,
 
-            fibonacci: fibLevels, // Renamed to match interface
+            // --- Ichimoku ---
             ichimokuData: {
                 tenkan: ichimoku.tenkan,
                 kijun: ichimoku.kijun,
                 senkouA: ichimoku.senkouA,
                 senkouB: ichimoku.senkouB,
-                chikou: closes[closes.length - 26] || closes[closes.length - 1], // Lagging span approx
+                chikou: closes[closes.length - 26] || closes[closes.length - 1],
                 currentPrice: closes[closes.length - 1],
-                chikouSpanFree: true, // Default
+                chikouSpanFree: true,
                 chikouDirection: 'NEUTRAL',
                 futureCloud: ichimoku.senkouA > ichimoku.senkouB ? 'BULLISH' : 'BEARISH',
                 cloudThickness: Math.abs((ichimoku.senkouA - ichimoku.senkouB) / ichimoku.senkouB) * 100,
                 priceVsKijun: 0,
                 tkSeparation: 0
             },
+            ichimoku, // Typed version if needed
 
-
-            // Custom additions for our pipeline
+            // --- Patterns & Structure (SMC) ---
             nPattern,
             boxTheory,
-            chartPatterns, // NEW: Active
-            cvd: cvdLine, // NEW
+            chartPatterns,
+            fractals, // NEW
+
+            // --- Order Flow ---
+            cvd, // NEW
             cvdDivergence, // NEW
-            rsiDivergence // Direct injection 
-        }; // Casting valid by structure now
+            rsiDivergence,
+
+            // --- Analysis Meta ---
+            rvol: calculateRVOL(volumes, 20),
+            rsiFreeze: calculateRSI(closes, 9),
+            stochRsi,
+            technicalReasoning: "Calculated via IndicatorCalculator",
+            invalidated: false,
+            trendStatus: {
+                emaAlignment,
+                goldenCross,
+                deathCross
+            }
+        };
     }
 }

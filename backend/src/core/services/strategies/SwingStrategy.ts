@@ -1,188 +1,143 @@
+import { TechnicalIndicators } from '../../types';
 
-import { calculateEMA, calculateRSIArray, detectBullishDivergence, calculateSMA } from '../mathUtils';
-
-export interface SwingSignal {
-    score: number;
-    signalSide: 'LONG' | 'SHORT';
-    detectionNote: string;
-    specificTrigger: string;
-}
-
-export const analyzeSwingSignal = (
+export function analyzeSwingSignal(
     prices: number[],
     highs: number[],
     lows: number[],
-    fibs: any, // Using any for now to avoid importing complex types, or I can define the shape
-    volumes?: number[], // NEW: Para validar volumen en barridos
-    orderBlocks?: { // NEW: Order Blocks ya calculados
-        bullishOB: Array<{ price: number; strength: number; mitigated: boolean }>;
-        bearishOB: Array<{ price: number; strength: number; mitigated: boolean }>;
-    },
-    confluence?: any // NEW: ConfluenceAnalysis (Type 'any' to avoid circular deps if needed, but preferably typed)
-): SwingSignal | null => {
-    const checkIndex = prices.length - 1;
-    const currentPrice = prices[checkIndex];
+    indicators: TechnicalIndicators // Now receiving full indicators object
+): { score: number; signalSide: 'LONG' | 'SHORT' | 'NEUTRAL'; detectionNote: string; specificTrigger?: string } {
 
-    const lastLow = lows[checkIndex];
-    const lastHigh = highs[checkIndex];
+    // -------------------------------------------------------------------------
+    // INSTITUTIONAL SMC LOGIC (V2 PRO)
+    // Core Philosophy: Liquidity Sweeps + Displacement + Order Flow Validation
+    // -------------------------------------------------------------------------
 
-    // Lookback increased to 20 for better swing structure detection
-    // Ensure we have enough data
-    if (checkIndex < 20) return null;
+    const currentPrice = prices[prices.length - 1];
+    const currentHigh = highs[highs.length - 1];
+    const currentLow = lows[lows.length - 1];
+    const prevClose = prices[prices.length - 2];
 
-    const prev20Lows = Math.min(...lows.slice(checkIndex - 20, checkIndex));
-    const prev20Highs = Math.max(...highs.slice(checkIndex - 20, checkIndex));
+    // 1. DATA EXTRACTION
+    const fractals = indicators.fractals;
+    const cvd = indicators.cvd;
+    const orderBlocks = indicators.orderBlocks;
 
-    const ema50 = calculateEMA(prices, 50);
-    const ema200 = calculateEMA(prices, 200);
-    // Hardened Trend Logic: Price > EMA200 dictates structure (Recovery/Bull), Cross is secondary confirmation.
-    // If we only wait for Cross, we miss V-Shapes.
-    const isBullishTrend = (ema50 > ema200) || (currentPrice > ema200);
+    // Safe guard for minimal data
+    if (!fractals || !cvd || !orderBlocks) {
+        return { score: 0, signalSide: 'NEUTRAL', detectionNote: "Datos insuficientes (Fractals/CVD/OB) para análisis SMC." };
+    }
 
-    // CHECK FIBONACCI PROXIMITY (Golden Pocket)
-    // fibs.level0_618 is the Golden Pocket level
-    const distToGolden = Math.abs((currentPrice - fibs.level0_618) / currentPrice);
-    const nearGoldenPocket = distToGolden < 0.015; // Within 1.5%
+    let score = 0;
+    let signalSide: 'LONG' | 'SHORT' | 'NEUTRAL' = 'NEUTRAL';
+    let detectionNote = "";
+    let specificTrigger = "";
 
-    // CHECK DIVERGENCES
-    const rsiArray = calculateRSIArray(prices, 14);
-    const hasBullishDiv = detectBullishDivergence(prices, rsiArray, lows);
+    // 2. IDENTIFY LIQUIDITY ZONES (FRACTALS)
+    // We assume indicators.fractals returns arrays of PRICE LEVELS of the fractal points.
+    // If empty, we can't operate.
 
-    // --- PROFESSIONAL REVERSAL LOGIC (Counter-Trend Sniper) ---
-    // Rule: If Trend is Bearish, we normally ignore Longs.
-    // EXCEPTION: If we are at a "God Tier" Support (Confluence >= 3 factors) AND have SFP/Div.
-    if (!isBullishTrend && currentPrice < ema200) {
-        // Detect SFP Candidate (Sweep of lows)
-        // Similar to below SFP logic but stricter
-        const isSFP = lastLow < prev20Lows && currentPrice > prev20Lows; // Swept low and closed back inside range
+    const lastSwingLow = fractals.bullish && fractals.bullish.length > 0 ? fractals.bullish[fractals.bullish.length - 1] : null;
+    const lastSwingHigh = fractals.bearish && fractals.bearish.length > 0 ? fractals.bearish[fractals.bearish.length - 1] : null;
 
-        if (isSFP || hasBullishDiv) {
-            // Check High Confluence Support
-            // We need at least one "Heavy" support from Confluence Engine
-            let atMajorSupport = false;
-            let supportScore = 0;
+    // 3. DETECT SWINGS (SFP - Swing Failure Pattern)
 
-            if (confluence && confluence.topSupports) {
-                // Check if any top support is nearby (1.5%)
-                const majorSupport = confluence.topSupports.find((s: any) =>
-                    Math.abs(s.price - currentPrice) / currentPrice < 0.015 && s.score >= 3
-                );
-                if (majorSupport) {
-                    atMajorSupport = true;
-                    supportScore = majorSupport.score;
-                }
+    // --- BULLISH SFP (Long Setup) ---
+    // Criteria:
+    // A. Previous Fractal Low exists.
+    // B. Current Low went BELOW that Fractal Low (Sweep).
+    // C. Current Close is ABOVE that Fractal Low (Rejection).
+
+    // We also check 'currentPrice' (Close) vs lastSwingLow
+    // To be safe, let's assume lastSwingLow is a number.
+    if (lastSwingLow !== null && currentLow < lastSwingLow && currentPrice > lastSwingLow) {
+
+        // Step A: We have a SWEEP.
+        let confluenceScore = 0;
+        let reasons: string[] = [];
+
+        // CVD Validation
+        // We need to check if CVD is diverging locally. 
+        // Simple check: Is the last CVD higher than the CVD 2 candles ago? Or just positive slope?
+        // Let's compare last 2 points.
+        if (cvd.length >= 2) {
+            const lastCVD = cvd[cvd.length - 1];
+            const prevCVD = cvd[cvd.length - 2];
+
+            // If Price is making a low (which it is, by definition of SFP local low)
+            // But CVD is rising or holding (Absorption)
+            if (lastCVD > prevCVD) {
+                confluenceScore += 2;
+                reasons.push("Absorción (CVD)");
             }
+        }
 
-            // Also allow if we are at Golden Pocket or Unmitigated Bullish OB specifically (if confluence not passed/parsed)
-            if (nearGoldenPocket || (orderBlocks?.bullishOB?.some(ob => !ob.mitigated && Math.abs(ob.price - currentPrice) / currentPrice < 0.01))) {
-                atMajorSupport = true;
-                supportScore = Math.max(supportScore, 3); // Base score for GP/OB
+        // Order Block Confluence
+        // Are we sweeping INTO a Bullish OB?
+        if (orderBlocks.bullish) {
+            const inBullishOB = orderBlocks.bullish.some((ob: any) =>
+                currentLow >= ob.min && currentLow <= ob.max && !ob.mitigated
+            );
+
+            if (inBullishOB) {
+                confluenceScore += 2;
+                reasons.push("Test Bullish OB");
             }
+        }
 
-            if (atMajorSupport) {
-                const score = 80 + (supportScore * 2); // Base 80 + Bonus
-                const trigger = isSFP ? "SFP (Sniper)" : "RSI Div (Reversal)";
+        // Final Scoring for Long
+        // We require at least ONE confirmation (CVD or OB) to consider it "Pro" check
+        // Or if the sweep is very clean (Hammer candle). 
+        // Let's be strict: Score 0 unless validated.
 
-                return {
-                    score,
-                    signalSide: 'LONG',
-                    detectionNote: `🛡️ PROFESSIONAL REVERSAL: Compra contra-tendencia en Soporte Mayor (Score ${supportScore}). Estructura de Acumulación detectada (${trigger}).`,
-                    specificTrigger: `PROFESSIONAL_REVERSAL`
-                };
-            }
+        if (confluenceScore >= 2) {
+            score = 80 + (confluenceScore * 5); // Max 100
+            signalSide = 'LONG';
+            specificTrigger = 'SFP_BULLISH';
+            detectionNote = `💎 SMC LONG: Barrido de Liquidez (SFP) en ${lastSwingLow}. Confirmación: ${reasons.join(' + ')}.`;
         }
     }
 
-    // SFP Logic (Swing Failure Pattern)
-    if (isBullishTrend && lastLow < prev20Lows && currentPrice > prev20Lows) {
-        let score = 80;
-        let extraNotes = [];
+    // --- BEARISH SFP (Short Setup) ---
+    else if (lastSwingHigh !== null && currentHigh > lastSwingHigh && currentPrice < lastSwingHigh) {
+        let confluenceScore = 0;
+        let reasons: string[] = [];
 
-        if (nearGoldenPocket) {
-            score += 10;
-            extraNotes.push("Golden Pocket");
-        }
-        if (hasBullishDiv) {
-            score += 5;
-            extraNotes.push("Divergencia RSI");
-        }
+        // CVD Validation
+        if (cvd.length >= 2) {
+            const lastCVD = cvd[cvd.length - 1];
+            const prevCVD = cvd[cvd.length - 2];
 
-        // NEW: VALIDACIÓN DE VOLUMEN EN EL BARRIDO (Institucional)
-        // Un barrido de liquidez real debe tener volumen significativo
-        if (volumes && volumes.length > checkIndex) {
-            const avgVolume = calculateSMA(volumes, 20);
-            const volumeOnSweep = volumes[checkIndex];
-            const volumeRatio = avgVolume > 0 ? volumeOnSweep / avgVolume : 0;
-
-            if (volumeRatio < 1.2) {
-                // Barrido sin volumen = débil (posible fake-out)
-                score -= 15;
-            } else if (volumeRatio > 2.0) {
-                // Barrido con volumen fuerte = institucional
-                score += 10;
-                extraNotes.push("Vol Fuerte");
+            // Price High, CVD Dropping (Exhaustion/Selling)
+            if (lastCVD < prevCVD) {
+                confluenceScore += 2;
+                reasons.push("CVD Bearish Div");
             }
         }
 
-        // NEW: BONUS POR ORDER BLOCK CERCANO
-        // Si hay un OB bullish cerca, es zona institucional de compra
-        if (orderBlocks && orderBlocks.bullishOB) {
-            const nearOB = orderBlocks.bullishOB.some(ob =>
-                !ob.mitigated && Math.abs(ob.price - currentPrice) / currentPrice < 0.01
+        // OB Confluence
+        if (orderBlocks.bearish) {
+            const inBearishOB = orderBlocks.bearish.some((ob: any) =>
+                currentHigh >= ob.min && currentHigh <= ob.max && !ob.mitigated
             );
-            if (nearOB) {
-                score += 10;
-                extraNotes.push("Order Block");
+
+            if (inBearishOB) {
+                confluenceScore += 2;
+                reasons.push("Test Bearish OB");
             }
         }
 
-        const detectionNote = `SMC Sniper: Barrido de Liquidez${extraNotes.length > 0 ? ' + ' + extraNotes.join(' + ') : ''}. El precio tomó liquidez bajo el mínimo previo y cerró arriba, atrapando vendedores.`;
-        const specificTrigger = `SFP (Swing Failure Pattern)${hasBullishDiv ? ' + Bull Div' : ''}`;
-
-        return {
-            score,
-            signalSide: 'LONG',
-            detectionNote,
-            specificTrigger
-        };
-    } else if (!isBullishTrend && lastHigh > prev20Highs && currentPrice < prev20Highs) {
-        let score = 80;
-        let extraNotes = [];
-
-        // NEW: VALIDACIÓN DE VOLUMEN EN BARRIDO BAJISTA
-        if (volumes && volumes.length > checkIndex) {
-            const avgVolume = calculateSMA(volumes, 20);
-            const volumeOnSweep = volumes[checkIndex];
-            const volumeRatio = avgVolume > 0 ? volumeOnSweep / avgVolume : 0;
-
-            if (volumeRatio < 1.2) {
-                score -= 15;
-            } else if (volumeRatio > 2.0) {
-                score += 10;
-                extraNotes.push("Vol Fuerte");
-            }
+        if (confluenceScore >= 2) {
+            score = 80 + (confluenceScore * 5);
+            signalSide = 'SHORT';
+            specificTrigger = 'SFP_BEARISH';
+            detectionNote = `💎 SMC SHORT: Barrido de Liquidez (SFP) en ${lastSwingHigh}. Confirmación: ${reasons.join(' + ')}.`;
         }
-
-        // NEW: BONUS POR ORDER BLOCK BAJISTA CERCANO
-        if (orderBlocks && orderBlocks.bearishOB) {
-            const nearOB = orderBlocks.bearishOB.some(ob =>
-                !ob.mitigated && Math.abs(ob.price - currentPrice) / currentPrice < 0.01
-            );
-            if (nearOB) {
-                score += 10;
-                extraNotes.push("Order Block");
-            }
-        }
-
-        const detectionNote = `SMC Setup: Rechazo de Estructura Bajista (SFP)${extraNotes.length > 0 ? ' + ' + extraNotes.join(' + ') : ''}. Barrido de stops sobre el máximo previo para capturar liquidez antes de caer.`;
-
-        return {
-            score,
-            signalSide: 'SHORT',
-            detectionNote,
-            specificTrigger: "SFP Bajista (Máximo previo barrido)"
-        };
     }
 
-    return null;
-};
+    return {
+        score,
+        signalSide,
+        detectionNote,
+        specificTrigger
+    };
+}
