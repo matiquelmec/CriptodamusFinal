@@ -65,18 +65,46 @@ export class SmartFetch {
 
             return response.data;
         } catch (error: any) {
-            // 2.5 Geo-Block Evasion (451)
-            if (error.response?.status === 451) {
-                if (url.includes('api.binance.com')) {
-                    const newUrl = url.replace('api.binance.com', 'api.binance.us');
-                    console.warn(`[SmartFetch] 🌍 Geo-Blocked (451). Rerouting to Binance US: ${newUrl}`);
-                    return this.executeRequest<T>(newUrl, config, retriesLeft);
-                }
-                if (url.includes('fapi.binance.com')) {
-                    // Futures are NOT available on Binance US. We can't auto-fix this easily without a VPN agent.
-                    console.error(`[SmartFetch] ⛔ CRITICAL: Futures API is Geo-Blocked (451) on this server IP. Cloud Proxy or VPN required.`);
-                    // We throw here, triggering the Service Fallback (if any)
-                    throw error;
+            // 2.5 Geo-Block Evasion (451/403)
+            if (error.response?.status === 451 || error.response?.status === 403) {
+                // Determine if it's Binance Filters
+                const isBinance = url.includes('binance.com');
+
+                if (isBinance) {
+                    console.warn(`[SmartFetch] 🌍 Geo-Blocked (${error.response.status}) accessing ${url}`);
+
+                    // Strategy A: Reroute to Binance US (Spot Only)
+                    if (url.includes('api.binance.com')) {
+                        const newUrl = url.replace('api.binance.com', 'api.binance.us');
+                        console.log(`[SmartFetch] ↪️ Rerouting Spot request to Binance US: ${newUrl}`);
+                        return this.executeRequest<T>(newUrl, config, retriesLeft);
+                    }
+
+                    // Strategy B: Project Bifrost (Frankfurt Gateway) - Futures & Spot
+                    if (process.env.BIFROST_URL) {
+                        console.log(`[SmartFetch] 🌈 Engaging Bifrost Gateway for ${domain}...`);
+
+                        // Construct Bifrost URL: https://bifrost.app/api?target=ENCODED_URL
+                        const targetUrl = encodeURIComponent(url);
+                        // Ensure BIFROST_URL does not end with slash
+                        const bifrostBase = process.env.BIFROST_URL.replace(/\/$/, '');
+                        const bifrostUrl = `${bifrostBase}/api?target=${targetUrl}`;
+
+                        // Execute DIRECTLY via axios to avoid recursion or re-entering SmartFetch limits for the proxy itself
+                        // We do NOT use this.executeRequest here to avoid infinite loops if Bifrost itself fails in a specific way
+                        try {
+                            const proxyResponse = await axios.get<T>(bifrostUrl, {
+                                ...config,
+                                timeout: 15000 // Give the proxy slightly more time
+                            });
+                            return proxyResponse.data;
+                        } catch (proxyError: any) {
+                            console.error(`[SmartFetch] 💥 Bifrost Gateway failed: ${proxyError.message}`);
+                            throw proxyError; // Throw original or proxy error? Throw proxy to debug connection
+                        }
+                    } else {
+                        console.error(`[SmartFetch] ⛔ CRITICAL: Geo-Blocked and BIFROST_URL not configured.`);
+                    }
                 }
             }
 
