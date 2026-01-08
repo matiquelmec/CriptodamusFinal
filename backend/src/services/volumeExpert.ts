@@ -1,6 +1,7 @@
 
 import { VolumeExpertAnalysis, DerivativesData, CVDData } from '../core/types/types-advanced';
 import { estimateLiquidationClusters, analyzeOrderBook } from './engine/liquidationEngine';
+import { SmartFetch } from '../core/services/SmartFetch';
 
 // ============================================================================
 // CONSTANTS & ENDPOINTS
@@ -21,21 +22,8 @@ const CACHE_DURATION = 10000; // 10 seconds (High frequency data)
 const cache: Record<string, CacheEntry<any>> = {};
 
 // ============================================================================
-// HELPER FUNCTIONS
+// HELPER FUNCTIONS (Refactored to use SmartFetch)
 // ============================================================================
-
-const fetchWithTimeout = async (url: string, timeout = 4000): Promise<Response> => {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    try {
-        const response = await fetch(url, { signal: controller.signal } as RequestInit);
-        clearTimeout(id);
-        return response;
-    } catch (error) {
-        clearTimeout(id);
-        throw error;
-    }
-};
 
 const getCached = <T>(key: string): T | null => {
     const entry = cache[key];
@@ -47,16 +35,26 @@ const getCached = <T>(key: string): T | null => {
 
 const setCache = <T>(key: string, data: T) => {
     cache[key] = { data, timestamp: Date.now() };
-    timestamp: Date.now()
+};
+
+// Helper to safely fetch with a default fallback (Proxied via SmartFetch)
+const safeFetch = async (url: string) => {
+    try {
+        // SmartFetch handles 451/403 internally by routing through Bifrost if env var is set
+        return await SmartFetch.get(url, { timeout: 5000 });
+    } catch (e) {
+        console.warn(`[VolumeExpert] Failed to fetch ${url}`, e);
+        return null; // Return null to trigger fallback handling (0.0 defaults)
+    }
 };
 
 // Minimal Fetch for internal needs if not using full BinanceApi service
 async function fetchCandles(symbol: string, interval: string): Promise<any[]> {
-    // Basic implementation for Backend
     try {
-        const res = await fetchWithTimeout(`${BINANCE_SPOT_API}/klines?symbol=${symbol}&interval=${interval}&limit=100`, 5000);
-        if (!res.ok) return [];
-        const data = await res.json();
+        // Uses Vision (Spot) - usually safe, but SmartFetch adds robustness
+        const data = await SmartFetch.get<any[]>(`${BINANCE_SPOT_API}/klines?symbol=${symbol}&interval=${interval}&limit=100`, { timeout: 5000 });
+        if (!Array.isArray(data)) return [];
+
         return data.map((d: any[]) => ({
             timestamp: d[0],
             open: parseFloat(d[1]),
@@ -72,12 +70,19 @@ async function fetchCandles(symbol: string, interval: string): Promise<any[]> {
 
 async function fetchOrderBook(symbol: string, limit = 50) {
     try {
-        const res = await fetchWithTimeout(`${BINANCE_SPOT_API}/depth?symbol=${symbol}&limit=${limit}`, 5000);
-        if (!res.ok) return null;
-        return await res.json();
+        return await SmartFetch.get(`${BINANCE_SPOT_API}/depth?symbol=${symbol}&limit=${limit}`, { timeout: 5000 });
     } catch (e) {
         return null;
     }
+}
+
+/**
+ * Helper to fetch Coinbase Candles (Public)
+ */
+async function fetchCoinbaseCandles(productIds: string, granularity: number = 3600): Promise<any[]> {
+    try {
+        return await SmartFetch.get<any[]>(`${COINBASE_EXCHANGE_API}/products/${productIds}/candles?granularity=${granularity}`, { timeout: 4000 });
+    } catch (e) { return []; }
 }
 
 // ============================================================================
@@ -103,20 +108,8 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
     }
 
     const cacheKey = `derivatives-${fSymbol}`;
-
     const cached = getCached<DerivativesData>(cacheKey);
     if (cached) return cached;
-
-    // Helper to safely fetch with a default fallback
-    const safeFetch = async (url: string) => {
-        try {
-            const res = await fetchWithTimeout(url, 3000);
-            if (res.status === 400 || res.status === 451 || !res.ok) return null;
-            return await res.json();
-        } catch (e) {
-            return null;
-        }
-    };
 
     try {
         // Parallel Fetch: Open Interest + Funding Rate (Premium Index)
@@ -161,17 +154,6 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
             buySellRatio: 1
         };
     }
-}
-
-/**
- * Helper to fetch Coinbase Candles (Public)
- */
-async function fetchCoinbaseCandles(productIds: string, granularity: number = 3600): Promise<any[]> {
-    try {
-        const res = await fetchWithTimeout(`${COINBASE_EXCHANGE_API}/products/${productIds}/candles?granularity=${granularity}`, 4000);
-        if (!res.ok) return [];
-        return await res.json();
-    } catch (e) { return []; }
 }
 
 /**
@@ -238,15 +220,10 @@ export async function getCoinbasePremium(symbol: string): Promise<VolumeExpertAn
         }
 
         // Fallback: Snapshot Logic
-        const [bnRes, cbRes] = await Promise.all([
-            fetchWithTimeout(`${BINANCE_SPOT_API}/ticker/price?symbol=${bnSymbol}`),
-            fetchWithTimeout(`${COINBASE_API}/prices/${cbSymbol}/spot`)
+        const [bnData, cbData] = await Promise.all([
+            SmartFetch.get<any>(`${BINANCE_SPOT_API}/ticker/price?symbol=${bnSymbol}`),
+            SmartFetch.get<any>(`${COINBASE_API}/prices/${cbSymbol}/spot`)
         ]);
-
-        if (!bnRes.ok || !cbRes.ok) throw new Error('Price API Error');
-
-        const bnData = await bnRes.json();
-        const cbData = await cbRes.json();
 
         const bnPrice = parseFloat(bnData.price);
         const cbPrice = parseFloat(cbData.data.amount);
@@ -279,10 +256,7 @@ export async function getInstantCVD(symbol: string): Promise<CVDData> {
 
     try {
         // Fetch last 500 trades
-        const res = await fetchWithTimeout(`${BINANCE_SPOT_API}/aggTrades?symbol=${fSymbol}&limit=500`);
-        if (!res.ok) throw new Error('Binance Trades API Error');
-
-        const trades = await res.json();
+        const trades = await SmartFetch.get<any[]>(`${BINANCE_SPOT_API}/aggTrades?symbol=${fSymbol}&limit=500`, { timeout: 5000 });
 
         let cvdDelta = 0;
         let buyVol = 0;

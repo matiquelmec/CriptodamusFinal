@@ -80,8 +80,12 @@ export class SmartFetch {
                         return this.executeRequest<T>(newUrl, config, retriesLeft);
                     }
 
-                    // Strategy B: (Removed per user request)
-                    // if (process.env.BIFROST_URL) { ... }
+                    // Strategy B: Bifrost Proxy (Geo-Blocking Bypass)
+                    if (process.env.BIFROST_URL) {
+                        console.log(`[SmartFetch] 🌈 Routing through Bifrost: ${url}`);
+                        const bifrostUrl = `${process.env.BIFROST_URL}/api?target=${encodeURIComponent(url)}`;
+                        return this.executeRequest<T>(bifrostUrl, config, retriesLeft - 1); // Don't infinite loop, consume 1 retry
+                    }
                 }
             }
 
