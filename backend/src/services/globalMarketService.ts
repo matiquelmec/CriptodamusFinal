@@ -1,3 +1,4 @@
+
 import { SmartFetch } from '../core/services/SmartFetch';
 
 export interface GlobalMarketData {
@@ -20,21 +21,21 @@ export const fetchGlobalMarketData = async (): Promise<GlobalMarketData> => {
 
     try {
         // 1. Fetch Dominance from CoinGecko using SmartFetch
-        let btcD = 55.0;
-        let usdtD = 5.0;
+        let btcD = 0;
+        let usdtD = 0;
 
         try {
             const cgData = await SmartFetch.get<any>('https://api.coingecko.com/api/v3/global');
             if (cgData.data && cgData.data.market_cap_percentage) {
-                btcD = cgData.data.market_cap_percentage.btc || 55.0;
-                usdtD = cgData.data.market_cap_percentage.usdt || 5.0;
+                btcD = cgData.data.market_cap_percentage.btc || 0;
+                usdtD = cgData.data.market_cap_percentage.usdt || 0;
             }
         } catch (e) {
             console.warn('[GlobalService] CoinGecko fetch failed (handled by SmartFetch):', e instanceof Error ? e.message : e);
         }
 
-        // 2. Fetch Gold Price (PAXG/USDT)
-        let goldPrice = 4300;
+        // 2. Fetch Gold Price (PAXG/USDT) - Real Price or 0 (No fake default)
+        let goldPrice = 0;
         try {
             const bData = await SmartFetch.get<any>('https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT');
             goldPrice = parseFloat(bData.price);
@@ -42,14 +43,16 @@ export const fetchGlobalMarketData = async (): Promise<GlobalMarketData> => {
             console.warn('[GlobalService] Gold Proxy fetch failed');
         }
 
-        // 3. Synthetic DXY
+        // 3. Synthetic DXY (Inverted Euro 2026 Adjusted)
+        // Baseline: DXY ~106 when EURUSD ~1.05 -> Scalar ~111.3
         let eurUsdt = 1.1;
         try {
             const eurData = await SmartFetch.get<any>('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT');
             eurUsdt = parseFloat(eurData.price);
         } catch (e) { }
 
-        const dxyProxy = (1 / eurUsdt) * 100;
+        // Formula: 111.3 / Price (Inverse relationship)
+        const dxyProxy = 111.3 / eurUsdt;
 
         cache = {
             btcDominance: btcD,
