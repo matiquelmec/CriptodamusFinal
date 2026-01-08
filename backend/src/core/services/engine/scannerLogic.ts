@@ -63,6 +63,14 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     const globalSentiment = await fetchCryptoSentiment('BTC');
     console.log(`[Scanner] Global Sentiment: ${globalSentiment.score} (${globalSentiment.sentiment}) | "${globalSentiment.summary}"`);
 
+    // NEW: Global Market Data (DXY, Gold) - Hoisted for efficiency
+    let globalData: any = { dxyIndex: 0, goldPrice: 0, btcDominance: 0 };
+    try {
+        globalData = await fetchGlobalMarketData();
+    } catch (e) {
+        console.warn("[Scanner] Global Market Data missing", e);
+    }
+
     // --- PHASE 8: CIRCUIT BREAKER CHECK ---
     // Note: In production this would use persistent data. Using ephemeral for logic demo.
     const riskLimit = TradingConfig.risk.protection.max_daily_drawdown;
@@ -427,11 +435,26 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     isSqueeze: !!indicators.isSqueeze,
                     volumeExpert: volumeAnalysis, // NEW: Populated from Backend Service
                     macdDivergence: indicators.macdDivergence?.type || undefined,
-                    rsiDivergence: indicators.rsiDivergence?.type || undefined, // NEW: Mapped
+                    rsiDivergence: indicators.rsiDivergence?.type || undefined,
+
+                    // NEW: GOD MODE MAPPING
+                    cvdDivergence: (indicators.cvdDivergence && indicators.cvdDivergence !== 'NONE') ? {
+                        type: indicators.cvdDivergence,
+                        strength: 0.8 // Default heavy weight for now
+                    } : undefined,
+
+                    macroContext: macroContext ? {
+                        btcRegime: macroContext.btcRegime.regime,
+                        dxyIndex: parseFloat(globalData.dxyIndex.toFixed(2)),
+                        goldPrice: parseFloat(globalData.goldPrice.toFixed(0)),
+                        btcDominance: parseFloat(macroContext.btcDominance.current.toFixed(2))
+                    } : undefined,
+
                     fractalAnalysis: macroCompass ? {
                         trend_4h: macroCompass.trend4h,
                         ema200_4h: macroCompass.ema200_4h,
-                        price_4h: macroCompass.price
+                        price_4h: macroCompass.price,
+                        aligned: macroCompass.aligned
                     } : undefined
                 },
                 chartPatterns: indicators.chartPatterns,

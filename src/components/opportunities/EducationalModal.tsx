@@ -3,7 +3,7 @@ import { AIOpportunity } from '../../types';
 import { STRATEGIES } from '../../services/strategyContext';
 import {
     BookOpen, X, Activity, Cpu, Calculator, TrendingUp,
-    Target, Shield, Layers, Zap
+    Target, Shield, Layers, Zap, Globe, ArrowRight
 } from 'lucide-react';
 
 interface EducationalModalProps {
@@ -43,6 +43,41 @@ const EducationalModal: React.FC<EducationalModalProps> = ({ selectedSignal, onC
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
+                {/* 0. GLOBAL MACRO CONTEXT (God Mode) */}
+                {selectedSignal.metrics?.macroContext && (
+                    <div className="bg-surface rounded-xl p-5 border border-border">
+                        <h4 className="text-xs font-bold text-indigo-400 uppercase mb-3 flex items-center gap-2">
+                            <Globe size={14} /> Contexto Macro Global
+                        </h4>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="space-y-1">
+                                <span className="text-[10px] text-secondary uppercase font-bold">Régimen BTC</span>
+                                <div className={`text-sm font-mono font-bold ${selectedSignal.metrics.macroContext.btcRegime === 'BULL' ? 'text-success' : selectedSignal.metrics.macroContext.btcRegime === 'BEAR' ? 'text-danger' : 'text-warning'}`}>
+                                    {selectedSignal.metrics.macroContext.btcRegime}
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] text-secondary uppercase font-bold">DXY Index</span>
+                                <div className={`text-sm font-mono font-bold ${selectedSignal.metrics.macroContext.dxyIndex > 105 ? 'text-danger' : 'text-primary'}`}>
+                                    {selectedSignal.metrics.macroContext.dxyIndex}
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] text-secondary uppercase font-bold">Gold (Risk-Off)</span>
+                                <div className="text-sm font-mono font-bold text-amber-400">
+                                    ${selectedSignal.metrics.macroContext.goldPrice}
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] text-secondary uppercase font-bold">BTC.D (Liquidity)</span>
+                                <div className="text-sm font-mono font-bold text-primary">
+                                    {selectedSignal.metrics.macroContext.btcDominance}%
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* 1. STRATEGY CONTEXT */}
                 <div className="bg-surface rounded-xl p-5 border border-border">
                     <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
@@ -127,6 +162,19 @@ const EducationalModal: React.FC<EducationalModalProps> = ({ selectedSignal, onC
                                         <span className="text-pink-400 font-bold">{selectedSignal.chartPatterns[0].type}</span>
                                     </div>
                                 )}
+                                {selectedSignal.metrics.fractalAnalysis && (
+                                    <div className="flex justify-between border-b border-border/50 pb-1 bg-yellow-500/10 p-1 rounded">
+                                        <span className="text-secondary">Estructura (15m vs 4H):</span>
+                                        <div className="flex items-center gap-1">
+                                            <span className={`font-bold ${selectedSignal.metrics.fractalAnalysis.aligned ? 'text-success' : 'text-warning'}`}>
+                                                {selectedSignal.metrics.fractalAnalysis.aligned ? 'ALINEADA' : 'DIVERGENTE'}
+                                            </span>
+                                            <span className="text-[10px] text-zinc-500">
+                                                ({selectedSignal.metrics.fractalAnalysis.trend_4h})
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                                 {selectedSignal.metrics.zScore !== undefined && (
                                     <div className="flex justify-between border-b border-border/50 pb-1">
                                         <span className="text-secondary">Z-Score (Desviación):</span>
@@ -183,6 +231,16 @@ const EducationalModal: React.FC<EducationalModalProps> = ({ selectedSignal, onC
                                         {selectedSignal.metrics.volumeExpert.cvd.trend}
                                     </span>
                                 </div>
+                                {/* CVD Divergence Alert */}
+                                {selectedSignal.metrics.cvdDivergence && (
+                                    <div className="flex justify-between border-b border-border/50 pb-1 mt-1 bg-purple-500/10 p-1 rounded animate-pulse">
+                                        <span className="text-secondary">Divergencia CVD:</span>
+                                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${selectedSignal.metrics.cvdDivergence.type.includes('BULL') ? 'text-success' : 'text-danger'
+                                            }`}>
+                                            {selectedSignal.metrics.cvdDivergence.type.replace('HIDDEN_', 'OCULTA ')}
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between border-b border-border/50 pb-1">
                                     <span className="text-secondary">Open Interest:</span>
                                     <span className="text-primary font-bold">

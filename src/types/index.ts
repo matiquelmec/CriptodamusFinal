@@ -361,10 +361,24 @@ export interface AIOpportunity {
     rsiDivergence?: string; // NEW: Description or Type
     volumeExpert?: import('./types-advanced').VolumeExpertAnalysis; // NEW: Institutional Data for UI
     sessionContext?: string; // NEW: Contexto de sesión (e.g. "ASIA_SWEEP")
+
+    // NEW: GOD MODE METRICS
+    cvdDivergence?: {
+      type: 'BULLISH' | 'BEARISH' | 'HIDDEN_BULLISH' | 'HIDDEN_BEARISH';
+      strength: number;
+    };
+    macroContext?: {
+      btcRegime: string; // e.g. "BULL", "BEAR"
+      dxyIndex: number;
+      goldPrice: number;
+      btcDominance: number;
+    };
+
     fractalAnalysis?: {
       trend_4h: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
       ema200_4h: number;
       price_4h: number;
+      aligned: boolean;
     };
   };
   chartPatterns?: ChartPattern[]; // NEW: Smart Geometric Patterns
