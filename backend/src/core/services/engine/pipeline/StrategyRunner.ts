@@ -38,6 +38,7 @@ export class StrategyRunner {
             score: number;
             signal: 'LONG' | 'SHORT' | 'NEUTRAL';
             reason: string;
+            isFresh?: boolean;
         } | null = null;
 
         const strategyDetails: string[] = [];
@@ -150,7 +151,8 @@ export class StrategyRunner {
                             id: strategy.id,
                             score: result.score, // Raw Score
                             signal: signal,
-                            reason: result.detectionNote // Mapped from detectionNote
+                            reason: result.detectionNote, // Mapped from detectionNote
+                            isFresh: (result as any).isFresh // Optional, bubbled up from adapter
                         };
                     }
 

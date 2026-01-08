@@ -460,6 +460,30 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 tp3: dcaPlan.takeProfits.tp3.price
             };
 
+            // --- STAGE 6: FOMO PREVENTION (The Sniper Check) ---
+            const isFresh = strategyResult.primaryStrategy?.isFresh ?? true; // Default to true if strategy doesn't support fresh check yet
+            const bestEntryDist = Math.abs(dcaPlan.entries[0].distanceFromCurrent);
+
+            // Dynamic Threshold based on timeframe
+            const fomoThreshold = interval === '4h' ? 1.5 : 0.6; // 1.5% for Swing, 0.6% for Scalp
+
+            if (!isFresh && bestEntryDist > fomoThreshold) {
+                // It's a stale signal AND we are far from the ideal entry.
+                // This is classic FOMO / Chasing.
+                // We don't discard entirely to allow 'Limit Order' setups, but we penalize score HEAVILY
+                // so it only shows up if everything else is perfect.
+                // Actually, user said "Entradas Ideales", "No FOMO".
+                // A limit order far away IS an ideal entry (waiting for dip).
+                // But showing it as a "Live Opportunity" might be confusing?
+                // Let's MARK it as "WAITING" status via score penalty or separate flag.
+                // For now, we will SKIP sending it to avoiding cluttering the UI with "Old Trends".
+
+                // Decision: Filters out 'Chasing'. If you want to enter a trend, wait for the dip (which dcaPlan provides).
+                // If price is > fomoThreshold away from dip, it's not a valid "Now" opportunity.
+                console.log(`[Sniper] Rejected ${coin.symbol}: Stale signal + Bad Entry (${bestEntryDist.toFixed(2)}% > ${fomoThreshold}%).`);
+                return;
+            }
+
             // FINAL GATEKEEPER
             const gate = FilterEngine.shouldDiscard(opportunity, risk, style);
             if (!gate.discarded) {
