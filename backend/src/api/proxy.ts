@@ -30,6 +30,16 @@ const ALLOWED_APIS: Record<string, ApiConfig> = {
             '/api/v3/depth'
         ]
     },
+    binance_futures: {
+        baseURL: 'https://fapi.binance.com',
+        rateLimit: 100,
+        endpoints: [
+            '/fapi/v1/openInterest',
+            '/fapi/v1/premiumIndex',
+            '/fapi/v1/fundingRate',
+            '/fapi/v1/ticker/price'
+        ]
+    },
     coincap: {
         baseURL: 'https://api.coincap.io',
         rateLimit: 200,

@@ -65,11 +65,19 @@ export class SmartFetch {
 
             return response.data;
         } catch (error: any) {
-            // 2.5 Geo-Block Evasion (451) -> Switch to Binance US
-            if (error.response?.status === 451 && url.includes('api.binance.com')) {
-                const newUrl = url.replace('api.binance.com', 'api.binance.us');
-                console.warn(`[SmartFetch] 🌍 Geo-Blocked (451). Rerouting to Binance US: ${newUrl}`);
-                return this.executeRequest<T>(newUrl, config, retriesLeft);
+            // 2.5 Geo-Block Evasion (451)
+            if (error.response?.status === 451) {
+                if (url.includes('api.binance.com')) {
+                    const newUrl = url.replace('api.binance.com', 'api.binance.us');
+                    console.warn(`[SmartFetch] 🌍 Geo-Blocked (451). Rerouting to Binance US: ${newUrl}`);
+                    return this.executeRequest<T>(newUrl, config, retriesLeft);
+                }
+                if (url.includes('fapi.binance.com')) {
+                    // Futures are NOT available on Binance US. We can't auto-fix this easily without a VPN agent.
+                    console.error(`[SmartFetch] ⛔ CRITICAL: Futures API is Geo-Blocked (451) on this server IP. Cloud Proxy or VPN required.`);
+                    // We throw here, triggering the Service Fallback (if any)
+                    throw error;
+                }
             }
 
             // 3. Retry Logic

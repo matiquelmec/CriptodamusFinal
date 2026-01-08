@@ -88,10 +88,14 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
     };
 
     try {
+        // Proxy URLs to avoid CORS
+        const API_URL = import.meta.env.PROD ? 'https://criptodamusfinal.onrender.com' : 'http://localhost:3001';
+        const PROXY_HB = `${API_URL}/api/proxy/binance_futures/fapi/v1`; // Uses new backend proxy key
+
         // Parallel Fetch: Open Interest + Funding Rate (Premium Index)
         const [oiData, fundingData] = await Promise.all([
-            safeFetch(`${BINANCE_FUTURES_API}/openInterest?symbol=${fSymbol}`),
-            safeFetch(`${BINANCE_FUTURES_API}/premiumIndex?symbol=${fSymbol}`) // Removed blocked globalLongShort to prevent CORS error
+            safeFetch(`${PROXY_HB}/openInterest?symbol=${fSymbol}`),
+            safeFetch(`${PROXY_HB}/premiumIndex?symbol=${fSymbol}`)
         ]);
 
         // If primary data failed (likely geoblocked), return defaults immediately
