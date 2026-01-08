@@ -12,7 +12,7 @@ import {
     calculateFractals, detectNPattern, calculateBoxTheory,
     detectBullishDivergence, calculateEMA,
     calculateCVD, detectCVDDivergence, // NEW: Order Flow
-    calculateADX, calculateCumulativeVWAP, calculatePivotPoints, calculateRSIArray // NEW: God Mode Imports
+    calculateADX, calculateCumulativeVWAP, calculatePivotPoints, calculateRSIArray, calculateRVOL // NEW: God Mode Imports
 } from '../../mathUtils';
 import { detectChartPatterns } from '../../chartPatterns';
 import { TradingConfig } from '../../../config/tradingConfig';
@@ -114,7 +114,7 @@ export class IndicatorCalculator {
         return {
             symbol: symbol,
             price: closes[closes.length - 1],
-            rvol: 0, // Calculated later or needs mathUtils support
+            rvol: calculateRVOL(volumes, 20), // Validated Fix for MemeStrategy
             technicalReasoning: "",
             invalidated: false,
             trendStatus: {

@@ -488,6 +488,17 @@ export function calculatePivotPoints(highs: number[], lows: number[], closes: nu
 
 export function formatVolume(vol: number) { return vol >= 1e9 ? (vol / 1e9).toFixed(1) + 'B' : (vol / 1e6).toFixed(1) + 'M'; }
 
+// NEW: RVOL Calculation
+export function calculateRVOL(volumes: number[], period: number = 20): number {
+    if (volumes.length < period + 1) return 1; // Not enough data
+    const currentVol = volumes[volumes.length - 1];
+    // Calculate SMA of PAST periods (excluding current) for baseline
+    const pastVolumes = volumes.slice(0, -1);
+    const avgVol = calculateSMA(pastVolumes, period);
+
+    return avgVol > 0 ? currentVol / avgVol : 0;
+}
+
 
 
 // NEW: Z-Score for Mean Reversion (Distance from EMA200 in StdDevs)
