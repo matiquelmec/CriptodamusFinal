@@ -39,6 +39,7 @@ export class StrategyRunner {
             signal: 'LONG' | 'SHORT' | 'NEUTRAL';
             reason: string;
             isFresh?: boolean;
+            specificTrigger?: string;
         } | null = null;
 
         const strategyDetails: string[] = [];
@@ -85,7 +86,8 @@ export class StrategyRunner {
                             lows,
                             indicators.fibonacci,
                             volumes,
-                            compatibleOBs
+                            compatibleOBs,
+                            indicators.confluenceAnalysis // Pass full Confluence Analysis
                         );
                         name = "SMC Liquidity";
                         break;
@@ -127,7 +129,8 @@ export class StrategyRunner {
                             lows,
                             indicators.fibonacci,
                             volumes,
-                            undefined // No specific SMC Order Blocks needed for pure mean reversion, or pass if available
+                            undefined, // No specific SMC Order Blocks needed for pure mean reversion, or pass if available
+                            indicators.confluenceAnalysis
                         );
                         name = "Mean Reversion (Range)";
                         break;
@@ -152,7 +155,8 @@ export class StrategyRunner {
                             score: result.score, // Raw Score
                             signal: signal,
                             reason: result.detectionNote, // Mapped from detectionNote
-                            isFresh: (result as any).isFresh // Optional, bubbled up from adapter
+                            isFresh: (result as any).isFresh, // Optional, bubbled up from adapter
+                            specificTrigger: (result as any).specificTrigger
                         };
                     }
 

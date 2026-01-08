@@ -17,7 +17,8 @@ export const analyzeSwingSignal = (
     orderBlocks?: { // NEW: Order Blocks ya calculados
         bullishOB: Array<{ price: number; strength: number; mitigated: boolean }>;
         bearishOB: Array<{ price: number; strength: number; mitigated: boolean }>;
-    }
+    },
+    confluence?: any // NEW: ConfluenceAnalysis (Type 'any' to avoid circular deps if needed, but preferably typed)
 ): SwingSignal | null => {
     const checkIndex = prices.length - 1;
     const currentPrice = prices[checkIndex];
@@ -46,6 +47,51 @@ export const analyzeSwingSignal = (
     // CHECK DIVERGENCES
     const rsiArray = calculateRSIArray(prices, 14);
     const hasBullishDiv = detectBullishDivergence(prices, rsiArray, lows);
+
+    // --- PROFESSIONAL REVERSAL LOGIC (Counter-Trend Sniper) ---
+    // Rule: If Trend is Bearish, we normally ignore Longs.
+    // EXCEPTION: If we are at a "God Tier" Support (Confluence >= 3 factors) AND have SFP/Div.
+    if (!isBullishTrend && currentPrice < ema200) {
+        // Detect SFP Candidate (Sweep of lows)
+        // Similar to below SFP logic but stricter
+        const isSFP = lastLow < prev20Lows && currentPrice > prev20Lows; // Swept low and closed back inside range
+
+        if (isSFP || hasBullishDiv) {
+            // Check High Confluence Support
+            // We need at least one "Heavy" support from Confluence Engine
+            let atMajorSupport = false;
+            let supportScore = 0;
+
+            if (confluence && confluence.topSupports) {
+                // Check if any top support is nearby (1.5%)
+                const majorSupport = confluence.topSupports.find((s: any) =>
+                    Math.abs(s.price - currentPrice) / currentPrice < 0.015 && s.score >= 3
+                );
+                if (majorSupport) {
+                    atMajorSupport = true;
+                    supportScore = majorSupport.score;
+                }
+            }
+
+            // Also allow if we are at Golden Pocket or Unmitigated Bullish OB specifically (if confluence not passed/parsed)
+            if (nearGoldenPocket || (orderBlocks?.bullishOB?.some(ob => !ob.mitigated && Math.abs(ob.price - currentPrice) / currentPrice < 0.01))) {
+                atMajorSupport = true;
+                supportScore = Math.max(supportScore, 3); // Base score for GP/OB
+            }
+
+            if (atMajorSupport) {
+                const score = 80 + (supportScore * 2); // Base 80 + Bonus
+                const trigger = isSFP ? "SFP (Sniper)" : "RSI Div (Reversal)";
+
+                return {
+                    score,
+                    signalSide: 'LONG',
+                    detectionNote: `🛡️ PROFESSIONAL REVERSAL: Compra contra-tendencia en Soporte Mayor (Score ${supportScore}). Estructura de Acumulación detectada (${trigger}).`,
+                    specificTrigger: `PROFESSIONAL_REVERSAL`
+                };
+            }
+        }
+    }
 
     // SFP Logic (Swing Failure Pattern)
     if (isBullishTrend && lastLow < prev20Lows && currentPrice > prev20Lows) {

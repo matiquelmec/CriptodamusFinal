@@ -160,9 +160,13 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             // NEW RULES:
             // 1. If Signal is SHORT, we ALWAYS verify 4H trend (Safety First).
             // 2. If Signal is LONG, we verify if score is high enough or strategy requires it.
+            // 3. EXCEPTION: "PROFESSIONAL_REVERSAL" (Reversal at Major Support) allows Counter-Trend.
 
             let macroCompass: MacroCompass | undefined;
-            const needsArchitectCheck = signalSide === 'SHORT' || totalScore > 75 || strategyResult.primaryStrategy?.id === 'FREEZE_STRATEGY';
+            const isProfessionalReversal = strategyResult.primaryStrategy?.id === 'PROFESSIONAL_REVERSAL' ||
+                strategyResult.primaryStrategy?.specificTrigger === 'PROFESSIONAL_REVERSAL'; // Check Trigger too
+
+            const needsArchitectCheck = (signalSide === 'SHORT' || totalScore > 75 || strategyResult.primaryStrategy?.id === 'FREEZE_STRATEGY') && !isProfessionalReversal;
 
             if (needsArchitectCheck) {
                 if (interval === '15m') {
@@ -183,6 +187,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         totalScore -= 20; // Heavy penalty instead of hard block for Longs (catching falling knives is risky but profitable)
                     }
                 }
+            } else if (isProfessionalReversal) {
+                // Log the exception
+                // console.log(`[Smart MTF] ALLOWED ${coin.symbol}: Professional Reversal at Major Support (Counter-Trend authorized).`);
+                reasoning.push("🛡️ Architect: Reversal authorized at Major Support");
             }
 
             // --- STAGE 5: FILTERING & OUTPUT ---
