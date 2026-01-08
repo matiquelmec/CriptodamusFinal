@@ -1,5 +1,5 @@
-
 import { calculateBollingerStats } from '../mathUtils';
+import { TechnicalIndicators } from '../../types';
 
 export interface BreakoutSignal {
     score: number;
@@ -12,17 +12,17 @@ export const analyzeBreakoutSignal = (
     prices: number[],
     highs: number[],
     lows: number[],
-    rvol: number,
-    resistances?: number[] // NEW: Resistencias conocidas para validación
+    indicators: TechnicalIndicators // Standardized Signature
 ): BreakoutSignal | null => {
     const checkIndex = prices.length - 1;
     const currentPrice = prices[checkIndex];
+    const rvol = indicators.rvol || 0;
+    const cvd = indicators.cvd; // Clean Order Flow Data
 
     // Ensure enough data for 20 periods
     if (checkIndex < 20) return null;
 
     // DONCHIAN CHANNEL LOGIC (20 Periods)
-    // We look at the PAST 20 candles (excluding current) to define the channel
     const pastHighs = highs.slice(checkIndex - 20, checkIndex);
     const pastLows = lows.slice(checkIndex - 20, checkIndex);
     const maxHigh20 = Math.max(...pastHighs);
@@ -30,82 +30,71 @@ export const analyzeBreakoutSignal = (
 
     // Volatility Expansion Check
     const { bandwidth } = calculateBollingerStats(prices);
-    // Previous bandwidth (approximate by removing last candle)
     const prevBandwidth = calculateBollingerStats(prices.slice(0, checkIndex)).bandwidth;
     const isExpanding = bandwidth > prevBandwidth;
 
     // 1. BULLISH BREAKOUT
     if (currentPrice > maxHigh20 && rvol > 1.5 && isExpanding) {
-        // NEW: VALIDACIÓN DE CIERRE FUERTE (Institucional)
-        // Un breakout real debe cerrar fuerte (>70% del rango de la vela)
+        // A. Strong Close Check
         const currentHigh = highs[checkIndex];
         const currentLow = lows[checkIndex];
         const candleRange = currentHigh - currentLow;
-
         if (candleRange > 0) {
             const closeStrength = (currentPrice - currentLow) / candleRange;
+            if (closeStrength < 0.7) return null; // Wick Rejection (Trap)
+        }
 
-            // Si cerró débil (<70%), es posible bull trap
-            if (closeStrength < 0.7) {
-                return null; // Descartar breakout no confirmado
+        // B. INSTITUTIONAL CHECK: CVD VALIDATION (No Divergence)
+        // If Price is breaking up, CVD MUST be sloping up or at least not dumping.
+        if (cvd && cvd.length > 5) {
+            const currentCVD = cvd[cvd.length - 1];
+            const prevCVD = cvd[cvd.length - 2];
+
+            // Critical Trap: Price New High but CVD Lower? (Bearish Div) -> Trap
+            if (currentCVD < prevCVD) {
+                // EXTREME CAUTION: CVD Dropping on Breakout = Absorption/Selling into strength
+                return null; // Filtered by Institutional Logic
             }
         }
 
         let score = 75 + Math.min((rvol * 5), 20);
-
-        // NEW: PENALIZACIÓN POR RESISTENCIAS CERCANAS
-        // Si hay resistencia <2% arriba, el breakout puede fallar
-        if (resistances && resistances.length > 0) {
-            const nearResistance = resistances.some(r =>
-                r > currentPrice && ((r - currentPrice) / currentPrice) < 0.02
-            );
-            if (nearResistance) {
-                score -= 20; // Penalización significativa
-            }
-        }
 
         return {
             score,
             signalSide: 'LONG',
-            detectionNote: `Donchian Breakout: Ruptura de Máximo de 20 periodos con Expansión. La expansión de bandas confirma que el movimiento tiene fuerza real y no es ruido.`,
-            specificTrigger: `Price > ${maxHigh20.toFixed(4)} (20p High) + RVOL ${rvol.toFixed(1)}x`
+            detectionNote: `Institutional Breakout: Ruptura validada por CVD y RVOL. Flujo de órdenes acompaña el movimiento.`,
+            specificTrigger: `Price > 20p High + CVD Align`
         };
     }
     // 2. BEARISH BREAKDOWN
     else if (currentPrice < minLow20 && rvol > 1.5 && isExpanding) {
-        // NEW: VALIDACIÓN DE CIERRE FUERTE PARA SHORT
-        // Debe cerrar en el 30% inferior de la vela (presión vendedora)
+        // A. Strong Close Check
         const currentHigh = highs[checkIndex];
         const currentLow = lows[checkIndex];
         const candleRange = currentHigh - currentLow;
-
         if (candleRange > 0) {
             const closeStrength = (currentPrice - currentLow) / candleRange;
+            if (closeStrength > 0.3) return null; // Wick Rejection
+        }
 
-            // Para SHORT, queremos cierre débil (<30%)
-            if (closeStrength > 0.3) {
-                return null; // Breakdown no confirmado
+        // B. INSTITUTIONAL CHECK: CVD VALIDATION
+        if (cvd && cvd.length > 5) {
+            const currentCVD = cvd[cvd.length - 1];
+            const prevCVD = cvd[cvd.length - 2];
+
+            // Critical Trap: Price New Low but CVD Rising? (Bullish Div) -> Trap
+            if (currentCVD > prevCVD) {
+                return null; // Filtered (Absorption detected)
             }
         }
 
         let score = 75 + Math.min((rvol * 5), 20);
 
-        // NEW: PENALIZACIÓN POR SOPORTES CERCANOS (para SHORTs)
-        if (resistances && resistances.length > 0) {
-            // Para SHORT, "resistances" actúan como soportes
-            const nearSupport = resistances.some(r =>
-                r < currentPrice && ((currentPrice - r) / currentPrice) < 0.02
-            );
-            if (nearSupport) {
-                score -= 20;
-            }
-        }
-
         return {
             score,
             signalSide: 'SHORT',
-            detectionNote: `Donchian Breakdown: Ruptura de Mínimo de 20 periodos con Expansión. La volatilidad creciente valida la continuación bajista y la debilidad del soporte.`,
-            specificTrigger: `Price < ${minLow20.toFixed(4)} (20p Low) + RVOL ${rvol.toFixed(1)}x`
+            detectionNote: `Institutional Breakdown: Caída validada por CVD y RVOL. Ventas agresivas confirmadas.`,
+            specificTrigger: `Price < 20p Low + CVD Align`
         };
     }
 

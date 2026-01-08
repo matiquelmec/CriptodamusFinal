@@ -222,6 +222,13 @@ export interface TechnicalIndicators {
         goldenCross: boolean;
         deathCross: boolean;
     };
+
+    // NEW: Raw Fractals (for SMC Strategy)
+    fractals?: {
+        bullish: number[];
+        bearish: number[];
+    };
+
     // NEW: Multi-Timeframe Fractal Analysis (1H, 4H, 1D)
     fractalAnalysis?: {
         trend_1h: 'BULLISH' | 'BEARISH';

@@ -47,6 +47,17 @@ export function analyzeFreezeStrategy(
         return signal; // Not enough data
     }
 
+    // 0. SECURITY KILL SWITCH (The Shield)
+    // If Market Risk is HIGH (Insane Volatility / Manipulation), we FREEZE immediately.
+    // This protects capital during "Black Swan" events or massive whale dumps.
+    if (riskProfile.level === 'HIGH') {
+        // We do strictly return inactive, but we could return a specific reason for UI.
+        // Let's modify the signal to be explicitly blocked.
+        signal.active = false;
+        signal.reason.push(`🛡️ PROTECTION ACTIVE: High Market Risk (${riskProfile.riskType || 'General'}). Trading Frozen.`);
+        return signal;
+    }
+
     // 1. TREND IDENTIFICATION (SMA 30 Filter)
     const isBullishTrend = price > sma30 && sma10 > sma30;
     const isBearishTrend = price < sma30 && sma10 < sma30;

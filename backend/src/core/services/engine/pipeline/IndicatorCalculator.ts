@@ -99,14 +99,19 @@ export class IndicatorCalculator {
         // 6. ORDER FLOW (CVD) & STRUCTURE
         const cvd = calculateCVD(volumes, takerBuyVolumes);
         const cvdDivergence = detectCVDDivergence(closes, cvd, lows, highs);
-        const fractals = calculateFractals(highs, lows, 5);
+        const fractals = calculateFractals(highs, lows);
 
         return {
+            symbol,
+            price: closes[closes.length - 1],
             // --- Basic ---
             rsi,
             adx,
-            volume: volumes[volumes.length - 1],
-            ema: { ema9: calculateEMA(closes, 9), ema20, ema50, ema200 },
+            // ema9 not in type
+            ema20,
+            ema50,
+            ema100,
+            ema200,
             macd,
             bollinger: {
                 upper: bb.upper,
@@ -143,13 +148,16 @@ export class IndicatorCalculator {
                 priceVsKijun: 0,
                 tkSeparation: 0
             },
-            ichimoku, // Typed version if needed
+            // ichimoku: removed (not in type)
 
             // --- Patterns & Structure (SMC) ---
             nPattern,
             boxTheory,
             chartPatterns,
-            fractals, // NEW
+            fractals: {
+                bullish: fractals.fractalLows.map(f => f.price),
+                bearish: fractals.fractalHighs.map(f => f.price)
+            },
 
             // --- Order Flow ---
             cvd, // NEW

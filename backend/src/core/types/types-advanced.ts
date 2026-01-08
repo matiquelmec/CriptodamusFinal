@@ -17,6 +17,8 @@ export interface VolumeProfileData {
 
 export interface OrderBlockData {
     price: number;
+    high: number;  // NEW: Top of OB
+    low: number;   // NEW: Bottom of OB
     strength: number;
     mitigated: boolean;
 }

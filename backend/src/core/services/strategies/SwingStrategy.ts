@@ -75,7 +75,7 @@ export function analyzeSwingSignal(
         // Are we sweeping INTO a Bullish OB?
         if (orderBlocks.bullish) {
             const inBullishOB = orderBlocks.bullish.some((ob: any) =>
-                currentLow >= ob.min && currentLow <= ob.max && !ob.mitigated
+                currentLow >= ob.low && currentLow <= ob.high && !ob.mitigated
             );
 
             if (inBullishOB) {
@@ -117,7 +117,7 @@ export function analyzeSwingSignal(
         // OB Confluence
         if (orderBlocks.bearish) {
             const inBearishOB = orderBlocks.bearish.some((ob: any) =>
-                currentHigh >= ob.min && currentHigh <= ob.max && !ob.mitigated
+                currentHigh >= ob.low && currentHigh <= ob.high && !ob.mitigated
             );
 
             if (inBearishOB) {

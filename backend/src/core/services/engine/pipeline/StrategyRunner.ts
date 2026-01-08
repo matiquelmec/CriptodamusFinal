@@ -60,53 +60,50 @@ export class StrategyRunner {
                         name = "Ichimoku Cloud";
                         break;
                     case 'breakout_momentum':
+                        // V2 Institutional: Pass full indicators (CVD, RVOL)
                         result = analyzeBreakoutSignal(
-                            prices,
-                            highs,
-                            lows,
-                            indicators.rvol,
-                            indicators.confluenceAnalysis?.topResistances.map(r => r.price)
-                        );
-                        name = "Breakout Momentum";
-                        break;
-                    case 'smc_liquidity':
-                        // V2: Pass full indicators object to access Fractals, CVD, etc.
-                        result = analyzeSwingSignal(
                             prices,
                             highs,
                             lows,
                             indicators
                         );
-                        name = "SMC Liquidity (Pro)";
+                        name = "Breakout Momentum (Inst)";
                         break;
-                    case 'quant_volatility':
-                        // Maps to Scalp Strategy in legacy logic
-                        result = analyzeScalpSignal(prices, indicators.vwap, indicators.rsi);
-                        name = "Quant Volatility";
+
+                    case 'quant_volatility': // Scalp Strategy
+                        // V2 Institutional: Pass full indicators (CVD, VWAP)
+                        result = analyzeScalpSignal(
+                            prices,
+                            indicators
+                        );
+                        name = "Quant Volatility (Scalp)";
                         break;
+
                     case 'meme_hunter':
+                        // Meme Strategy (Not heavily refactored yet, kept as is for now or use subset)
+                        // Wait, current signature is: (prices, vwap, rvol, rsi, stochRsi)
+                        // Let's keep it specific or refactor it? 
+                        // To be safe and compliant with current code, I will KEEP the old signature 
+                        // UNLESS I update MemeStrategy.ts too. I did NOT touch MemeStrategy.ts in this run. 
+                        // I only touched Breakout, Pinball, Scalp.
+                        // So Meme stays same.
                         result = analyzeMemeSignal(
                             prices,
                             indicators.vwap,
-                            indicators.rvol,
+                            indicators.rvol || 0,
                             indicators.rsi,
                             indicators.stochRsi
                         );
                         name = "Meme Hunter";
                         break;
-                    case 'divergence_hunter':
-                        // Maps to Pinball in legacy logic (approx) or specialized Divergence check
-                        // Legacy scanner used Pinball or General Divergence
+
+                    case 'divergence_hunter': // Using Pinball Strategy file logic often
+                        // V2 Institutional: Pass full indicators (OrderBlocks)
                         result = analyzePinballSignal(
                             prices,
-                            lows,
-                            highs,
-                            indicators.ema50,
-                            indicators.ema200,
-                            indicators.emaSlope,
-                            indicators.adx
+                            indicators
                         );
-                        name = "Pinball/Divergence";
+                        name = "Pinball / Divergence (Inst)";
                         break;
                     case 'mean_reversion':
                         // Maps to Swing Strategy (Reversion to Mean in Range)
