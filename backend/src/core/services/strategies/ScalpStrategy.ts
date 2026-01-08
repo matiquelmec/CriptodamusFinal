@@ -22,7 +22,7 @@ export const analyzeScalpSignal = (
     const historicalBandwidths = [];
     // Look back 20-50 periods to find min bandwidth
     for (let i = 20; i < 50; i++) {
-        if (checkIndex - i < 0) break;
+        if (checkIndex - i < 20) break; // Ensure we have at least 20 candles for Bollinger calc
         const slice = prices.slice(0, checkIndex + 1 - i);
         historicalBandwidths.push(calculateBollingerStats(slice).bandwidth);
     }
