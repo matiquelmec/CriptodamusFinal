@@ -426,7 +426,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     stopLoss: indicators.price * 0.98, // Placeholder default, DCA calculator refines this
                     takeProfits: { tp1: 0, tp2: 0, tp3: 0 }, // Placeholder
                     technicalReasoning: reasoning.join(". "),
-                    reasoning: reasoning, // NEW: Pass full array
+                    chartPatterns: indicators.chartPatterns || [], // Pass list of patterns
+                    harmonicPatterns: (indicators as any).harmonics || [],
                     invalidated: false,
                     metrics: {
                         adx: indicators.adx || 0, // NEW: For filtering
@@ -442,6 +443,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         volumeExpert: volumeAnalysis, // NEW: Populated from Backend Service
                         macdDivergence: indicators.macdDivergence?.type || undefined,
                         rsiDivergence: indicators.rsiDivergence?.type || undefined,
+                        chartPatterns: (indicators.chartPatterns && indicators.chartPatterns.length > 0) ? indicators.chartPatterns : undefined,
+                        harmonics: ((indicators as any).harmonics && (indicators as any).harmonics.length > 0) ? (indicators as any).harmonics : undefined,
 
                         // NEW: GOD MODE MAPPING
                         cvdDivergence: (indicators.cvdDivergence && indicators.cvdDivergence !== 'NONE') ? {
@@ -463,7 +466,6 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                             aligned: macroCompass.aligned
                         } : undefined
                     },
-                    chartPatterns: indicators.chartPatterns,
                     freezeSignal: undefined, // Add if computed
                     tier: tier,
 

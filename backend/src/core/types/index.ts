@@ -398,6 +398,8 @@ export interface AIOpportunity {
             price_4h: number;
             aligned: boolean; // NEW: Explicit alignment flag
         };
+        chartPatterns?: ChartPattern[];
+        harmonics?: import('./types-advanced').HarmonicPattern[];
     };
     chartPatterns?: ChartPattern[]; // NEW: Smart Geometric Patterns
     dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI

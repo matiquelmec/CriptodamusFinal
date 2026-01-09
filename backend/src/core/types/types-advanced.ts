@@ -67,13 +67,14 @@ export interface AdvancedTechnicalIndicators {
 export interface HarmonicPattern {
     type: 'GARTLEY' | 'BAT' | 'BUTTERFLY' | 'CRAB';
     direction: 'BULLISH' | 'BEARISH';
-    startIndex: number;
-    endIndex: number;
-    points: { X: number; A: number; B: number; C: number; D: number };
+    startIndex?: number;
+    endIndex?: number;
+    points?: { X: number; A: number; B: number; C: number; D: number };
     prz: number; // Potential Reversal Zone
-    stopLoss: number;
-    takeProfits: [number, number];
+    stopLoss?: number;
+    takeProfits?: [number, number];
     confidence: number;
+    ratios?: { b_xa: number; c_ab: number; d_bc: number };
 }
 
 export interface AutoFibsResult {

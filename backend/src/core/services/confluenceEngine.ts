@@ -3,6 +3,7 @@ import { VolumeProfile } from './volumeProfile';
 import { OrderBlock } from './orderBlocks';
 import { FairValueGap } from './fairValueGaps';
 import { AutoFibsResult, HarmonicPattern, OrderBookAnalysis, LiquidationCluster } from '../types/types-advanced';
+import { ChartPattern } from './chartPatterns';
 
 export interface POI {
     price: number;
@@ -34,9 +35,10 @@ export function calculatePOIs(
     bearishOBs: OrderBlock[],
     bullishFVGs: FairValueGap[],
     bearishFVGs: FairValueGap[],
-    harmonicPatterns: HarmonicPattern[] = [], // NEW: Optional for backward compatibility
-    orderBook?: OrderBookAnalysis, // NEW: Liquidity Layer
-    liquidationClusters: LiquidationCluster[] = [] // NEW: Liquidity Layer
+    harmonicPatterns: HarmonicPattern[] = [],
+    orderBook?: OrderBookAnalysis,
+    liquidationClusters: LiquidationCluster[] = [],
+    chartPatterns: ChartPattern[] = [] // NEW: Awake structural patterns
 ): ConfluenceAnalysis {
     const supportPOIs: POI[] = [];
     const resistancePOIs: POI[] = [];
@@ -177,6 +179,26 @@ export function calculatePOIs(
         // Weight: 3-4 based on strength
         const clusterScore = cluster.strength >= 50 ? 4 : 3;
         addOrUpdatePOI(targetList, midPrice, clusterScore, label, poiType);
+    });
+
+    // 10. CHART PATTERNS (Structural Framework)
+    chartPatterns.forEach(pattern => {
+        const targetList = pattern.signal === 'BULLISH' ? supportPOIs : resistancePOIs;
+        const poiType = pattern.signal === 'BULLISH' ? 'SUPPORT' : 'RESISTANCE';
+
+        let score = 3;
+        if (pattern.type === 'HEAD_SHOULDERS' || pattern.type === 'INV_HEAD_SHOULDERS') score = 5;
+        if (pattern.type.includes('WEDGE')) score = 4;
+
+        // Use priceTarget or invalidationLevel as the POI anchor depending on pattern context
+        // For H&S/Inverse, the PRZ is often the neckline or the head itself.
+        // Let's use the price point associated with the pattern (often the recent fractal)
+        // If we don't have a specific anchor price in pattern, we'll skip POI mapping 
+        // but we WILL use it for global confluence scoring in AdvancedAnalyzer.
+        // Actually, we can use invalidationLevel (the "Head" or "Wedge Tip") as a strong POI.
+        if (pattern.invalidationLevel) {
+            addOrUpdatePOI(targetList, pattern.invalidationLevel, score, `💠 ${pattern.type} Pivot`, poiType);
+        }
     });
 
     // SYNERGY BONUS: Fib + Order Block + Wall
