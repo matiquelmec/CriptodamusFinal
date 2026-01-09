@@ -16,7 +16,7 @@ export interface ScoringResult {
 
 export class StrategyScorer {
 
-    static score(symbol: string, indicators: TechnicalIndicators): ScoringResult {
+    static score(symbol: string, indicators: TechnicalIndicators, signalSide: 'LONG' | 'SHORT' = 'LONG'): ScoringResult {
         let score = 0;
         const reasoning: string[] = [];
         const strategies: string[] = [];
@@ -87,12 +87,13 @@ export class StrategyScorer {
             }
         }
 
-        // 5.2 Liquidation Fuel
+        // 5.2 Liquidation Fuel (DIRECTIONAL MAGNETS)
         if (indicators.volumeExpert?.liquidity?.liquidationClusters) {
             const liqs = indicators.volumeExpert.liquidity.liquidationClusters;
-            const signalSide = indicators.rsi > 50 ? 'SHORT' : 'LONG'; // Rough proxy if side not explicit
 
             // If we have a cluster in the direction of the trade (Magnet)
+            // For LONG, we target SHORT_LIQs (above price)
+            // For SHORT, we target LONG_LIQs (below price)
             const magnet = liqs.find(c =>
                 (c.type === 'SHORT_LIQ' && signalSide === 'LONG') ||
                 (c.type === 'LONG_LIQ' && signalSide === 'SHORT')
@@ -104,30 +105,57 @@ export class StrategyScorer {
                     score += weights.liquidation_flutter;
                     reasoning.push(`🧲 Liquidity Magnet: Near ${magnet.type} Cluster (+${weights.liquidation_flutter})`);
                 }
+            } else {
+                // Check if price is sitting on our OWN side's liquidations (Risk)
+                const threat = liqs.find(c =>
+                    (c.type === 'LONG_LIQ' && signalSide === 'LONG') ||
+                    (c.type === 'SHORT_LIQ' && signalSide === 'SHORT')
+                );
+                if (threat) {
+                    const distPercent = Math.abs(threat.priceMin - indicators.price) / indicators.price;
+                    if (distPercent < 0.005) {
+                        score -= 20;
+                        reasoning.push(`⚠️ Liquidation Threat: Entering near our own side's Liquidation Cluster (-20)`);
+                    }
+                }
             }
         }
 
-        // 5.3 Institutional Walls
+        // 5.3 Institutional Walls (DIRECTIONAL)
         if (indicators.volumeExpert?.liquidity?.orderBook) {
             const ob = indicators.volumeExpert.liquidity.orderBook;
             const bidWall = ob.bidWall;
             const askWall = ob.askWall;
 
-            // Check Support (Bids)
-            if (bidWall && bidWall.strength > 70) {
+            // Check Support (Bids) - Only for Longs
+            if (bidWall && bidWall.strength > 70 && signalSide === 'LONG') {
                 const dist = Math.abs(indicators.price - bidWall.price) / indicators.price;
                 if (dist < 0.015) {
-                    score += 15; // Wall confirmed boost
+                    score += 15;
                     reasoning.push(`🧱 Structural Support: Buy Wall at $${bidWall.price.toFixed(2)} (+15)`);
+                }
+            } else if (bidWall && bidWall.strength > 70 && signalSide === 'SHORT') {
+                // Penalty if shorting into a wall?
+                const dist = Math.abs(indicators.price - bidWall.price) / indicators.price;
+                if (dist < 0.005) {
+                    score -= 20;
+                    reasoning.push(`⚠️ Wall Warning: Shorting into a Buy Wall (-20)`);
                 }
             }
 
-            // Check Resistance (Asks)
-            if (askWall && askWall.strength > 70) {
+            // Check Resistance (Asks) - Only for Shorts
+            if (askWall && askWall.strength > 70 && signalSide === 'SHORT') {
                 const dist = Math.abs(indicators.price - askWall.price) / indicators.price;
                 if (dist < 0.015) {
                     score += 15;
                     reasoning.push(`🧱 Structural Resistance: Sell Wall at $${askWall.price.toFixed(2)} (+15)`);
+                }
+            } else if (askWall && askWall.strength > 70 && signalSide === 'LONG') {
+                // Penalty for buying into resistance
+                const dist = Math.abs(indicators.price - askWall.price) / indicators.price;
+                if (dist < 0.005) {
+                    score -= 20;
+                    reasoning.push(`⚠️ Wall Warning: Buying into a Sell Wall (-20)`);
                 }
             }
         }
@@ -164,13 +192,16 @@ export class StrategyScorer {
 
 
 
-        // 5.4 Harmonic Precision
+        // 5.4 Harmonic Precision (DIRECTIONAL)
         if (indicators.harmonicPatterns && indicators.harmonicPatterns.length > 0) {
             const pattern = indicators.harmonicPatterns[0];
-            if (pattern.direction === 'BULLISH') {
+            if (pattern.direction === (signalSide === 'LONG' ? 'BULLISH' : 'BEARISH')) {
                 score += weights.harmonic_pattern;
                 strategies.push(`HARMONIC_${pattern.type}`);
                 reasoning.push(`✨ ${pattern.type} Harmonic Pattern (+${weights.harmonic_pattern})`);
+            } else {
+                score -= 10;
+                reasoning.push(`⚠️ Pattern Divergence: Structural Setup opposes Signal`);
             }
         }
 

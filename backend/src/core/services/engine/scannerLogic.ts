@@ -127,8 +127,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 if (volumeAnalysis) indicators.volumeExpert = volumeAnalysis;
 
                 // Tier Calculation (Legacy/Config hybrid)
-                const tier = calculateFundamentalTier(coin.id, style === 'MEME_SCALP');
-                indicators.tier = tier;
+                const fundamentalTier = calculateFundamentalTier(coin.id, style === 'MEME_SCALP');
+                indicators.tier = fundamentalTier;
 
                 // --- STAGE 3: STRATEGY EXECUTION ---
                 const highs = candles.map(c => c.high);
@@ -144,9 +144,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
 
                 const signalSide: 'LONG' | 'SHORT' = (strategyResult.primaryStrategy?.signal === 'SHORT') ? 'SHORT' : 'LONG';
-                const baseScoreResult = StrategyScorer.score(coin.symbol, indicators);
+                const baseScoreResult = StrategyScorer.score(coin.symbol, indicators, signalSide);
 
-                let totalScore = baseScoreResult.score + (strategyResult.primaryStrategy?.score || 0) + strategyResult.scoreBoost;
+                // Initial Score (Capped to baseline level before boosts)
+                let totalScore = Math.min(100, (baseScoreResult.score + (strategyResult.primaryStrategy?.score || 0) + strategyResult.scoreBoost) / 1.5);
                 let reasoning = [...baseScoreResult.reasoning, ...strategyResult.details];
 
                 // --- PHASE 0: MARKET SESSION & TIME AWARENESS ---
@@ -402,6 +403,17 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // Mocking open positions as empty for now, in live it would pull from active trades
                 const correlationRisk = calculatePortfolioCorrelation(coin.symbol, [], style === 'MEME_SCALP');
 
+                // --- FINAL SCORE NORMALIZATION & REALISM ---
+                // We ensure the score never exceeds 100% (Institutional Standard)
+                // and never goes below 0.
+                totalScore = Math.min(100, Math.max(0, totalScore));
+
+                // Add explicit logic for "Confidence Tier" based on normalized score
+                let confidenceTier: 'A' | 'B' | 'C' | 'S' = 'C';
+                if (totalScore >= 90) confidenceTier = 'S';
+                else if (totalScore >= 75) confidenceTier = 'A';
+                else if (totalScore >= 60) confidenceTier = 'B';
+
                 const opportunity: AIOpportunity = {
                     id: coin.id,
                     symbol: coin.symbol,
@@ -467,7 +479,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         } : undefined
                     },
                     freezeSignal: undefined, // Add if computed
-                    tier: tier,
+                    tier: confidenceTier,
 
                     // Phase 8: Risk Management
                     kellySize,
@@ -484,7 +496,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     signalSide,
                     indicators.marketRegime,
                     indicators.fibonacci,
-                    tier || 'B',
+                    fundamentalTier || 'B',
                     { // Predictive Targets
                         rsiReversal: indicators.rsiExpert?.target || undefined,
                         liquidationCluster: undefined, // Add if available
