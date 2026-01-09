@@ -2,7 +2,7 @@ import { TechnicalIndicators } from '../types';
 import { VolumeProfile } from './volumeProfile';
 import { OrderBlock } from './orderBlocks';
 import { FairValueGap } from './fairValueGaps';
-import { AutoFibsResult, HarmonicPattern } from '../types/types-advanced';
+import { AutoFibsResult, HarmonicPattern, OrderBookAnalysis, LiquidationCluster } from '../types/types-advanced';
 
 export interface POI {
     price: number;
@@ -34,7 +34,9 @@ export function calculatePOIs(
     bearishOBs: OrderBlock[],
     bullishFVGs: FairValueGap[],
     bearishFVGs: FairValueGap[],
-    harmonicPatterns: HarmonicPattern[] = [] // NEW: Optional for backward compatibility
+    harmonicPatterns: HarmonicPattern[] = [], // NEW: Optional for backward compatibility
+    orderBook?: OrderBookAnalysis, // NEW: Liquidity Layer
+    liquidationClusters: LiquidationCluster[] = [] // NEW: Liquidity Layer
 ): ConfluenceAnalysis {
     const supportPOIs: POI[] = [];
     const resistancePOIs: POI[] = [];
@@ -154,14 +156,41 @@ export function calculatePOIs(
         }
     });
 
-    // SYNERGY BONUS: Fib + Order Block
-    // If a POI contains both a Fibonacci level and an Order Block, it's an institutional trap.
+    // 8. ORDER BOOK WALLS (Tier S - Institutional Liquidity)
+    if (orderBook) {
+        if (orderBook.bidWall && orderBook.bidWall.strength >= 50) {
+            // HEAVY WEIGHT: 6 pts (Order book is current REAL commitment)
+            addOrUpdatePOI(supportPOIs, orderBook.bidWall.price, 6, `🧱 Buy Wall (Strength: ${orderBook.bidWall.strength})`, 'SUPPORT');
+        }
+        if (orderBook.askWall && orderBook.askWall.strength >= 50) {
+            addOrUpdatePOI(resistancePOIs, orderBook.askWall.price, 6, `🧱 Sell Wall (Strength: ${orderBook.askWall.strength})`, 'RESISTANCE');
+        }
+    }
+
+    // 9. LIQUIDATION CLUSTERS (The Magnets)
+    liquidationClusters.forEach(cluster => {
+        const midPrice = (cluster.priceMin + cluster.priceMax) / 2;
+        const label = cluster.type === 'SHORT_LIQ' ? '🧲 Short Liq Cluster' : '🧲 Long Liq Cluster';
+        const poiType = cluster.type === 'SHORT_LIQ' ? 'RESISTANCE' : 'SUPPORT';
+        const targetList = poiType === 'SUPPORT' ? supportPOIs : resistancePOIs;
+
+        // Weight: 3-4 based on strength
+        const clusterScore = cluster.strength >= 50 ? 4 : 3;
+        addOrUpdatePOI(targetList, midPrice, clusterScore, label, poiType);
+    });
+
+    // SYNERGY BONUS: Fib + Order Block + Wall
+    // If a POI contains technical + liquidity factors, it's a God Mode level.
     const applySynergy = (list: POI[]) => {
         list.forEach(poi => {
             const hasFib = poi.factors.some(f => f.includes('Fib') || f.includes('Golden'));
             const hasOB = poi.factors.some(f => f.includes('OB'));
+            const hasWall = poi.factors.some(f => f.includes('Wall') || f.includes('Liq Cluster'));
 
-            if (hasFib && hasOB) {
+            if (hasFib && hasOB && hasWall) {
+                poi.score = Math.ceil(poi.score * 2.0); // 100% Boost (Iron Level)
+                poi.factors.push('🔱 GOD MODE CONFLUENCE');
+            } else if (hasFib && hasOB) {
                 poi.score = Math.ceil(poi.score * 1.5); // 50% Boost
                 poi.factors.push('🔥 INSTITUTIONAL CONFLUENCE');
             }

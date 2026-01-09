@@ -21,6 +21,7 @@ export interface DCAPlan {
         tp2: { price: number; exitSize: number }; // 30%
         tp3: { price: number; exitSize: number }; // 30%
     };
+    proximityScorePenalty?: number; // NEW
 }
 
 // NEW: Predictive Targets for Smart Exits
@@ -250,6 +251,18 @@ export function calculateDCAPlan(
         sum + (e.price * e.positionSize / totalWeight), 0
     );
 
+    // 6.5 PROFESSIONAL PROXIMITY PENALTY (Sniper Filter)
+    const entryGap = Math.abs(averageEntry - signalPrice) / signalPrice;
+    const atrGap = atr > 0 ? (Math.abs(averageEntry - signalPrice) / atr) : 0;
+
+    let proximityScorePenalty = 0;
+
+    // Penalize if > 3% or > 2.5x ATR
+    if (entryGap > 0.03 || atrGap > 2.5) {
+        proximityScorePenalty = Math.min(30, Math.round(entryGap * 100 * 2)); // Up to 30 points penalty
+        entries.forEach(e => e.factors.push(`⚠️ Proximity Alert: ${(entryGap * 100).toFixed(1)}% Gap`));
+    }
+
     // 7. Stop Loss Final
     // DYNAMIC ATR MULTIPLIER BASED ON TIER
     // S: Wide (2.5x), A: Std (2.0x), B: Tight (1.5x), C: Sniper (1.0x)
@@ -402,7 +415,8 @@ export function calculateDCAPlan(
             tp1: { price: tps[0], exitSize: tpSizes[0] },
             tp2: { price: tps[1], exitSize: tpSizes[1] },
             tp3: { price: tps[2], exitSize: tpSizes[2] }
-        }
+        },
+        proximityScorePenalty // NEW: Bubbled up for StrategyScorer/Scanner
     };
 }
 

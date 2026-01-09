@@ -94,7 +94,20 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 indicators.symbol = coin.symbol;
                 indicators.price = candles[candles.length - 1].close;
 
-                // --- STAGE 2: ADVANCED ANALYSIS (Institutional) ---
+                // --- STAGE 2: EXPERT VOLUME & LIQUIDITY (God Tier) ---
+                let volumeAnalysis: VolumeExpertAnalysis | undefined;
+                try {
+                    // Fetch base expert data (OI, Funding, CVD)
+                    volumeAnalysis = await getExpertVolumeAnalysis(coin.symbol);
+                    // ENRICH: Get Order Book Walls & Liquidation Clusters
+                    if (volumeAnalysis) {
+                        const highs = candles.map(c => c.high);
+                        const lows = candles.map(c => c.low);
+                        volumeAnalysis = await enrichWithDepthAndLiqs(coin.symbol, volumeAnalysis, highs, lows, indicators.price);
+                    }
+                } catch (e) { }
+
+                // --- STAGE 2.5: ADVANCED ANALYSIS (Institutional) ---
                 const advancedData = await AdvancedAnalyzer.compute(
                     coin.symbol,
                     candles,
@@ -103,11 +116,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     indicators.fibonacci,
                     indicators.pivots,
                     indicators.ema200,
-                    indicators.ema50
+                    indicators.ema50,
+                    [], // Harmonics fallback
+                    volumeAnalysis?.liquidity?.orderBook,
+                    volumeAnalysis?.liquidity?.liquidationClusters || []
                 );
 
                 // Merge Advanced Data into Indicators
                 Object.assign(indicators, advancedData);
+                if (volumeAnalysis) indicators.volumeExpert = volumeAnalysis;
 
                 // Tier Calculation (Legacy/Config hybrid)
                 const tier = calculateFundamentalTier(coin.id, style === 'MEME_SCALP');
@@ -231,45 +248,37 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 } catch (e) { /* console.warn("ML Inference Failed for " + coin.symbol); */ }
 
                 // --- STAGE 4.6: EXPERT VOLUME ANALYSIS (God Tier) ---
-                // Only fetch mainly IO-heavy data for strong candidates (Score > 50)
-                let volumeAnalysis: VolumeExpertAnalysis | undefined;
+                // Already fetched and enriched in Stage 2. Applying Scoring logic here.
+                if (indicators.volumeExpert) {
+                    const ve = indicators.volumeExpert;
+                    // 1. Coinbase Premium Signal
+                    if (ve.coinbasePremium.signal === 'INSTITUTIONAL_BUY' && signalSide === 'LONG') {
+                        totalScore += TradingConfig.scoring.advisor.coinbase_premium;
+                        reasoning.push(`🏦 Premium: Institutional Buying Detected (+${ve.coinbasePremium.gapPercent.toFixed(3)}%)`);
+                    } else if (ve.coinbasePremium.signal === 'INSTITUTIONAL_SELL' && signalSide === 'SHORT') {
+                        totalScore += TradingConfig.scoring.advisor.coinbase_premium;
+                        reasoning.push(`🏦 Premium: Institutional Selling Detected (${ve.coinbasePremium.gapPercent.toFixed(3)}%)`);
+                    }
 
-                if (totalScore > 50) {
-                    try {
-                        volumeAnalysis = await getExpertVolumeAnalysis(coin.symbol);
-                        if (volumeAnalysis) {
-                            // 1. Coinbase Premium Signal
-                            if (volumeAnalysis.coinbasePremium.signal === 'INSTITUTIONAL_BUY' && signalSide === 'LONG') {
-                                totalScore += TradingConfig.scoring.advisor.coinbase_premium;
-                                reasoning.push(`🏦 Premium: Institutional Buying Detected (+${volumeAnalysis.coinbasePremium.gapPercent.toFixed(3)}%)`);
-                            } else if (volumeAnalysis.coinbasePremium.signal === 'INSTITUTIONAL_SELL' && signalSide === 'SHORT') {
-                                totalScore += TradingConfig.scoring.advisor.coinbase_premium;
-                                reasoning.push(`🏦 Premium: Institutional Selling Detected (${volumeAnalysis.coinbasePremium.gapPercent.toFixed(3)}%)`);
-                            }
+                    // 2. CVD Trend Confirmation
+                    if (ve.cvd.trend === 'BULLISH' && signalSide === 'LONG') {
+                        totalScore += 10;
+                        reasoning.push("🌊 CVD: Aggressive Buying Flow");
+                    } else if (ve.cvd.trend === 'BEARISH' && signalSide === 'SHORT') {
+                        totalScore += 10;
+                        reasoning.push("🌊 CVD: Aggressive Selling Flow");
+                    }
 
-                            // 2. CVD Trend Confirmation
-                            if (volumeAnalysis.cvd.trend === 'BULLISH' && signalSide === 'LONG') {
-                                totalScore += 10;
-                                reasoning.push("🌊 CVD: Aggressive Buying Flow");
-                            } else if (volumeAnalysis.cvd.trend === 'BEARISH' && signalSide === 'SHORT') {
-                                totalScore += 10;
-                                reasoning.push("🌊 CVD: Aggressive Selling Flow");
-                            }
-
-                            // 3. Open Interest Confluence (Price UP + OI UP = Strong Trend)
-                            const oiValueMillions = (volumeAnalysis.derivatives.openInterestValue || 0) / 1_000_000;
-                            if (oiValueMillions > 50) { // Significant market interest
-                                if (signalSide === 'LONG' && volumeAnalysis.derivatives.fundingRate > 0.01) {
-                                    // High funding usually means long crowded, but if price is breaking out it's momentum.
-                                    // Let's use OI Growth if available (snapshot doesn't have growth yet).
-                                    // Using pure magnitude for now:
-                                    totalScore += 5;
-                                    reasoning.push(`📊 OI: High Interest Market ($${oiValueMillions.toFixed(1)}M)`);
-                                }
-                            }
+                    // 3. Liquidity Walls Confluence
+                    const orderBook = ve.liquidity.orderBook;
+                    if (orderBook) {
+                        if (signalSide === 'LONG' && orderBook.bidWall && orderBook.bidWall.strength > 70) {
+                            totalScore += 15;
+                            reasoning.push(`🧱 Muro Confirmado: Soporte real en $${orderBook.bidWall.price.toFixed(2)} (+15)`);
+                        } else if (signalSide === 'SHORT' && orderBook.askWall && orderBook.askWall.strength > 70) {
+                            totalScore += 15;
+                            reasoning.push(`🧱 Muro Confirmado: Resistencia real en $${orderBook.askWall.price.toFixed(2)} (+15)`);
                         }
-                    } catch (err) {
-                        // console.warn("Volume Expert Failed:", err);
                     }
                 }
 
@@ -487,6 +496,25 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     tp2: dcaPlan.takeProfits.tp2.price,
                     tp3: dcaPlan.takeProfits.tp3.price
                 };
+
+                // --- STAGE 5.5: PROFESSIONAL TRADER GATEKEEPER ---
+                // Apply Proximity Penalty from DCA engine
+                if (dcaPlan.proximityScorePenalty && dcaPlan.proximityScorePenalty > 0) {
+                    totalScore -= dcaPlan.proximityScorePenalty;
+                    opportunity.confidenceScore = Math.max(0, Math.round(totalScore));
+                    reasoning.push(`🎯 Filtro Sniper: Entrada muy lejana del precio actual (-${dcaPlan.proximityScorePenalty})`);
+                    opportunity.technicalReasoning = reasoning.join(". "); // Update reasoning string
+                }
+
+                // PIVOT LOGIC: If a Short is distant but trend is Bullish, add tactical warning
+                const isDistantShort = signalSide === 'SHORT' && (dcaPlan.proximityScorePenalty || 0) > 15;
+                const localBullishTrend = indicators.emaSlope > 3 && indicators.price > indicators.ema200;
+
+                if (isDistantShort && localBullishTrend) {
+                    opportunity.technicalReasoning = `🏦 TÁCTICA PROFESIONAL: Tendencia alcista fuerte. No shortear el "pump" prematuramente. Buscar confirmación en zona de resistencia superior ($${dcaPlan.entries[1].price.toFixed(0)}) o scalp LONG hasta dicho nivel. ` + opportunity.technicalReasoning;
+                    // Downgrade score further to ensure it's not a 'Golden Ticket'
+                    opportunity.confidenceScore = Math.max(40, opportunity.confidenceScore - 10);
+                }
 
                 // --- STAGE 6: FOMO PREVENTION (The Sniper Check) ---
                 const isFresh = strategyResult.primaryStrategy?.isFresh ?? true; // Default to true if strategy doesn't support fresh check yet

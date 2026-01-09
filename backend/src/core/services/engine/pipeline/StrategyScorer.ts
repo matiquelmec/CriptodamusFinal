@@ -73,25 +73,62 @@ export class StrategyScorer {
             score += weights.cvd_divergence_boost;
             reasoning.push(`🐋 CVD Divergence (Whale Accumulation) (+${weights.cvd_divergence_boost})`);
         } else if (indicators.volumeExpert?.cvd?.divergence?.includes('ABSORPTION')) {
-            score += weights.cvd_divergence_boost;
-            reasoning.push(`🧱 Passive Absorption Detected (Smart Money) (+${weights.cvd_divergence_boost})`);
+            // PROFESSIONAL TRADER RULE: Absorption must align with RSI context to be a valid reversal signal.
+            // If price is overbought (RSI > 75) and we see "Absorption", but no SHORT signal, it's just a strong pump.
+            const isShortAbsorption = indicators.volumeExpert.cvd.divergence === 'CVD_ABSORPTION_SELL' && indicators.rsi > 70;
+            const isLongAbsorption = indicators.volumeExpert.cvd.divergence === 'CVD_ABSORPTION_BUY' && indicators.rsi < 30;
+
+            if (isShortAbsorption || isLongAbsorption) {
+                score += weights.cvd_divergence_boost;
+                reasoning.push(`🧱 Passive Absorption Detected (Institutional Reversal) (+${weights.cvd_divergence_boost})`);
+            } else {
+                score += 5; // Reduced boost for absorption without extreme context
+                reasoning.push(`🧱 Micro-Absorption Detected (+5)`);
+            }
         }
 
         // 5.2 Liquidation Fuel
-        if (indicators.volumeExpert?.liquidity?.liquidationClusters?.[0]) {
-            // Logic: If close to liquidation cluster, it's a magnet/fuel
-            // Simplified: If trend is favorable and liquidation nearby
-            score += weights.liquidation_flutter;
-            reasoning.push(`💧 Liquidation Cluster Fuel (+${weights.liquidation_flutter})`);
+        if (indicators.volumeExpert?.liquidity?.liquidationClusters) {
+            const liqs = indicators.volumeExpert.liquidity.liquidationClusters;
+            const signalSide = indicators.rsi > 50 ? 'SHORT' : 'LONG'; // Rough proxy if side not explicit
+
+            // If we have a cluster in the direction of the trade (Magnet)
+            const magnet = liqs.find(c =>
+                (c.type === 'SHORT_LIQ' && signalSide === 'LONG') ||
+                (c.type === 'LONG_LIQ' && signalSide === 'SHORT')
+            );
+
+            if (magnet) {
+                const distPercent = Math.abs(magnet.priceMin - indicators.price) / indicators.price;
+                if (distPercent < 0.02) {
+                    score += weights.liquidation_flutter;
+                    reasoning.push(`🧲 Liquidity Magnet: Near ${magnet.type} Cluster (+${weights.liquidation_flutter})`);
+                }
+            }
         }
 
-        // 5.3 Order Block Support
-        if (indicators.volumeExpert?.liquidity?.orderBook?.bidWall) {
-            const wall = indicators.volumeExpert.liquidity.orderBook.bidWall;
-            const dist = Math.abs(indicators.price - wall.price) / indicators.price;
-            if (dist < 0.02) { // 2% Proximity
-                score += weights.order_block_retest;
-                reasoning.push(`🛡️ Institutional Buy Wall Support (+${weights.order_block_retest})`);
+        // 5.3 Institutional Walls
+        if (indicators.volumeExpert?.liquidity?.orderBook) {
+            const ob = indicators.volumeExpert.liquidity.orderBook;
+            const bidWall = ob.bidWall;
+            const askWall = ob.askWall;
+
+            // Check Support (Bids)
+            if (bidWall && bidWall.strength > 70) {
+                const dist = Math.abs(indicators.price - bidWall.price) / indicators.price;
+                if (dist < 0.015) {
+                    score += 15; // Wall confirmed boost
+                    reasoning.push(`🧱 Structural Support: Buy Wall at $${bidWall.price.toFixed(2)} (+15)`);
+                }
+            }
+
+            // Check Resistance (Asks)
+            if (askWall && askWall.strength > 70) {
+                const dist = Math.abs(indicators.price - askWall.price) / indicators.price;
+                if (dist < 0.015) {
+                    score += 15;
+                    reasoning.push(`🧱 Structural Resistance: Sell Wall at $${askWall.price.toFixed(2)} (+15)`);
+                }
             }
         }
 

@@ -14,6 +14,7 @@ import { calculateVolumeProfile } from '../../volumeProfile';
 import { detectOrderBlocks } from '../../orderBlocks';
 import { detectFVG } from '../../fairValueGaps';
 import { calculatePOIs } from '../../confluenceEngine';
+import { OrderBookAnalysis, LiquidationCluster } from '../../../types/types-advanced';
 import { getExpertVolumeAnalysis } from '../../volumeExpertService';
 import { detectGenericDivergence } from '../../divergenceDetector';
 import { analyzeRSIExpert } from '../../rsiExpert';
@@ -28,10 +29,13 @@ export class AdvancedAnalyzer {
         fibs: any,
         pivots: any,
         ema200: number,
-        ema50: number
+        ema50: number,
+        harmonicPatterns: any[] = [],
+        orderBook?: OrderBookAnalysis,
+        liquidationClusters: LiquidationCluster[] = []
     ) {
         // 1. Institutional Structures (Safe Wrapped)
-        let volumeProfile, bullishOB, bearishOB, bullishFVG, bearishFVG;
+        let volumeProfile: any, bullishOB: any[] = [], bearishOB: any[] = [], bullishFVG: any[] = [], bearishFVG: any[] = [];
         try {
             volumeProfile = calculateVolumeProfile(candles, atr);
             const obs = detectOrderBlocks(candles, atr, currentPrice);
@@ -48,8 +52,6 @@ export class AdvancedAnalyzer {
 
         // 2. Expert Volume (Async/External)
         // We handle this gracefully if it fails (not blocking)
-        // Note: In the original scanner, rvol check happened before this.
-        // We will assume the caller checks rvol constraints if needed for performance.
         let volumeExpert = undefined;
         let cvdDivergence = undefined;
         try {
@@ -68,10 +70,6 @@ export class AdvancedAnalyzer {
 
         // 3. RSI Expert
         const prices = candles.map(c => c.close);
-        // We need RSI Array. IndicatorCalculator calculated single value.
-        // For efficiency, we should have calculated the array once and passed it.
-        // Ideally IndicatorCalculator returns the array too or we re-calc here.
-        // Re-calc specific for Expert module to keep it decoupled for now.
         const rsiArray = (await import('../../mathUtils')).calculateRSIArray(prices, 14);
         const rsiExpertResults = analyzeRSIExpert(prices, rsiArray);
 
@@ -79,7 +77,8 @@ export class AdvancedAnalyzer {
         // 4. Confluence
         const confluence = calculatePOIs(
             currentPrice, fibs, pivots, ema200, ema50, atr,
-            volumeProfile, bullishOB, bearishOB, bullishFVG, bearishFVG
+            volumeProfile, bullishOB, bearishOB, bullishFVG, bearishFVG,
+            harmonicPatterns, orderBook, liquidationClusters
         );
 
         return {
