@@ -177,8 +177,8 @@ export interface OrderBookAnalysis {
 // --- EXPERT VOLUME ANALYSIS (NEW) ---
 
 export interface DerivativesData {
-    openInterest: number;           // En Moneda (ej: BTC)
-    openInterestValue: number;      // En USD
+    openInterest: number | null;           // En Moneda (ej: BTC)
+    openInterestValue: number | null;      // En USD
     fundingRate: number;            // Funding Rate actual (0.01% = 0.0001)
     fundingRateDaily: number;       // Annualized approximation or Daily
     buySellRatio: number;           // Long/Short Ratio accounts

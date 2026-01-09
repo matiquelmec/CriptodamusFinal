@@ -118,25 +118,31 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
             safeFetch(`${BINANCE_FUTURES_API}/premiumIndex?symbol=${fSymbol}`)
         ]);
 
-        if (!oiData || !fundingData) {
+        if (!oiData) {
+            // IF DATA IS MISSING -> RETURN NULL (Don't fake 0.0)
             return {
-                openInterest: 0,
-                openInterestValue: 0,
-                fundingRate: 0,
+                openInterest: null,
+                openInterestValue: null,
+                fundingRate: 0, // 0 is safe "Neutral"
                 fundingRateDaily: 0,
                 buySellRatio: 1
             };
         }
 
-        const openInterest = parseFloat(oiData.openInterest); // En monedas
-        const fundingRate = parseFloat(fundingData.lastFundingRate);
-        const price = parseFloat(fundingData.markPrice); // Use Mark Price specifically
+        // Funding might be missing but OI present?
+        const fundingRate = fundingData ? parseFloat((fundingData as any).lastFundingRate) : 0;
+        const markPrice = fundingData ? parseFloat((fundingData as any).markPrice) : 0;
+
+
+        const openInterest = parseFloat((oiData as any).openInterest); // En monedas
+
+        const openInterestValue = (markPrice > 0) ? openInterest * markPrice : null; // Can't calc value without price
 
         const fundingRateDaily = fundingRate * 3;
 
         const result: DerivativesData = {
             openInterest,
-            openInterestValue: openInterest * price,
+            openInterestValue,
             fundingRate,
             fundingRateDaily,
             buySellRatio: 1.0 // Ratio endpoint often blocked or requires stricter auth/headers, keeping simple
@@ -147,8 +153,8 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
 
     } catch (error) {
         return {
-            openInterest: 0,
-            openInterestValue: 0,
+            openInterest: null,
+            openInterestValue: null,
             fundingRate: 0,
             fundingRateDaily: 0,
             buySellRatio: 1
@@ -341,7 +347,9 @@ export async function getExpertVolumeAnalysis(symbol: string): Promise<VolumeExp
     ]);
 
     // Simple liquidity proxy
-    const liquidityScore = Math.min(100, Math.max(0, 50 + (derivatives.openInterestValue > 10000000 ? 30 : 0)));
+    // Guard against null OI
+    const oiVal = derivatives.openInterestValue || 0;
+    const liquidityScore = Math.min(100, Math.max(0, 50 + (oiVal > 10000000 ? 30 : 0)));
 
     return {
         derivatives,
@@ -368,7 +376,7 @@ export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: Vo
     const orderBook = await fetchOrderBook(normalizedSymbol);
 
     if (orderBook) {
-        enriched.liquidity.orderBook = analyzeOrderBook(orderBook.bids, orderBook.asks, currentPrice);
+        enriched.liquidity.orderBook = analyzeOrderBook((orderBook as any).bids, (orderBook as any).asks, currentPrice);
 
         // Adjust Market Depth Score based on Wall presence
         if (enriched.liquidity.orderBook.bidWall && enriched.liquidity.orderBook.bidWall.strength > 50) {

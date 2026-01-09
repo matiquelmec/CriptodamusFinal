@@ -244,7 +244,10 @@ const EducationalModal: React.FC<EducationalModalProps> = ({ selectedSignal, onC
                                 <div className="flex justify-between border-b border-border/50 pb-1">
                                     <span className="text-secondary">Open Interest:</span>
                                     <span className="text-primary font-bold">
-                                        ${(selectedSignal.metrics.volumeExpert.derivatives.openInterestValue / 1000000).toFixed(1)}M
+                                        {selectedSignal.metrics.volumeExpert.derivatives.openInterestValue
+                                            ? `$${(selectedSignal.metrics.volumeExpert.derivatives.openInterestValue / 1000000).toFixed(1)}M`
+                                            : <span className="text-secondary italic">N/A</span>
+                                        }
                                     </span>
                                 </div>
                             </div>
