@@ -9,6 +9,7 @@ import https from 'https';
  * 2. Rate Limiting: Enforces minimum delay between requests to the same domain.
  * 3. Auto-Retry: Exponential backoff for 429/5xx and network errors.
  * 4. IPv4 Force: Fixes connection issues on some cloud providers (Render).
+ * 5. Proactive Proxy (Bifrost): Automatically routes Binance requests through proxy if configured.
  */
 export class SmartFetch {
     private static pendingRequests = new Map<string, Promise<any>>();
@@ -44,15 +45,28 @@ export class SmartFetch {
 
     private static async executeRequest<T>(url: string, config: AxiosRequestConfig, retriesLeft: number): Promise<T> {
         const domain = new URL(url).hostname;
+        const isBinance = domain.includes('binance.com') || domain.includes('binance.vision');
 
         // 2. Rate Limiting (Domain Level)
         await this.enforceRateLimit(domain);
+
+        // 2.5 PROACTIVE PROXY (Institutional Grade)
+        // If we have the Bifrost Key, we use the tunnel immediately.
+        // Why wait for a 403/Timeout? Real pros don't get blocked.
+        if (isBinance && process.env.BIFROST_URL && !url.includes(process.env.BIFROST_URL)) {
+            // console.log(`[SmartFetch] 🌈 Proactive Bifrost Routing: ${url}`);
+            const bifrostUrl = `${process.env.BIFROST_URL}/api?target=${encodeURIComponent(url)}`;
+
+            // Recursively call with the new URL, but treating it as a standard request now
+            // We pass the SAME retries to the proxy request.
+            return this.executeRequest<T>(bifrostUrl, config, retriesLeft);
+        }
 
         try {
             const response = await axios.get<T>(url, {
                 ...config,
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'User-Agent': 'Mozilla/5.0 (Criptodamus/1.0)',
                     'Accept': 'application/json',
                     ...config.headers
                 },
@@ -65,31 +79,9 @@ export class SmartFetch {
 
             return response.data;
         } catch (error: any) {
-            // 2.5 Geo-Block Evasion (451/403)
-            if (error.response?.status === 451 || error.response?.status === 403) {
-                // Determine if it's Binance Filters
-                const isBinance = url.includes('binance.com');
-
-                if (isBinance) {
-                    console.warn(`[SmartFetch] 🌍 Geo-Blocked (${error.response.status}) accessing ${url}`);
-
-                    // Strategy A: Reroute to Binance US (Spot Only)
-                    if (url.includes('api.binance.com')) {
-                        const newUrl = url.replace('api.binance.com', 'api.binance.us');
-                        console.log(`[SmartFetch] ↪️ Rerouting Spot request to Binance US: ${newUrl}`);
-                        return this.executeRequest<T>(newUrl, config, retriesLeft);
-                    }
-
-                    // Strategy B: Bifrost Proxy (Geo-Blocking Bypass)
-                    if (process.env.BIFROST_URL) {
-                        console.log(`[SmartFetch] 🌈 Routing through Bifrost: ${url}`);
-                        const bifrostUrl = `${process.env.BIFROST_URL}/api?target=${encodeURIComponent(url)}`;
-                        return this.executeRequest<T>(bifrostUrl, config, retriesLeft - 1); // Don't infinite loop, consume 1 retry
-                    }
-                }
-            }
-
             // 3. Retry Logic
+            // Note: We removed the reactive 403 logic because the Proactive check above handles it better.
+
             const shouldRetry = this.isRetryableError(error) && retriesLeft > 0;
 
             if (shouldRetry) {
