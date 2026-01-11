@@ -33,7 +33,7 @@ const AuditEducational: React.FC<AuditEducationalProps> = ({ onClose }) => {
                     </div>
 
                     {/* Content Swiper/List */}
-                    <div className="flex-1 overflow-y-auto space-y-8 pr-2 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto space-y-8 p-6 pr-4 custom-scrollbar pb-24">
 
                         {/* 1. Win Rate */}
                         <section className="space-y-4">
@@ -106,26 +106,26 @@ const AuditEducational: React.FC<AuditEducationalProps> = ({ onClose }) => {
                         </section>
 
                         {/* 4. Porcentaje vs Capital */}
-                        <section className="bg-indigo-500/5 border border-indigo-500/10 rounded-2xl p-5">
+                        <section className="bg-indigo-500/5 border border-indigo-500/10 rounded-2xl p-5 mb-8">
                             <div className="flex items-center gap-3 mb-3">
                                 <Calculator className="text-indigo-400" size={18} />
                                 <h4 className="text-xs font-bold text-indigo-300 uppercase tracking-widest">¿Por qué en Porcentajes?</h4>
                             </div>
                             <p className="text-[11px] text-slate-400 leading-relaxed">
-                                Criptodamus utiliza <span className="text-indigo-300">"Flat-Stake Modeling"</span>. Auditamos la <span className="text-white font-bold">pureza técnica</span> de la estrategia midiendo el PnL % bruto. Esto garantiza que el sistema sea rentable matemáticamente, independientemente del capital que tú decidas asignar a cada operación.
+                                Criptodamus utiliza <span className="text-indigo-300">"Flat-Stake Modeling"</span>. Auditamos la <span className="text-white font-bold">pureza técnica</span> de la estrategia midiendo el PnL % bruto. Esto garantiza que el sistema sea rentable matemáticamente.
                             </p>
                         </section>
 
                     </div>
 
                     {/* Footer */}
-                    <div className="mt-8 pt-6 border-t border-white/10 flex justify-between items-center">
+                    <div className="p-6 pb-8 border-t border-white/10 flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0a0c10]/50">
                         <div className="flex items-center gap-2 text-[9px] text-slate-600 font-mono uppercase tracking-tighter">
                             <ShieldCheck size={12} /> Datos auditados 1:1 contra Binance API
                         </div>
                         <button
                             onClick={onClose}
-                            className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+                            className="w-full sm:w-auto px-10 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20 active:scale-95"
                         >
                             Entendido, Proseguir
                         </button>

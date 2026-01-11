@@ -96,58 +96,58 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
                 <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Log de Auditoría (Últimos 10)</h3>
             </div>
 
-            <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                 {history.map((sig) => (
-                    <div key={sig.id} className="group bg-[#11141a]/40 backdrop-blur-sm border border-white/5 rounded-xl p-3 flex items-center justify-between hover:bg-[#11141a]/60 transition-all duration-300">
-                        <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+                    <div key={sig.id} className="group bg-[#11141a]/40 backdrop-blur-sm border border-white/5 rounded-xl p-4 flex items-center justify-between hover:bg-[#11141a]/60 transition-all duration-300">
+                        <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                             {/* Symbol & Side */}
-                            <div className="flex flex-col min-w-[50px]">
-                                <span className="text-[10px] sm:text-xs font-bold text-white tracking-tight">{sig.symbol}</span>
-                                <span className={`text-[8px] font-black uppercase ${sig.side === 'LONG' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            <div className="flex flex-col min-w-[60px]">
+                                <span className="text-xs sm:text-sm font-bold text-white tracking-tight">{sig.symbol}</span>
+                                <span className={`text-[9px] sm:text-[10px] font-black uppercase ${sig.side === 'LONG' ? 'text-emerald-500' : 'text-rose-500'}`}>
                                     {sig.side}
                                 </span>
                             </div>
 
                             {/* Strategy & Time (Always visible but compact) */}
-                            <div className="flex flex-col border-l border-white/5 pl-2 sm:pl-4 min-w-0">
-                                <span className="text-[8px] sm:text-[10px] text-slate-400 font-mono uppercase truncate max-w-[60px] sm:max-w-[80px]">
+                            <div className="flex flex-col border-l border-white/10 pl-3 sm:pl-4 min-w-0">
+                                <span className="text-[9px] sm:text-[10px] text-slate-300 font-mono uppercase truncate max-w-[70px] sm:max-w-[100px]">
                                     {sig.strategy.split('_')[0]}
                                 </span>
-                                <span className="text-[7px] sm:text-[9px] text-slate-500 flex items-center gap-1">
-                                    {sig.status === 'OPEN' ? 'D:' : 'C:'}
-                                    {new Date(Number(sig.status === 'OPEN' ? sig.created_at : sig.closed_at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    <span className="hidden xs:inline opacity-40">•</span>
-                                    <span className="hidden xs:inline opacity-60">
+                                <span className="text-[8px] sm:text-[9px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                    <span className="opacity-70">{sig.status === 'OPEN' ? 'D:' : 'C:'}</span>
+                                    <span className="text-slate-400">{new Date(Number(sig.status === 'OPEN' ? sig.created_at : sig.closed_at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                    <span className="opacity-40">•</span>
+                                    <span className="opacity-60">
                                         {Math.floor((Date.now() - Number(sig.status === 'OPEN' ? sig.created_at : sig.closed_at)) / (60000))}m
                                     </span>
                                 </span>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2 sm:gap-6 ml-2">
+                        <div className="flex items-center gap-3 sm:gap-6 ml-2">
                             {/* PnL */}
-                            <div className="text-right flex flex-col min-w-[55px] sm:min-w-[80px]">
+                            <div className="text-right flex flex-col min-w-[65px] sm:min-w-[90px]">
                                 {sig.status === 'OPEN' ? (
                                     <div className="flex flex-col items-end">
-                                        <span className="text-xs sm:text-sm font-bold font-mono text-blue-400 animate-pulse truncate">
-                                            ${sig.entry_price > 100 ? Math.round(sig.entry_price) : sig.entry_price.toFixed(2)}
+                                        <span className="text-xs sm:text-sm font-bold font-mono text-blue-400 animate-pulse truncate drop-shadow-[0_0_8px_rgba(96,165,250,0.3)]">
+                                            ${sig.entry_price > 100 ? sig.entry_price.toLocaleString(undefined, { maximumFractionDigits: 0 }) : sig.entry_price.toFixed(2)}
                                         </span>
-                                        <span className="text-[7px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">ENTRY</span>
+                                        <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">ENTRY</span>
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-end">
-                                        <span className={`text-xs sm:text-sm font-bold font-mono ${sig.pnl_percent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        <span className={`text-xs sm:text-sm font-bold font-mono ${sig.pnl_percent >= 0 ? 'text-emerald-400' : 'text-rose-400'} drop-shadow-md`}>
                                             {sig.pnl_percent >= 0 ? '+' : ''}{sig.pnl_percent.toFixed(1)}%
                                         </span>
-                                        <span className="text-[7px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">PNL</span>
+                                        <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">PNL</span>
                                     </div>
                                 )}
                             </div>
 
                             {/* Status Badge */}
-                            <div className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border text-[7px] sm:text-[9px] font-bold flex items-center gap-1 uppercase ${getStatusStyle(sig.status)}`}>
+                            <div className={`px-2 py-1 sm:px-2.5 sm:py-1 rounded-full border text-[8px] sm:text-[9px] font-black flex items-center gap-1.5 uppercase transition-all ${getStatusStyle(sig.status)}`}>
                                 {getStatusIcon(sig.status)}
-                                <span className="hidden xs:inline">{sig.status}</span>
+                                <span>{sig.status}</span>
                             </div>
                         </div>
                     </div>
