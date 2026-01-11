@@ -57,7 +57,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     const scan = handleRefresh;
 
     return (
-        <div className="h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col overflow-hidden relative">
+        <div className="h-auto md:h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col md:overflow-hidden relative">
             {/* Real-time Ticker */}
             <LiquidationFeed />
 
@@ -152,7 +152,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
             <PerformanceStats />
 
             {/* Main Content Area */}
-            <div className="opportunities-grid overflow-y-auto p-4 custom-scrollbar bg-background/50">
+            <div className="opportunities-grid md:overflow-y-auto p-4 custom-scrollbar bg-background/50">
                 {loading ? (
                     <ProgressIndicator step={scanProgress.step} progress={scanProgress.progress} />
                 ) : error ? (

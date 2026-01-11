@@ -12,7 +12,7 @@ const Opportunities: React.FC = () => {
     };
 
     return (
-        <div className="h-full min-h-[600px] mb-24 lg:mb-0">
+        <div className="h-auto md:h-full min-h-[600px] mb-24 lg:mb-0">
             <OpportunityFinder onSelectOpportunity={handleSelectOpportunity} />
         </div>
     );
