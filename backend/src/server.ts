@@ -84,6 +84,15 @@ async function startServices() {
             console.error("   ❌ Stream Failed to Start (Non-Fatal):", e);
         }
 
+        // 3. Signal Auditor (Win Rate)
+        try {
+            console.log("   • Initializing Signal Auditor...");
+            const { signalAuditService } = await import('./services/signalAuditService');
+            signalAuditService.start();
+        } catch (e) {
+            console.error("   ❌ Auditor Failed to Start:", e);
+        }
+
     } catch (e) {
         console.error("🔥 Critical Service Failure:", e);
     }
@@ -145,6 +154,18 @@ app.get('/api/macro/global', async (req, res) => {
     } catch (error) {
         console.error("Macro Fetch Error:", error);
         res.status(500).json({ error: 'Failed to fetch global data' });
+    }
+});
+
+
+// --- PERFORMANCE & AUDIT ENDPOINT ---
+import { signalAuditService } from './services/signalAuditService';
+app.get('/api/performance/stats', async (req, res) => {
+    try {
+        const stats = await signalAuditService.getPerformanceStats();
+        res.json(stats);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch performance stats' });
     }
 });
 

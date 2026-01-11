@@ -162,6 +162,10 @@ class ScannerService extends EventEmitter {
                 // 🚀 TELEGRAM NOTIFICATION HOOK
                 telegramService.broadcastSignals(uniqueResults).catch(err => console.error("[Scanner] Telegram Error:", err));
 
+                // 🛡️ SIGNAL AUDIT HOOK (New)
+                const { signalAuditService } = await import('./signalAuditService');
+                signalAuditService.registerSignals(uniqueResults).catch(err => console.error("[Scanner] Audit Error:", err));
+
                 // Golden Tickets (High Confidence)
                 const goldenTickets = uniqueResults.filter(o => o.confidenceScore >= 80);
                 if (goldenTickets.length > 0) {
