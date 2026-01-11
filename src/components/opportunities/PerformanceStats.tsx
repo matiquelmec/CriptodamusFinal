@@ -18,9 +18,15 @@ const PerformanceStats: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [showHistory, setShowHistory] = useState(false);
 
+    const getBaseUrl = () => {
+        const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
+        return IS_PROD ? 'https://criptodamusfinal.onrender.com' : 'http://localhost:3001';
+    };
+
     const fetchStats = async () => {
         try {
-            const response = await axios.get('/api/performance/stats');
+            const url = `${getBaseUrl()}/api/performance/stats`;
+            const response = await axios.get(url);
             setStats(response.data);
         } catch (error) {
             console.error("Error fetching performance stats:", error);

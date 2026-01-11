@@ -18,10 +18,16 @@ const AuditHistory: React.FC = () => {
     const [history, setHistory] = useState<HistoricalSignal[]>([]);
     const [loading, setLoading] = useState(true);
 
+    const getBaseUrl = () => {
+        const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
+        return IS_PROD ? 'https://criptodamusfinal.onrender.com' : 'http://localhost:3001';
+    };
+
     useEffect(() => {
         const fetchHistory = async () => {
             try {
-                const response = await axios.get('/api/performance/history?limit=10');
+                const url = `${getBaseUrl()}/api/performance/history?limit=10`;
+                const response = await axios.get(url);
                 if (Array.isArray(response.data)) {
                     setHistory(response.data);
                 } else {
