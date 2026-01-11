@@ -99,55 +99,55 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
             <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                 {history.map((sig) => (
                     <div key={sig.id} className="group bg-[#11141a]/40 backdrop-blur-sm border border-white/5 rounded-xl p-3 flex items-center justify-between hover:bg-[#11141a]/60 transition-all duration-300">
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
                             {/* Symbol & Side */}
-                            <div className="flex flex-col">
-                                <span className="text-xs font-bold text-white tracking-tight">{sig.symbol}</span>
-                                <span className={`text-[9px] font-black uppercase ${sig.side === 'LONG' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            <div className="flex flex-col min-w-[50px]">
+                                <span className="text-[10px] sm:text-xs font-bold text-white tracking-tight">{sig.symbol}</span>
+                                <span className={`text-[8px] font-black uppercase ${sig.side === 'LONG' ? 'text-emerald-500' : 'text-rose-500'}`}>
                                     {sig.side}
                                 </span>
                             </div>
 
-                            {/* Strategy & Time */}
-                            <div className="hidden sm:flex flex-col border-l border-white/5 pl-4">
-                                <span className="text-[10px] text-slate-400 font-mono uppercase truncate max-w-[80px]">
+                            {/* Strategy & Time (Always visible but compact) */}
+                            <div className="flex flex-col border-l border-white/5 pl-2 sm:pl-4 min-w-0">
+                                <span className="text-[8px] sm:text-[10px] text-slate-400 font-mono uppercase truncate max-w-[60px] sm:max-w-[80px]">
                                     {sig.strategy.split('_')[0]}
                                 </span>
-                                <span className="text-[9px] text-slate-500 flex items-center gap-1">
-                                    {sig.status === 'OPEN' ? 'Detectada: ' : 'Cerrada: '}
+                                <span className="text-[7px] sm:text-[9px] text-slate-500 flex items-center gap-1">
+                                    {sig.status === 'OPEN' ? 'D:' : 'C:'}
                                     {new Date(Number(sig.status === 'OPEN' ? sig.created_at : sig.closed_at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    <span className="opacity-40 ml-1">•</span>
-                                    <span className="opacity-60">
-                                        {Math.floor((Date.now() - Number(sig.status === 'OPEN' ? sig.created_at : sig.closed_at)) / (60000))}m atrás
+                                    <span className="hidden xs:inline opacity-40">•</span>
+                                    <span className="hidden xs:inline opacity-60">
+                                        {Math.floor((Date.now() - Number(sig.status === 'OPEN' ? sig.created_at : sig.closed_at)) / (60000))}m
                                     </span>
                                 </span>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2 sm:gap-6 ml-2">
                             {/* PnL */}
-                            <div className="text-right flex flex-col">
+                            <div className="text-right flex flex-col min-w-[55px] sm:min-w-[80px]">
                                 {sig.status === 'OPEN' ? (
                                     <div className="flex flex-col items-end">
-                                        <span className="text-sm font-bold font-mono text-blue-400 animate-pulse">
-                                            $ {sig.entry_price.toLocaleString()}
+                                        <span className="text-xs sm:text-sm font-bold font-mono text-blue-400 animate-pulse truncate">
+                                            ${sig.entry_price > 100 ? Math.round(sig.entry_price) : sig.entry_price.toFixed(2)}
                                         </span>
-                                        <span className="text-[9px] text-slate-500 uppercase tracking-tighter">PRECIO ENTRADA</span>
+                                        <span className="text-[7px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">ENTRY</span>
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-end">
-                                        <span className={`text-sm font-bold font-mono ${sig.pnl_percent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                            {sig.pnl_percent >= 0 ? '+' : ''}{sig.pnl_percent.toFixed(2)}%
+                                        <span className={`text-xs sm:text-sm font-bold font-mono ${sig.pnl_percent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {sig.pnl_percent >= 0 ? '+' : ''}{sig.pnl_percent.toFixed(1)}%
                                         </span>
-                                        <span className="text-[9px] text-slate-500 uppercase tracking-tighter">PNL REAL</span>
+                                        <span className="text-[7px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">PNL</span>
                                     </div>
                                 )}
                             </div>
 
                             {/* Status Badge */}
-                            <div className={`px-2.5 py-1 rounded-full border text-[9px] font-bold flex items-center gap-1.5 uppercase ${getStatusStyle(sig.status)}`}>
+                            <div className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border text-[7px] sm:text-[9px] font-bold flex items-center gap-1 uppercase ${getStatusStyle(sig.status)}`}>
                                 {getStatusIcon(sig.status)}
-                                {sig.status}
+                                <span className="hidden xs:inline">{sig.status}</span>
                             </div>
                         </div>
                     </div>

@@ -111,35 +111,37 @@ class SignalAuditService extends EventEmitter {
             const sym = signal.symbol.toUpperCase().replace('/', '');
             const currentPrice = cvdData[sym]?.price;
 
-            if (!currentPrice) continue;
-
             let finalStatus: string | null = null;
             let pnl = 0;
 
-            // 1. Verificación de WIN (TP1)
-            if (signal.side === 'LONG') {
-                if (currentPrice >= signal.tp1) finalStatus = 'WIN';
-                else if (currentPrice <= signal.stop_loss) finalStatus = 'LOSS';
-            } else {
-                if (currentPrice <= signal.tp1) finalStatus = 'WIN';
-                else if (currentPrice >= signal.stop_loss) finalStatus = 'LOSS';
+            // 1. Verificación de WIN/LOSS (Requiere precio real)
+            if (currentPrice) {
+                if (signal.side === 'LONG') {
+                    if (currentPrice >= signal.tp1) finalStatus = 'WIN';
+                    else if (currentPrice <= signal.stop_loss) finalStatus = 'LOSS';
+                } else {
+                    if (currentPrice <= signal.tp1) finalStatus = 'WIN';
+                    else if (currentPrice >= signal.stop_loss) finalStatus = 'LOSS';
+                }
             }
 
-            // 2. Verificación de Expiración (Caducidad)
+            // 2. Verificación de Expiración (Caducidad cronológica bruta)
             if (!finalStatus) {
                 const ageHours = (Date.now() - Number(signal.created_at)) / (1000 * 60 * 60);
-                const limit = signal.timeframe === '15m' ? 6 : 48; // Según plan dinámico
+                const limit = signal.timeframe === '15m' ? 6 : 48;
                 if (ageHours > limit) finalStatus = 'EXPIRED';
             }
 
             if (finalStatus) {
-                pnl = ((currentPrice - signal.entry_price) / signal.entry_price) * 100 * (signal.side === 'LONG' ? 1 : -1);
+                // Si expiró y no tenemos precio actual, usamos el precio de entrada como "referencia neutral"
+                const referencePrice = currentPrice || signal.entry_price;
+                pnl = ((referencePrice - signal.entry_price) / signal.entry_price) * 100 * (signal.side === 'LONG' ? 1 : -1);
 
                 signalsToUpdate.push({
                     id: signal.id,
                     status: finalStatus,
                     closed_at: Date.now(),
-                    final_price: currentPrice,
+                    final_price: referencePrice,
                     pnl_percent: pnl
                 });
             }
