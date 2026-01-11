@@ -170,6 +170,17 @@ app.get('/api/performance/stats', async (req, res) => {
 });
 
 
+app.get('/api/performance/history', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit as string) || 10;
+        const history = await signalAuditService.getRecentSignals(limit);
+        res.json(history);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch performance history' });
+    }
+});
+
+
 // Error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error(err.stack);

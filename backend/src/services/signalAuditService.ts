@@ -167,26 +167,57 @@ class SignalAuditService extends EventEmitter {
     }
 
     /**
-     * Obtener estadísticas agregadas para el Frontend
+     * Obtener señales recientes para el Histórico (Audit Log)
      */
-    public async getPerformanceStats() {
-        if (!this.supabase) return { winRate: 0, total: 0, wins: 0, closed: 0, open: 0 };
+    public async getRecentSignals(limit: number = 10) {
+        if (!this.supabase) return [];
 
         const { data, error } = await this.supabase
             .from('signals_audit')
-            .select('status, strategy');
+            .select('*')
+            .neq('status', 'OPEN')
+            .order('closed_at', { ascending: false })
+            .limit(limit);
 
-        if (error || !data) return { winRate: 0, total: 0, wins: 0, closed: 0, open: 0 };
+        if (error || !data) return [];
+        return data;
+    }
+
+    /**
+     * Obtener estadísticas agregadas para el Frontend (Elite Mode)
+     */
+    public async getPerformanceStats() {
+        if (!this.supabase) return { winRate: 0, total: 0, wins: 0, closed: 0, open: 0, profitFactor: 0 };
+
+        const { data, error } = await this.supabase
+            .from('signals_audit')
+            .select('status, pnl_percent');
+
+        if (error || !data) return { winRate: 0, total: 0, wins: 0, closed: 0, open: 0, profitFactor: 0 };
 
         const closed = data.filter((s: any) => s.status === 'WIN' || s.status === 'LOSS');
-        const wins = closed.filter((s: any) => s.status === 'WIN').length;
+        const winsCount = closed.filter((s: any) => s.status === 'WIN').length;
+
+        // Cálculo de Profit Factor (Métrica Institucional)
+        // Profit Factor = Total Gross Profit / Total Gross Loss
+        let grossProfit = 0;
+        let grossLoss = 0;
+
+        closed.forEach((s: any) => {
+            const pnl = s.pnl_percent || 0;
+            if (pnl > 0) grossProfit += pnl;
+            else grossLoss += Math.abs(pnl);
+        });
+
+        const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : (grossProfit > 0 ? 99 : 0);
 
         return {
             total: data.length,
             closed: closed.length,
-            wins,
-            winRate: closed.length > 0 ? (wins / closed.length) * 100 : 0,
-            open: data.filter((s: any) => s.status === 'OPEN').length
+            wins: winsCount,
+            winRate: closed.length > 0 ? (winsCount / closed.length) * 100 : 0,
+            open: data.filter((s: any) => s.status === 'OPEN').length,
+            profitFactor: Number(profitFactor.toFixed(2))
         };
     }
 }
