@@ -25,11 +25,11 @@ export interface SocketState {
 }
 
 const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (IS_PROD
-    ? 'https://criptodamusfinal.onrender.com'
-    : 'http://localhost:3001');
+const WS_BASE_URL = IS_PROD
+    ? `wss://${window.location.host}`
+    : 'ws://localhost:3001';
 
-const WS_URL = BACKEND_URL.replace(/^http/, 'ws') + '/ws';
+const WS_URL = import.meta.env.VITE_BACKEND_URL || `${WS_BASE_URL}/ws`;
 
 export const useSocket = () => {
     const [isConnected, setIsConnected] = useState(false);
