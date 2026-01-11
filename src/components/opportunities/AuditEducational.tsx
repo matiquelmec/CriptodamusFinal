@@ -131,6 +131,7 @@ const AuditEducational: React.FC<AuditEducationalProps> = ({ onClose }) => {
                         </button>
                     </div>
                 </div>
+            </div>
         </Portal>
     );
 };
