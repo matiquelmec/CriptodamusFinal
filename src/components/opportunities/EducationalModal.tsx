@@ -110,7 +110,7 @@ const EducationalModal: React.FC<EducationalModalProps> = ({ selectedSignal, onC
                             <div className="space-y-1 text-right">
                                 <span className="text-[10px] text-secondary uppercase font-bold">Probabilidad</span>
                                 <div className="text-lg font-mono font-bold text-primary">
-                                    {selectedSignal.mlPrediction.probability.toFixed(1)}%
+                                    {(selectedSignal.mlPrediction?.probability || 0).toFixed(1)}%
                                 </div>
                             </div>
                             <div className="col-span-2 pt-2 border-t border-border/50">
@@ -216,13 +216,13 @@ const EducationalModal: React.FC<EducationalModalProps> = ({ selectedSignal, onC
                                 <div className="flex justify-between border-b border-border/50 pb-1">
                                     <span className="text-secondary">Coinbase Premium:</span>
                                     <span className={selectedSignal.metrics.volumeExpert.coinbasePremium.signal === 'INSTITUTIONAL_BUY' ? 'text-success font-bold' : selectedSignal.metrics.volumeExpert.coinbasePremium.signal === 'INSTITUTIONAL_SELL' ? 'text-danger font-bold' : 'text-primary'}>
-                                        {selectedSignal.metrics.volumeExpert.coinbasePremium.gapPercent.toFixed(3)}%
+                                        {(selectedSignal.metrics.volumeExpert.coinbasePremium.gapPercent || 0).toFixed(3)}%
                                     </span>
                                 </div>
                                 <div className="flex justify-between border-b border-border/50 pb-1">
                                     <span className="text-secondary">Funding Rate:</span>
                                     <span className={Math.abs(selectedSignal.metrics.volumeExpert.derivatives.fundingRate) > 0.01 ? 'text-warning font-bold' : 'text-primary'}>
-                                        {selectedSignal.metrics.volumeExpert.derivatives.fundingRate.toFixed(4)}%
+                                        {(selectedSignal.metrics.volumeExpert.derivatives.fundingRate || 0).toFixed(4)}%
                                     </span>
                                 </div>
                                 <div className="flex justify-between border-b border-border/50 pb-1">
@@ -324,12 +324,12 @@ const EducationalModal: React.FC<EducationalModalProps> = ({ selectedSignal, onC
                         </div>
                         <div className="bg-accent/10 p-3 rounded border border-accent/20">
                             <span className="block text-[10px] text-accent uppercase mb-1">Kelly Size</span>
-                            <span className="font-mono font-bold text-accent">{(selectedSignal.kellySize! * 100).toFixed(2)}%</span>
+                            <span className="font-mono font-bold text-accent">{((selectedSignal.kellySize || 0) * 100).toFixed(2)}%</span>
                         </div>
                         {selectedSignal.recommendedLeverage && (
                             <div className="bg-blue-500/10 p-3 rounded border border-blue-500/20">
                                 <span className="block text-[10px] text-blue-400 uppercase mb-1">Palancaje (ATR)</span>
-                                <span className="font-mono font-bold text-blue-400">{selectedSignal.recommendedLeverage.toFixed(1)}x</span>
+                                <span className="font-mono font-bold text-blue-400">{(selectedSignal.recommendedLeverage || 1).toFixed(1)}x</span>
                             </div>
                         )}
                         {selectedSignal.correlationRisk && (
@@ -338,7 +338,7 @@ const EducationalModal: React.FC<EducationalModalProps> = ({ selectedSignal, onC
                                     'bg-success/20 border-success/30 text-success'
                                 }`}>
                                 <span className="block text-[10px] uppercase mb-1 font-bold">Heatmap de Correlación</span>
-                                <span className="font-mono text-[10px]">{selectedSignal.correlationRisk.recommendation}: Riesgo {(selectedSignal.correlationRisk.score * 100).toFixed(0)}%</span>
+                                <span className="font-mono text-[10px]">{selectedSignal.correlationRisk.recommendation}: Riesgo {((selectedSignal.correlationRisk.score || 0) * 100).toFixed(0)}%</span>
                             </div>
                         )}
                     </div>

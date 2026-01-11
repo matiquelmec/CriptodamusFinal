@@ -48,7 +48,7 @@ const PerformanceStats: React.FC = () => {
                         <div>
                             <div className="text-[11px] uppercase tracking-wider font-bold text-slate-400/80 mb-1">Win Rate Global</div>
                             <div className={`text-3xl font-black tracking-tight ${winRateColor}`}>
-                                {stats.winRate.toFixed(1)}%
+                                {(stats?.winRate || 0).toFixed(1)}%
                             </div>
                         </div>
                     </div>

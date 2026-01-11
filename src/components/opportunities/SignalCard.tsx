@@ -168,7 +168,7 @@ const SignalCard: React.FC<SignalCardProps> = ({ data, onSelect, onShowDetails }
                 {/* ML Brain Badge */}
                 {data.mlPrediction && (
                     <div className={`flex items-center gap-1.5 border-l border-border/50 pl-4 shrink-0 ${data.mlPrediction.signal === 'BULLISH' ? 'text-success' : data.mlPrediction.signal === 'BEARISH' ? 'text-danger' : 'text-secondary/70'
-                        } animate-pulse`} title={`Predicción Neuronal: ${data.mlPrediction.signal} (${data.mlPrediction.probability.toFixed(1)}%)`}>
+                        } animate-pulse`} title={`Predicción Neuronal: ${data.mlPrediction.signal} (${(data.mlPrediction.probability || 0).toFixed(1)}%)`}>
                         <Cpu size={12} />
                         <span className="font-bold">AI: {data.mlPrediction.signal}</span>
                     </div>
@@ -255,7 +255,7 @@ const SignalCard: React.FC<SignalCardProps> = ({ data, onSelect, onShowDetails }
                         <div className="flex-1 space-y-1">
                             <label className="text-[9px] text-accent uppercase font-bold">Kelly (Size)</label>
                             <div className="p-2 bg-accent/5 border border-accent/10 rounded font-mono text-xs text-accent font-bold text-center">
-                                {(data.kellySize * 100).toFixed(1)}%
+                                {((data.kellySize || 0) * 100).toFixed(1)}%
                             </div>
                         </div>
                     )}
@@ -263,7 +263,7 @@ const SignalCard: React.FC<SignalCardProps> = ({ data, onSelect, onShowDetails }
                         <div className="flex-1 space-y-1">
                             <label className="text-[9px] text-blue-400 uppercase font-bold">Leverage</label>
                             <div className="p-2 bg-blue-500/5 border border-blue-500/10 rounded font-mono text-xs text-blue-400 font-bold text-center">
-                                {data.recommendedLeverage.toFixed(1)}x
+                                {(data.recommendedLeverage || 1).toFixed(1)}x
                             </div>
                         </div>
                     )}
