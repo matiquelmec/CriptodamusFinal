@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { History, TrendingUp, TrendingDown, Clock, ExternalLink, ShieldCheck, XCircle, AlertCircle, Activity } from 'lucide-react';
+import { History, TrendingUp, TrendingDown, Clock, ExternalLink, ShieldCheck, XCircle, AlertCircle, Activity, HelpCircle } from 'lucide-react';
 import axios from 'axios';
 
 interface HistoricalSignal {
@@ -15,7 +15,11 @@ interface HistoricalSignal {
     closed_at: number;
 }
 
-const AuditHistory: React.FC = () => {
+interface AuditHistoryProps {
+    onShowEducation?: () => void;
+}
+
+const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
     const [history, setHistory] = useState<HistoricalSignal[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -150,8 +154,17 @@ const AuditHistory: React.FC = () => {
                 ))}
             </div>
 
-            <div className="mt-4 text-center">
-                <p className="text-[9px] text-slate-600 italic">Cada cierre es auditado 1:1 contra el WebSocket de Binance Pro Data.</p>
+            <div className="mt-4 flex flex-col items-center gap-2">
+                <p className="text-[9px] text-slate-600 italic px-4">Cada cierre es auditado 1:1 contra el WebSocket de Binance Pro Data.</p>
+                {onShowEducation && (
+                    <button
+                        onClick={onShowEducation}
+                        className="text-[9px] font-black text-blue-400/60 hover:text-blue-400 uppercase tracking-widest flex items-center gap-1.5 transition-colors border-b border-blue-400/20 pb-0.5"
+                    >
+                        <HelpCircle size={10} />
+                        ¿Cómo funciona la auditoría?
+                    </button>
+                )}
             </div>
         </div>
     );

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Target, TrendingUp, BarChart2, Activity } from 'lucide-react';
+import { Target, TrendingUp, BarChart2, Activity, HelpCircle } from 'lucide-react';
 import axios from 'axios';
 
 import AuditHistory from './AuditHistory';
+import AuditEducational from './AuditEducational';
 
 interface Stats {
     total: number;
@@ -17,6 +18,7 @@ const PerformanceStats: React.FC = () => {
     const [stats, setStats] = useState<Stats | null>(null);
     const [loading, setLoading] = useState(true);
     const [showHistory, setShowHistory] = useState(false);
+    const [showEducation, setShowEducation] = useState(false);
 
     const getBaseUrl = () => {
         const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
@@ -90,8 +92,15 @@ const PerformanceStats: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Audit Toggle Button */}
-                    <div className="flex justify-start md:justify-end items-center">
+                    {/* Audit Toggle & Help Buttons */}
+                    <div className="flex justify-start md:justify-end items-center gap-3">
+                        <button
+                            onClick={() => setShowEducation(true)}
+                            className="p-2.5 rounded-full bg-slate-900/50 border border-white/10 text-slate-400 hover:text-blue-400 hover:border-blue-400/30 transition-all active:scale-95"
+                            title="Guía Educativa de Métricas"
+                        >
+                            <HelpCircle size={20} />
+                        </button>
                         <button
                             onClick={() => setShowHistory(!showHistory)}
                             className={`flex items-center gap-2.5 px-6 py-2.5 rounded-full border transition-all duration-300 group/btn shadow-inner
@@ -110,8 +119,11 @@ const PerformanceStats: React.FC = () => {
 
                 </div>
 
+                {/* Educational View Toggle Overlay */}
+                {showEducation && <AuditEducational onClose={() => setShowEducation(false)} />}
+
                 {/* Historical Audit View */}
-                {showHistory && <AuditHistory />}
+                {showHistory && <AuditHistory onShowEducation={() => setShowEducation(true)} />}
             </div>
         </div>
     );
