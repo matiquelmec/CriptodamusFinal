@@ -22,7 +22,12 @@ const AuditHistory: React.FC = () => {
         const fetchHistory = async () => {
             try {
                 const response = await axios.get('/api/performance/history?limit=10');
-                setHistory(response.data);
+                if (Array.isArray(response.data)) {
+                    setHistory(response.data);
+                } else {
+                    console.error("Historical data is not an array:", response.data);
+                    setHistory([]);
+                }
             } catch (error) {
                 console.error("Error fetching audit history:", error);
             } finally {
