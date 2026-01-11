@@ -11,6 +11,7 @@ interface HistoricalSignal {
     entry_price: number;
     final_price: number;
     pnl_percent: number;
+    created_at: number;
     closed_at: number;
 }
 
@@ -108,8 +109,13 @@ const AuditHistory: React.FC = () => {
                                 <span className="text-[10px] text-slate-400 font-mono uppercase truncate max-w-[80px]">
                                     {sig.strategy.split('_')[0]}
                                 </span>
-                                <span className="text-[9px] text-slate-500">
-                                    {new Date(Number(sig.closed_at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                <span className="text-[9px] text-slate-500 flex items-center gap-1">
+                                    {sig.status === 'OPEN' ? 'Detectada: ' : 'Cerrada: '}
+                                    {new Date(Number(sig.status === 'OPEN' ? sig.created_at : sig.closed_at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    <span className="opacity-40 ml-1">•</span>
+                                    <span className="opacity-60">
+                                        {Math.floor((Date.now() - Number(sig.status === 'OPEN' ? sig.created_at : sig.closed_at)) / (60000))}m atrás
+                                    </span>
                                 </span>
                             </div>
                         </div>
@@ -118,17 +124,20 @@ const AuditHistory: React.FC = () => {
                             {/* PnL */}
                             <div className="text-right flex flex-col">
                                 {sig.status === 'OPEN' ? (
-                                    <span className="text-sm font-bold font-mono text-blue-400 animate-pulse">
-                                        EN VIVO
-                                    </span>
+                                    <div className="flex flex-col items-end">
+                                        <span className="text-sm font-bold font-mono text-blue-400 animate-pulse">
+                                            $ {sig.entry_price.toLocaleString()}
+                                        </span>
+                                        <span className="text-[9px] text-slate-500 uppercase tracking-tighter">PRECIO ENTRADA</span>
+                                    </div>
                                 ) : (
-                                    <span className={`text-sm font-bold font-mono ${sig.pnl_percent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        {sig.pnl_percent >= 0 ? '+' : ''}{sig.pnl_percent.toFixed(2)}%
-                                    </span>
+                                    <div className="flex flex-col items-end">
+                                        <span className={`text-sm font-bold font-mono ${sig.pnl_percent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {sig.pnl_percent >= 0 ? '+' : ''}{sig.pnl_percent.toFixed(2)}%
+                                        </span>
+                                        <span className="text-[9px] text-slate-500 uppercase tracking-tighter">PNL REAL</span>
+                                    </div>
                                 )}
-                                <span className="text-[9px] text-slate-500 uppercase tracking-tighter">
-                                    {sig.status === 'OPEN' ? 'AUDITANDO' : 'PNL REAL'}
-                                </span>
                             </div>
 
                             {/* Status Badge */}
