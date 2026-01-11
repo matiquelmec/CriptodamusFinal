@@ -62,86 +62,87 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
             <LiquidationFeed />
 
             {/* Header / Controls */}
-            <div className="p-4 border-b border-border bg-background/50 backdrop-blur-sm flex flex-col gap-4">
-                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                    <div className="flex items-center gap-3">
+            <div className="p-3 md:p-4 border-b border-border bg-background/50 backdrop-blur-sm flex flex-col gap-3 md:gap-4">
+                <div className="flex flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-2 md:gap-3">
                         <div className="relative">
-                            <div className={`p-2 rounded-lg text-white shadow-lg ${isConnected ? 'bg-gradient-to-br from-green-600 to-emerald-600 shadow-green-500/20' : 'bg-gray-600'}`}>
-                                <Cpu size={20} className={isConnected ? "animate-pulse" : ""} />
+                            <div className={`p-1.5 md:p-2 rounded-lg text-white shadow-lg ${isConnected ? 'bg-gradient-to-br from-green-600 to-emerald-600 shadow-green-500/20' : 'bg-gray-600'}`}>
+                                <Cpu size={18} className={isConnected ? "animate-pulse" : ""} />
                             </div>
-                            {isConnected && <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                            {isConnected && <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 md:h-3 md:w-3">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                                <span className="relative inline-flex rounded-full h-full w-full bg-green-500"></span>
                             </span>}
                         </div>
                         <div>
-                            <h2 className="text-sm font-mono font-bold text-primary uppercase tracking-wider">Criptodamus Auto-Pilot</h2>
-                            <p className="text-[10px] text-secondary">
-                                {isConnected ? '🟢 Conectado al Servidor Neural (24/7)' : '🔴 Desconectado (Reconectando...)'}
+                            <h2 className="text-[12px] md:text-sm font-mono font-bold text-primary uppercase tracking-wider">Criptodamus Auto-Pilot</h2>
+                            <p className="text-[9px] md:text-[10px] text-secondary">
+                                {isConnected ? '🟢 Conectado (24/7)' : '🔴 Desconectado'}
                             </p>
                         </div>
                     </div>
 
                     <button
                         onClick={handleRefresh}
-                        className="flex items-center gap-2 px-4 py-2 bg-surface hover:bg-background border border-border rounded font-mono text-xs font-bold transition-colors shadow-sm ml-auto md:ml-0 opacity-80"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-background border border-border rounded font-mono text-[10px] md:text-xs font-bold transition-colors shadow-sm opacity-80"
                     >
-                        <RefreshCw size={14} />
-                        Auto-Scan (15m)
+                        <RefreshCw size={12} />
+                        <span className="hidden xs:inline">Auto-Scan</span> (15m)
                     </button>
                 </div>
 
-                {/* Risk Shield Banner */}
+                {/* Risk Shield Banner - Optimized for mobile */}
                 {currentRisk && (
-                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${currentRisk.level === 'HIGH' ? 'bg-danger/10 border-danger/20 text-danger' :
+                    <div className={`flex items-center gap-2 px-2 md:px-3 py-1.5 rounded-lg border text-[9px] md:text-[10px] ${currentRisk.level === 'HIGH' ? 'bg-danger/10 border-danger/20 text-danger' :
                         currentRisk.level === 'MEDIUM' ? 'bg-warning/10 border-warning/20 text-warning' :
                             'bg-success/5 border-success/10 text-success'
                         }`}>
                         {currentRisk.riskType === 'MANIPULATION' ? (
-                            <Eye size={14} className={currentRisk.level === 'HIGH' ? 'animate-pulse' : ''} />
+                            <Eye size={12} className={currentRisk.level === 'HIGH' ? 'animate-pulse' : ''} />
                         ) : (
-                            <Shield size={14} className={currentRisk.level === 'HIGH' ? 'animate-pulse' : ''} />
+                            <Shield size={12} className={currentRisk.level === 'HIGH' ? 'animate-pulse' : ''} />
                         )}
 
-                        <span className="text-[10px] font-mono font-bold uppercase">
-                            {currentRisk.riskType === 'MANIPULATION' ? 'Whale Alert' : `Escudo Macro: ${currentRisk.level}`}
+                        <span className="font-mono font-bold uppercase shrink-0">
+                            {currentRisk.riskType === 'MANIPULATION' ? 'Whale Alert' : `Escudo: ${currentRisk.level}`}
                         </span>
-                        <span className="text-[10px] opacity-80 border-l border-current pl-2 ml-1 truncate">
+                        <span className="opacity-80 border-l border-current pl-2 ml-1 truncate">
                             {currentRisk.note}
                         </span>
                     </div>
                 )}
 
-                {/* Autonomous Mode Indicator */}
-                <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-lg p-3">
+                {/* Autonomous Mode Indicator - COMPACTED FOR MOBILE */}
+                <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-lg p-2 md:p-3">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Cpu className="text-blue-400 animate-pulse" size={16} />
-                            <span className="text-xs font-mono font-bold text-blue-400 uppercase tracking-wider">
-                                Modo Autónomo Activo
+                            <span className="text-[10px] md:text-xs font-mono font-bold text-blue-400 uppercase tracking-wider">
+                                MODO AUTÓNOMO
                             </span>
                         </div>
                         <div className="flex items-center gap-2">
                             {detectedRegime && (
-                                <div className="flex items-center gap-2 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20">
-                                    <Activity size={12} className="text-cyan-400" />
-                                    <span className="text-[10px] font-mono text-cyan-400">
-                                        {detectedRegime}
+                                <div className="flex items-center gap-1.5 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
+                                    <Activity size={10} className="text-cyan-400" />
+                                    <span className="text-[9px] font-mono text-cyan-400 uppercase">
+                                        {detectedRegime.split('_')[0]}
                                     </span>
                                 </div>
                             )}
                             {/* Cache Indicator */}
                             {isFromCache && cacheAge && (
-                                <div className="flex items-center gap-1.5 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">
-                                    <Database size={12} className="text-amber-400" />
-                                    <span className="text-[10px] font-mono text-amber-400">
-                                        Cache: {cacheAge}
+                                <div className="hidden xs:flex items-center gap-1.5 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                    <Database size={10} className="text-amber-400" />
+                                    <span className="text-[9px] font-mono text-amber-400">
+                                        {cacheAge}
                                     </span>
                                 </div>
                             )}
                         </div>
                     </div>
-                    <p className="text-[10px] text-secondary mt-2 leading-relaxed">
+                    {/* HIDE description on mobile to reclaim space */}
+                    <p className="hidden md:block text-[10px] text-secondary mt-2 leading-relaxed">
                         El sistema detecta automáticamente el régimen de mercado y selecciona las estrategias óptimas con ponderación inteligente.
                     </p>
                 </div>
