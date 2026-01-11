@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { History, TrendingUp, TrendingDown, Clock, ExternalLink, ShieldCheck, XCircle, AlertCircle } from 'lucide-react';
+import { History, TrendingUp, TrendingDown, Clock, ExternalLink, ShieldCheck, XCircle, AlertCircle, Activity } from 'lucide-react';
 import axios from 'axios';
 
 interface HistoricalSignal {
     id: string;
     symbol: string;
     side: 'LONG' | 'SHORT';
-    status: 'WIN' | 'LOSS' | 'EXPIRED';
+    status: 'WIN' | 'LOSS' | 'EXPIRED' | 'OPEN';
     strategy: string;
     entry_price: number;
     final_price: number;
@@ -49,6 +49,7 @@ const AuditHistory: React.FC = () => {
             case 'WIN': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
             case 'LOSS': return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
             case 'EXPIRED': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+            case 'OPEN': return 'bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse';
             default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
         }
     };
@@ -58,13 +59,30 @@ const AuditHistory: React.FC = () => {
             case 'WIN': return <ShieldCheck size={14} />;
             case 'LOSS': return <XCircle size={14} />;
             case 'EXPIRED': return <Clock size={14} />;
+            case 'OPEN': return <Activity size={14} />;
             default: return <AlertCircle size={14} />;
         }
     };
 
     if (loading) return <div className="p-8 text-center animate-pulse text-slate-500 font-mono text-xs uppercase tracking-widest">Sincronizando Archivo...</div>;
 
-    if (history.length === 0) return null;
+    if (history.length === 0) {
+        return (
+            <div className="mt-4 p-8 border border-dashed border-white/5 rounded-2xl bg-white/[0.02] text-center animate-in fade-in duration-700">
+                <div className="bg-blue-500/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
+                    <History className="text-blue-400/60" size={24} />
+                </div>
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-2">Archivo en Generación</h3>
+                <p className="text-[10px] text-slate-500 max-w-[280px] mx-auto leading-relaxed">
+                    Las señales están siendo auditadas en tiempo real. Los resultados aparecerán aquí automáticamente una vez que alcancen su <span className="text-emerald-400/80">Take Profit</span>, <span className="text-rose-400/80">Stop Loss</span> o expiren.
+                </p>
+                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/50 border border-white/5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Monitoreo Activo</span>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="mt-4 animate-in fade-in slide-in-from-top-4 duration-500">
@@ -99,10 +117,18 @@ const AuditHistory: React.FC = () => {
                         <div className="flex items-center gap-6">
                             {/* PnL */}
                             <div className="text-right flex flex-col">
-                                <span className={`text-sm font-bold font-mono ${sig.pnl_percent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {sig.pnl_percent >= 0 ? '+' : ''}{sig.pnl_percent.toFixed(2)}%
+                                {sig.status === 'OPEN' ? (
+                                    <span className="text-sm font-bold font-mono text-blue-400 animate-pulse">
+                                        EN VIVO
+                                    </span>
+                                ) : (
+                                    <span className={`text-sm font-bold font-mono ${sig.pnl_percent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {sig.pnl_percent >= 0 ? '+' : ''}{sig.pnl_percent.toFixed(2)}%
+                                    </span>
+                                )}
+                                <span className="text-[9px] text-slate-500 uppercase tracking-tighter">
+                                    {sig.status === 'OPEN' ? 'AUDITANDO' : 'PNL REAL'}
                                 </span>
-                                <span className="text-[9px] text-slate-500 uppercase tracking-tighter">PNL REAL</span>
                             </div>
 
                             {/* Status Badge */}

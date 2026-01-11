@@ -175,8 +175,7 @@ class SignalAuditService extends EventEmitter {
         const { data, error } = await this.supabase
             .from('signals_audit')
             .select('*')
-            .neq('status', 'OPEN')
-            .order('closed_at', { ascending: false })
+            .order('created_at', { ascending: false })
             .limit(limit);
 
         if (error || !data) return [];
