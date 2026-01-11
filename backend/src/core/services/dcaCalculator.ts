@@ -264,13 +264,13 @@ export function calculateDCAPlan(
     }
 
     // 7. Stop Loss Final
-    // DYNAMIC ATR MULTIPLIER BASED ON TIER
-    // S: Wide (2.5x), A: Std (2.0x), B: Tight (1.5x), C: Sniper (1.0x)
-    let atrMultiplier = 1.5; // Default (Tier B)
-    if (tier === 'S') atrMultiplier = 2.5;
-    else if (tier === 'A') atrMultiplier = 2.0;
-    else if (tier === 'B') atrMultiplier = 1.5;
-    else if (tier === 'C') atrMultiplier = 1.0;
+    // DYNAMIC ATR MULTIPLIER BASED ON TIER (Elite Hedge Fund Calibration)
+    // S: Wide (3.5x), A: Strong (3.0x), B: Institutional (2.5x), C: Scalp (2.0x)
+    let atrMultiplier = 2.5; // Default (Tier B)
+    if (tier === 'S') atrMultiplier = 3.5;
+    else if (tier === 'A') atrMultiplier = 3.0;
+    else if (tier === 'B') atrMultiplier = 2.5;
+    else if (tier === 'C') atrMultiplier = 2.0;
 
     const finalDeepest = entries[entries.length - 1].price;
     const stopLoss = side === 'LONG'

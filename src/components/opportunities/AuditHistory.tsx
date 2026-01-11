@@ -6,7 +6,7 @@ interface HistoricalSignal {
     id: string;
     symbol: string;
     side: 'LONG' | 'SHORT';
-    status: 'WIN' | 'LOSS' | 'EXPIRED' | 'OPEN';
+    status: 'WIN' | 'LOSS' | 'EXPIRED' | 'ACTIVE' | 'PENDING' | 'OPEN';
     strategy: string;
     entry_price: number;
     final_price: number;
@@ -54,7 +54,9 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
             case 'WIN': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
             case 'LOSS': return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
             case 'EXPIRED': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-            case 'OPEN': return 'bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse';
+            case 'ACTIVE': return 'bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse';
+            case 'PENDING': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+            case 'OPEN': return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
             default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
         }
     };
@@ -64,7 +66,9 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
             case 'WIN': return <ShieldCheck size={14} />;
             case 'LOSS': return <XCircle size={14} />;
             case 'EXPIRED': return <Clock size={14} />;
-            case 'OPEN': return <Activity size={14} />;
+            case 'ACTIVE': return <Activity size={14} />;
+            case 'PENDING': return <Clock size={14} />;
+            case 'OPEN': return <AlertCircle size={14} />;
             default: return <AlertCircle size={14} />;
         }
     };
@@ -127,19 +131,19 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
                         <div className="flex items-center gap-3 sm:gap-6 ml-2">
                             {/* PnL */}
                             <div className="text-right flex flex-col min-w-[65px] sm:min-w-[90px]">
-                                {sig.status === 'OPEN' ? (
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-xs sm:text-sm font-bold font-mono text-blue-400 animate-pulse truncate drop-shadow-[0_0_8px_rgba(96,165,250,0.3)]">
-                                            ${sig.entry_price > 100 ? sig.entry_price.toLocaleString(undefined, { maximumFractionDigits: 0 }) : sig.entry_price.toFixed(2)}
-                                        </span>
-                                        <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">ENTRY</span>
-                                    </div>
-                                ) : (
+                                {sig.status === 'WIN' || sig.status === 'LOSS' || sig.status === 'EXPIRED' ? (
                                     <div className="flex flex-col items-end">
                                         <span className={`text-xs sm:text-sm font-bold font-mono ${sig.pnl_percent >= 0 ? 'text-emerald-400' : 'text-rose-400'} drop-shadow-md`}>
                                             {sig.pnl_percent >= 0 ? '+' : ''}{sig.pnl_percent.toFixed(1)}%
                                         </span>
                                         <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">PNL</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-end">
+                                        <span className={`text-xs sm:text-sm font-bold font-mono ${sig.status === 'ACTIVE' ? 'text-blue-400 animate-pulse' : 'text-amber-400'} truncate drop-shadow-[0_0_8px_rgba(96,165,250,0.3)]`}>
+                                            ${sig.entry_price > 100 ? sig.entry_price.toLocaleString(undefined, { maximumFractionDigits: 0 }) : sig.entry_price.toFixed(2)}
+                                        </span>
+                                        <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">{sig.status === 'ACTIVE' ? 'ENTRY ACTIVE' : 'ENTRY ZONE'}</span>
                                     </div>
                                 )}
                             </div>

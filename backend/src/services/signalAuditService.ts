@@ -19,13 +19,20 @@ class SignalAuditService extends EventEmitter {
     }
 
     public async start() {
-        console.log("🛡️ [SignalAudit] Auditoría de Señales Iniciada.");
+        console.log("🛡️ [SignalAudit] Auditoría de Señales Iniciada (Elite Mode).");
 
-        // 1. Cargar señales OPEN de la base de datos para seguimiento
+        // 1. Cargar señales PENDING/ACTIVE de la base de datos
         await this.reloadActiveSignals();
 
-        // 2. Iniciar loop de monitoreo cada 1 minuto
-        this.auditInterval = setInterval(() => this.performAudit(), 60 * 1000);
+        // 2. Suscribirse al stream binance para auditoría reactiva (Tick-by-Tick)
+        binanceStream.subscribe((event) => {
+            if (event.type === 'cvd_update') {
+                this.processPriceTick(event.data.symbol, event.data.price);
+            }
+        });
+
+        // 3. Proceso de expiración sigue siendo cronológico (cada 5m es suficiente)
+        this.auditInterval = setInterval(() => this.checkExpirations(), 5 * 60 * 1000);
     }
 
     private async reloadActiveSignals() {
@@ -34,7 +41,7 @@ class SignalAuditService extends EventEmitter {
         const { data, error } = await this.supabase
             .from('signals_audit')
             .select('*')
-            .eq('status', 'OPEN');
+            .in('status', ['PENDING', 'ACTIVE', 'OPEN']); // 'OPEN' for legacy support
 
         if (!error && data) {
             this.activeSignals = data;
@@ -68,7 +75,7 @@ class SignalAuditService extends EventEmitter {
                 signal_id: opp.id,
                 symbol: opp.symbol,
                 side: opp.side,
-                status: 'OPEN',
+                status: 'PENDING', // Start as Pending waiting for entry
                 strategy: opp.strategy,
                 timeframe: opp.timeframe,
                 entry_price: opp.entryZone.currentPrice || opp.entryZone.max,
@@ -95,76 +102,115 @@ class SignalAuditService extends EventEmitter {
     }
 
     /**
-     * Proceso principal de revisión
+     * Procesa cada tick de precio en tiempo real
      */
-    private async performAudit() {
+    private async processPriceTick(symbol: string, currentPrice: number) {
         if (this.activeSignals.length === 0) return;
 
-        console.log(`🛡️ [SignalAudit] Ejecutando auditoría sobre ${this.activeSignals.length} señales...`);
-
-        const snapshot = binanceStream.getSnapshot();
-        const cvdData = snapshot.cvd;
-
         const signalsToUpdate = [];
+        const sym = symbol.toUpperCase().replace('/', '');
 
         for (const signal of this.activeSignals) {
-            const sym = signal.symbol.toUpperCase().replace('/', '');
-            const currentPrice = cvdData[sym]?.price;
+            if (signal.symbol.toUpperCase().replace('/', '') !== sym) continue;
 
-            let finalStatus: string | null = null;
+            let newStatus: string | null = null;
             let pnl = 0;
 
-            // 1. Verificación de WIN/LOSS (Requiere precio real)
-            if (currentPrice) {
-                if (signal.side === 'LONG') {
-                    if (currentPrice >= signal.tp1) finalStatus = 'WIN';
-                    else if (currentPrice <= signal.stop_loss) finalStatus = 'LOSS';
-                } else {
-                    if (currentPrice <= signal.tp1) finalStatus = 'WIN';
-                    else if (currentPrice >= signal.stop_loss) finalStatus = 'LOSS';
+            // FASE 1: Verificación de Entrada (PENDING -> ACTIVE)
+            if (signal.status === 'PENDING' || signal.status === 'OPEN') {
+                const entryPrice = signal.entry_price;
+                const buffer = entryPrice * 0.001; // 0.1% de tolerancia
+
+                const entryTouched = (signal.side === 'LONG')
+                    ? currentPrice <= (entryPrice + buffer)
+                    : currentPrice >= (entryPrice - buffer);
+
+                if (entryTouched) {
+                    newStatus = 'ACTIVE';
+                    console.log(`🚀 [SignalAudit] Entrada ACTIVADA: ${signal.symbol} ${signal.side} @ ${currentPrice}`);
                 }
             }
 
-            // 2. Verificación de Expiración (Caducidad cronológica bruta)
-            if (!finalStatus) {
-                const ageHours = (Date.now() - Number(signal.created_at)) / (1000 * 60 * 60);
-                const limit = signal.timeframe === '15m' ? 6 : 48;
-                if (ageHours > limit) finalStatus = 'EXPIRED';
+            // FASE 2: Verificación de Salida (ACTIVE -> WIN/LOSS)
+            // Una señal que acaba de pasar a ACTIVE puede tocar el SL/TP en el mismo tick
+            const isActive = newStatus === 'ACTIVE' || signal.status === 'ACTIVE';
+
+            if (isActive) {
+                if (signal.side === 'LONG') {
+                    if (currentPrice >= signal.tp1) newStatus = 'WIN';
+                    else if (currentPrice <= signal.stop_loss) newStatus = 'LOSS';
+                } else {
+                    if (currentPrice <= signal.tp1) newStatus = 'WIN';
+                    else if (currentPrice >= signal.stop_loss) newStatus = 'LOSS';
+                }
             }
 
-            if (finalStatus) {
-                // Si expiró y no tenemos precio actual, usamos el precio de entrada como "referencia neutral"
-                const referencePrice = currentPrice || signal.entry_price;
-                pnl = ((referencePrice - signal.entry_price) / signal.entry_price) * 100 * (signal.side === 'LONG' ? 1 : -1);
+            if (newStatus && newStatus !== signal.status) {
+                pnl = ((currentPrice - signal.entry_price) / signal.entry_price) * 100 * (signal.side === 'LONG' ? 1 : -1);
+
+                // Actualizar cache local inmediatamente para evitar procesamiento doble
+                signal.status = newStatus;
 
                 signalsToUpdate.push({
                     id: signal.id,
-                    status: finalStatus,
-                    closed_at: Date.now(),
-                    final_price: referencePrice,
+                    status: newStatus,
+                    closed_at: (newStatus === 'WIN' || newStatus === 'LOSS') ? Date.now() : null,
+                    final_price: currentPrice,
                     pnl_percent: pnl
                 });
             }
         }
 
-        // Actualizar en Supabase y Limpiar cache local
         if (signalsToUpdate.length > 0) {
-            for (const upd of signalsToUpdate) {
-                const { error } = await this.supabase
-                    .from('signals_audit')
-                    .update({
-                        status: upd.status,
-                        closed_at: upd.closed_at,
-                        final_price: upd.final_price,
-                        pnl_percent: upd.pnl_percent
-                    })
-                    .eq('id', upd.id);
+            this.syncUpdates(signalsToUpdate);
+        }
+    }
 
-                if (!error) {
+    /**
+     * Sincroniza los cambios con la base de datos
+     */
+    private async syncUpdates(updates: any[]) {
+        for (const upd of updates) {
+            const { error } = await this.supabase
+                .from('signals_audit')
+                .update({
+                    status: upd.status,
+                    closed_at: upd.closed_at,
+                    final_price: upd.final_price,
+                    pnl_percent: upd.pnl_percent
+                })
+                .eq('id', upd.id);
+
+            if (!error) {
+                if (upd.status === 'WIN' || upd.status === 'LOSS') {
                     this.activeSignals = this.activeSignals.filter((s: any) => s.id !== upd.id);
                     console.log(`🎯 [SignalAudit] Señal CERRADA (${upd.status}): ${upd.id} | PnL: ${upd.pnl_percent.toFixed(2)}%`);
                 }
             }
+        }
+    }
+
+    private async checkExpirations() {
+        if (this.activeSignals.length === 0) return;
+
+        const signalsToUpdate = [];
+        for (const signal of this.activeSignals) {
+            const ageHours = (Date.now() - Number(signal.created_at)) / (1000 * 60 * 60);
+            const limit = signal.timeframe === '15m' ? 6 : 48;
+
+            if (ageHours > limit) {
+                signalsToUpdate.push({
+                    id: signal.id,
+                    status: 'EXPIRED',
+                    closed_at: Date.now(),
+                    final_price: signal.entry_price, // Use entry as neutral ref
+                    pnl_percent: 0
+                });
+            }
+        }
+
+        if (signalsToUpdate.length > 0) {
+            this.syncUpdates(signalsToUpdate);
         }
     }
 
