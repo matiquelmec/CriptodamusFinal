@@ -94,7 +94,11 @@ export class TelegramService {
             message += `📚 <b>PLAN DE ENTRADA (DCA)</b>\n`;
             opp.dcaPlan.entries.forEach(e => {
                 const discount = e.distanceFromCurrent !== undefined ? `(${Math.abs(e.distanceFromCurrent).toFixed(2)}%)` : '';
-                message += `🔹 <b>Entrada ${e.level}:</b> $${e.price} - <i>${e.positionSize}%</i> ${discount}\n`;
+                // Check for Market Entry Factor
+                const isMarket = e.factors && e.factors.some(f => f.includes('Market') || f.includes('Inmediata'));
+                const label = isMarket ? '⚡ <b>ENTRADA A MERCADO</b>' : `🔹 <b>Entrada ${e.level}:</b>`;
+
+                message += `${label} $${e.price} - <i>${e.positionSize}%</i> ${discount}\n`;
             });
             message += `📉 <b>Precio Promedio (WAP):</b> $${opp.dcaPlan.averageEntry.toFixed(4)}\n\n`;
 

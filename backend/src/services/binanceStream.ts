@@ -164,7 +164,12 @@ class BinanceStreamService {
 
     private handleMessage(msg: StreamMessage): void {
         // DEBUG: Active
-        console.log('RAW MSG:', msg.e);
+        // console.log('RAW MSG:', msg.e);
+        if (!msg.e) {
+            console.log('🔍 [BinanceStream] System Msg:', JSON.stringify(msg));
+        } else {
+            // console.log('📨 [BinanceStream] Event:', msg.e);
+        }
 
         // 1. Force Order (Liquidation)
         if (msg.e === 'forceOrder' && msg.o) {

@@ -71,14 +71,33 @@ class SignalAuditService extends EventEmitter {
 
             if (isDuplicate) continue;
 
+            // SMART EXECUTION: Verificar activación inmediata
+            // Si el precio actual ya está en zona, entramos directo (ACTIVE) en lugar de PENDING
+            const entryTarget = opp.entryZone.currentPrice || opp.entryZone.max;
+            const buffer = entryTarget * 0.003; // 0.3% Tolerance
+            const currentPrice = opp.entryZone.currentPrice || 0;
+
+            let initialStatus = 'PENDING';
+
+            if (currentPrice > 0) {
+                const canEnterNow = (opp.side === 'LONG')
+                    ? currentPrice <= (entryTarget + buffer)
+                    : currentPrice >= (entryTarget - buffer);
+
+                if (canEnterNow) {
+                    initialStatus = 'ACTIVE';
+                    console.log(`⚡ [SignalAudit] Ejecución Inmediata (Market): ${opp.symbol} @ ${currentPrice}`);
+                }
+            }
+
             const payload = {
                 signal_id: opp.id,
                 symbol: opp.symbol,
                 side: opp.side,
-                status: 'PENDING', // Start as Pending waiting for entry
+                status: initialStatus, // ACTIVE if entering at market, otherwise PENDING
                 strategy: opp.strategy,
                 timeframe: opp.timeframe,
-                entry_price: opp.entryZone.currentPrice || opp.entryZone.max,
+                entry_price: entryTarget,
                 tp1: opp.takeProfits.tp1,
                 tp2: opp.takeProfits.tp2,
                 tp3: opp.takeProfits.tp3,
@@ -92,11 +111,16 @@ class SignalAuditService extends EventEmitter {
                 .insert(payload)
                 .select();
 
+            if (error) {
+                console.error("❌ [SignalAudit] Error inserting signal:", error.message, error.details);
+            }
+
             if (!error && data) {
                 this.activeSignals.push(data[0]);
                 // Activar stream de precio para este símbolo
                 const streamSymbol = opp.symbol.toLowerCase().replace('/', '') + '@aggTrade';
                 binanceStream.addStream(streamSymbol);
+                console.log(`✅ [SignalAudit] Signal Registered: ${opp.symbol} ${opp.side} (${opp.id})`);
             }
         }
     }
@@ -116,18 +140,22 @@ class SignalAuditService extends EventEmitter {
             let newStatus: string | null = null;
             let pnl = 0;
 
-            // FASE 1: Verificación de Entrada (PENDING -> ACTIVE)
+            // FASE 1: Verificación de Entrada ("Smart Execution")
             if (signal.status === 'PENDING' || signal.status === 'OPEN') {
                 const entryPrice = signal.entry_price;
-                const buffer = entryPrice * 0.001; // 0.1% de tolerancia
+                // Buffer relajado (0.3%) - Standard Institucional para Volatilidad/Spread
+                const buffer = entryPrice * 0.003;
 
+                // 1. Marketable Check: Si el precio YA es mejor o igual a la entrada, entramos.
+                // LONG: Precio actual <= Entrada (+buffer)
+                // SHORT: Precio actual >= Entrada (-buffer)
                 const entryTouched = (signal.side === 'LONG')
                     ? currentPrice <= (entryPrice + buffer)
                     : currentPrice >= (entryPrice - buffer);
 
                 if (entryTouched) {
                     newStatus = 'ACTIVE';
-                    console.log(`🚀 [SignalAudit] Entrada ACTIVADA: ${signal.symbol} ${signal.side} @ ${currentPrice}`);
+                    console.log(`🚀 [SignalAudit] Entrada ACTIVADA (SmartExec): ${signal.symbol} ${signal.side} @ ${currentPrice} (Entry: ${entryPrice})`);
                 }
             }
 
