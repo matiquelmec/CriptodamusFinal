@@ -118,11 +118,13 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
                                     {sig.strategy.split('_')[0]}
                                 </span>
                                 <span className="text-[8px] sm:text-[9px] text-slate-500 flex items-center gap-1 mt-0.5">
-                                    <span className="opacity-70">{sig.status === 'OPEN' ? 'D:' : 'C:'}</span>
-                                    <span className="text-slate-400">{new Date(Number(sig.status === 'OPEN' ? sig.created_at : sig.closed_at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                    <span className="opacity-70">{['WIN', 'LOSS', 'EXPIRED'].includes(sig.status) ? 'C:' : 'D:'}</span>
+                                    <span className="text-slate-400">
+                                        {new Date(Number(['WIN', 'LOSS', 'EXPIRED'].includes(sig.status) ? sig.closed_at : sig.created_at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
                                     <span className="opacity-40">•</span>
                                     <span className="opacity-60">
-                                        {Math.floor((Date.now() - Number(sig.status === 'OPEN' ? sig.created_at : sig.closed_at)) / (60000))}m
+                                        {Math.floor((Date.now() - Number(['WIN', 'LOSS', 'EXPIRED'].includes(sig.status) ? sig.closed_at : sig.created_at)) / (60000))}m
                                     </span>
                                 </span>
                             </div>
