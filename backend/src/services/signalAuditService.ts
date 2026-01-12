@@ -142,6 +142,23 @@ class SignalAuditService extends EventEmitter {
             let newStatus: string | null = null;
             let pnl = 0;
 
+            // 0. Sanity Check: Ignorar precios absurdos (Protección contra glitches de API)
+            // Si el precio se desvía más del 15% del precio de entrada de golpe, es probablemente un error de data feed.
+            // Excepción: Monedas muy volátiles podrían necesitar ajuste, pero 15% en un tick es "Flash Crash" o Bug.
+            if (signal.entry_price > 0) {
+                const deviation = Math.abs((currentPrice - signal.entry_price) / signal.entry_price);
+                if (deviation > 0.15 && signal.status !== 'ACTIVE') {
+                    // Solo filtrar si NO está activa (evitar activar por error). 
+                    // Si YA está activa, un flash crash real debería stoparla, pero 15% instantáneo suele ser glitch.
+                    // Para seguridad, lo ignoramos si es PENDING. Si es ACTIVE, requerimos confirmación (future improvement).
+                    // Por ahora, ignoramos desviaciones > 15% para todos para evitar PNL -40%.
+                    console.warn(`⚠️ [SignalAudit] Anomalía de precio detectada para ${signal.symbol}: ${currentPrice} vs Entry ${signal.entry_price} (${(deviation * 100).toFixed(2)}%). Ignorando.`);
+                    continue;
+                }
+                // Corrección: Aplicar filtro general.
+                if (deviation > 0.15) continue;
+            }
+
             // FASE 1: Verificación de Entrada ("Smart Execution")
             if (signal.status === 'PENDING' || signal.status === 'OPEN') {
                 const entryPrice = signal.entry_price;
