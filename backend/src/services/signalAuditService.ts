@@ -339,10 +339,7 @@ class SignalAuditService extends EventEmitter {
 
     /**
      * Obtener señales recientes para el Histórico (Audit Log)
-     */
-    /**
-     * Obtener señales recientes para el Histórico (Audit Log)
-     * PRIORIDAD: Siempre mostrar ACTIVE/OPEN arriba.
+     * PRIORIDAD: Siempre mostrar ACTIVE/OPEN arriba (usando cache local + DB).
      */
     public async getRecentSignals(limit: number = 10) {
         if (!this.supabase) return [];
@@ -356,17 +353,14 @@ class SignalAuditService extends EventEmitter {
 
         if (error || !data) return [];
 
-        // 2. Local Sort: Active First, then Date
-        // We use the local sort to ensure that IF the active signals are in the fetched batch, they bubble up.
-        // NOTE: If we have >50 pending signals NEWER than the active ones, the active ones might be missed by the DB query limit.
-        // FIX: We should fetch ACTIVE signals explicitly if we want to guarantee them.
+        // 2. Merge with In-Memory Active Signals (Guarantee Visibility)
+        const combined = [...this.activeSignals, ...data];
 
-        // Let's rely on the fact that we have 'this.activeSignals' in memory!
-        // We can just merge them? No, 'this.activeSignals' might be incomplete or just a cache for tracking.
-        // Better: Fetch a slightly larger batch or trust the LIMIT=50 is enough for now.
-        // Given user feedback, let's just SORT what we have.
+        // 3. Deduplicate elements by ID
+        const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
 
-        return data.sort((a: any, b: any) => {
+        // 4. Sort: Active First, then Date
+        return unique.sort((a: any, b: any) => {
             const scoreA = ['ACTIVE', 'OPEN'].includes(a.status) ? 1 : 0;
             const scoreB = ['ACTIVE', 'OPEN'].includes(b.status) ? 1 : 0;
             if (scoreA !== scoreB) return scoreB - scoreA; // High score first
