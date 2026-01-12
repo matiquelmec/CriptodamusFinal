@@ -142,33 +142,31 @@ const SignalCard: React.FC<SignalCardProps> = ({ data, onSelect, onShowDetails }
                     </div>
 
                     {data.dcaPlan ? (
-                        {
-                            data.dcaPlan ? (
-                                <div className="grid grid-cols-3 gap-1.5 md:gap-2">
-                                    {data.dcaPlan.entries.map((entry, idx) => {
-                                        // Check for Market Entry Factor
-                                        const isMarket = entry.factors && entry.factors.some(f => f.includes('Market') || f.includes('Inmediata'));
-                                        const badgeColor = isMarket ? 'text-accent border-accent/20 bg-accent/5' : 'text-primary border-border bg-background';
-                                        const label = isMarket ? '⚡ MARKET' : `${entry.positionSize}%`;
+                        <div className="grid grid-cols-3 gap-1.5 md:gap-2">
+                            {data.dcaPlan.entries.map((entry, idx) => {
+                                // Check for Market Entry Factor
+                                const isMarket = entry.factors && entry.factors.some(f => f.includes('Market') || f.includes('Inmediata'));
+                                const badgeColor = isMarket ? 'text-accent border-accent/20 bg-accent/5' : 'text-primary border-border bg-background';
+                                const label = isMarket ? '⚡ MARKET' : `${entry.positionSize}%`;
 
-                                        return (
-                                            <div key={idx} className={`p-1.5 md:p-2 border rounded flex flex-col items-center ${badgeColor}`}>
-                                                <span className={`text-[8px] uppercase mb-0.5 ${isMarket ? 'text-accent font-bold' : 'text-secondary'}`}>
-                                                    {label}
-                                                </span>
-                                                <span className="font-mono text-[11px] md:text-xs font-bold text-primary">
-                                                    ${formatPrice(entry.price)}
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <div className="p-1.5 bg-background border border-border rounded font-mono text-[11px] text-primary text-center">
-                                    ${data.entryZone.min} - ${data.entryZone.max}
-                                </div>
-                            )
-                        }
+                                return (
+                                    <div key={idx} className={`p-1.5 md:p-2 border rounded flex flex-col items-center ${badgeColor}`}>
+                                        <span className={`text-[8px] uppercase mb-0.5 ${isMarket ? 'text-accent font-bold' : 'text-secondary'}`}>
+                                            {label}
+                                        </span>
+                                        <span className="font-mono text-[11px] md:text-xs font-bold text-primary">
+                                            ${formatPrice(entry.price)}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="p-1.5 bg-background border border-border rounded font-mono text-[11px] text-primary text-center">
+                            ${data.entryZone.min} - ${data.entryZone.max}
+                        </div>
+                    )
+                    }
                 </div>
 
                 {/* TP Stack */}
