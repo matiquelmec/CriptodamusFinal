@@ -224,16 +224,19 @@ class SignalAuditService extends EventEmitter {
         const signalsToUpdate = [];
         for (const signal of this.activeSignals) {
             const ageHours = (Date.now() - Number(signal.created_at)) / (1000 * 60 * 60);
-            const limit = signal.timeframe === '15m' ? 6 : 48;
+            // SOLO expirar señales PENDING. Las ACTIVE son trades abiertos que deben tocar TP/SL.
+            if (signal.status === 'PENDING') {
+                const limit = signal.timeframe === '15m' ? 4 : 48; // Reducido a 4h para scalping
 
-            if (ageHours > limit) {
-                signalsToUpdate.push({
-                    id: signal.id,
-                    status: 'EXPIRED',
-                    closed_at: Date.now(),
-                    final_price: signal.entry_price, // Use entry as neutral ref
-                    pnl_percent: 0
-                });
+                if (ageHours > limit) {
+                    signalsToUpdate.push({
+                        id: signal.id,
+                        status: 'EXPIRED',
+                        closed_at: Date.now(),
+                        final_price: signal.entry_price,
+                        pnl_percent: 0
+                    });
+                }
             }
         }
 
@@ -291,7 +294,7 @@ class SignalAuditService extends EventEmitter {
             closed: closed.length,
             wins: winsCount,
             winRate: closed.length > 0 ? (winsCount / closed.length) * 100 : 0,
-            open: data.filter((s: any) => s.status === 'OPEN').length,
+            open: data.filter((s: any) => ['OPEN', 'ACTIVE', 'PENDING'].includes(s.status)).length,
             profitFactor: Number(profitFactor.toFixed(2))
         };
     }
