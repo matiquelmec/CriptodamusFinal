@@ -88,6 +88,21 @@ class SignalAuditService extends EventEmitter {
             // LOCK IMMEDIATELY
             this.processingSignatures.add(sigKey);
 
+            // 2. CHECK DATABASE (Cross-Instance Protection)
+            // Consultamos directamente a la DB para ver si existe el par activo.
+            // Esto protege si hay otra instancia corriendo (Local vs Cloud) o si el cache local falló.
+            const { count } = await this.supabase
+                .from('signals_audit')
+                .select('*', { count: 'exact', head: true })
+                .eq('symbol', opp.symbol)
+                .eq('side', opp.side)
+                .in('status', ['PENDING', 'ACTIVE', 'OPEN']);
+
+            if (count && count > 0) {
+                // console.log(`🛡️ [SignalAudit] Duplicado Detectado (DB): ${sigKey}`);
+                continue;
+            }
+
             try {
                 // SMART EXECUTION: Verificar activación inmediata
                 const entryTarget = opp.entryZone.currentPrice || opp.entryZone.max;
