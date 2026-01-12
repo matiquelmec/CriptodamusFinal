@@ -316,8 +316,8 @@ class SignalAuditService extends EventEmitter {
         const signalsToUpdate = [];
         for (const signal of this.activeSignals) {
             const ageHours = (Date.now() - Number(signal.created_at)) / (1000 * 60 * 60);
-            // SOLO expirar señales PENDING. Las ACTIVE son trades abiertos que deben tocar TP/SL.
-            if (signal.status === 'PENDING') {
+            // SOLO expirar señales PENDING/OPEN. Las ACTIVE son trades abiertos que deben tocar TP/SL.
+            if (signal.status === 'PENDING' || signal.status === 'OPEN') {
                 const limit = signal.timeframe === '15m' ? 4 : 48; // Reducido a 4h para scalping
 
                 if (ageHours > limit) {
