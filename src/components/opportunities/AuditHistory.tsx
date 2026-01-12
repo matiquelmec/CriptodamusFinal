@@ -31,7 +31,7 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
     useEffect(() => {
         const fetchHistory = async () => {
             try {
-                const url = `${getBaseUrl()}/api/performance/history?limit=10`;
+                const url = `${getBaseUrl()}/api/performance/history?limit=50`;
                 const response = await axios.get(url);
                 if (Array.isArray(response.data)) {
                     setHistory(response.data);
@@ -97,7 +97,7 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
         <div className="mt-4 animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex items-center gap-2 mb-4 px-2">
                 <History className="text-slate-400" size={16} />
-                <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Log de Auditoría (Últimos 10)</h3>
+                <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Log de Auditoría (Últimos 50)</h3>
             </div>
 
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
