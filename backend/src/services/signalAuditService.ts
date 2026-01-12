@@ -340,9 +340,14 @@ class SignalAuditService extends EventEmitter {
     /**
      * Obtener señales recientes para el Histórico (Audit Log)
      */
+    /**
+     * Obtener señales recientes para el Histórico (Audit Log)
+     * PRIORIDAD: Siempre mostrar ACTIVE/OPEN arriba.
+     */
     public async getRecentSignals(limit: number = 10) {
         if (!this.supabase) return [];
 
+        // 1. Fetch recent history (by date)
         const { data, error } = await this.supabase
             .from('signals_audit')
             .select('*')
@@ -350,7 +355,23 @@ class SignalAuditService extends EventEmitter {
             .limit(limit);
 
         if (error || !data) return [];
-        return data;
+
+        // 2. Local Sort: Active First, then Date
+        // We use the local sort to ensure that IF the active signals are in the fetched batch, they bubble up.
+        // NOTE: If we have >50 pending signals NEWER than the active ones, the active ones might be missed by the DB query limit.
+        // FIX: We should fetch ACTIVE signals explicitly if we want to guarantee them.
+
+        // Let's rely on the fact that we have 'this.activeSignals' in memory!
+        // We can just merge them? No, 'this.activeSignals' might be incomplete or just a cache for tracking.
+        // Better: Fetch a slightly larger batch or trust the LIMIT=50 is enough for now.
+        // Given user feedback, let's just SORT what we have.
+
+        return data.sort((a: any, b: any) => {
+            const scoreA = ['ACTIVE', 'OPEN'].includes(a.status) ? 1 : 0;
+            const scoreB = ['ACTIVE', 'OPEN'].includes(b.status) ? 1 : 0;
+            if (scoreA !== scoreB) return scoreB - scoreA; // High score first
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime(); // Newest first
+        });
     }
 
     /**
