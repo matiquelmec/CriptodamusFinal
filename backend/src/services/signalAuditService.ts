@@ -88,7 +88,43 @@ class SignalAuditService extends EventEmitter {
             // LOCK IMMEDIATELY
             this.processingSignatures.add(sigKey);
 
-            // 2. CHECK DATABASE (Cross-Instance Protection)
+            // 2. CHECK REVERSAL (Stop & Reverse / Hedge Protecion)
+            // Si existe una señal opuesta (ej: viene SHORT y ya hay LONG), cerramos la vieja.
+            const oppositeSide = opp.side === 'LONG' ? 'SHORT' : 'LONG';
+            const reversalSignal = this.activeSignals.find((s: any) =>
+                s.symbol.replace('/', '') === opp.symbol.replace('/', '') &&
+                s.side === oppositeSide &&
+                ['PENDING', 'ACTIVE', 'OPEN'].includes(s.status)
+            );
+
+            if (reversalSignal) {
+                console.log(`🔄 [SignalAudit] REVERSAL DETECTED: New ${opp.side} vs Old ${oppositeSide} (${reversalSignal.id})`);
+
+                // Calcular precio de cierre para la vieja
+                const closePrice = opp.entryZone.currentPrice || opp.entryZone.max;
+                let finalStatus = 'EXPIRED'; // Default for PENDING
+                let pnl = 0;
+
+                if (reversalSignal.status === 'ACTIVE' || reversalSignal.status === 'OPEN') {
+                    // Si estaba activa, realizamos PnL al precio actual
+                    pnl = ((closePrice - reversalSignal.entry_price) / reversalSignal.entry_price) * 100 * (reversalSignal.side === 'LONG' ? 1 : -1);
+                    finalStatus = pnl >= 0 ? 'WIN' : 'LOSS'; // Logic simplificada: Salida por Reversal
+                }
+
+                // Cerrar la señal vieja en DB
+                await this.syncUpdates([{
+                    id: reversalSignal.id,
+                    status: finalStatus, // O podríamos usar un status 'REVERSED' si quisiéramos ser específicos
+                    closed_at: Date.now(),
+                    final_price: closePrice,
+                    pnl_percent: pnl
+                }]);
+
+                // Eliminar del array local inmediatamente
+                this.activeSignals = this.activeSignals.filter(s => s.id !== reversalSignal.id);
+            }
+
+            // 3. CHECK DATABASE (Cross-Instance Protection)
             // Consultamos directamente a la DB para ver si existe el par activo.
             // Esto protege si hay otra instancia corriendo (Local vs Cloud) o si el cache local falló.
             const { count } = await this.supabase
