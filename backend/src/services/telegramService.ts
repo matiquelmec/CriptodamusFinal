@@ -154,6 +154,32 @@ export class TelegramService {
             }
         }
     }
+
+    /**
+     * Alert for Stop & Reverse (Hedge Protection)
+     */
+    public async sendReversalAlert(symbol: string, oldSide: string, newSide: string, closePrice: number, pnl: number) {
+        if (!this.bot || !TradingConfig.telegram.chatId) return;
+
+        const pnlIcon = pnl >= 0 ? '✅' : '❌';
+        const pnlText = pnl >= 0 ? `+${pnl.toFixed(2)}%` : `${pnl.toFixed(2)}%`;
+        const oldIcon = oldSide === 'LONG' ? '🟢' : '🔴';
+        const newIcon = newSide === 'LONG' ? '🟢' : '🔴';
+
+        let message = `🔄 <b>STOP & REVERSE (GIRO DE MERCADO)</b>\n\n`;
+        message += `⛔ <b>CERRANDO:</b> ${symbol} ${oldIcon} ${oldSide}\n`;
+        message += `📉 <b>Precio Cierre:</b> $${closePrice}\n`;
+        message += `${pnlIcon} <b>PnL Realizado:</b> ${pnlText}\n\n`;
+        message += `🆕 <b>ABRIENDO:</b> ${symbol} ${newIcon} ${newSide}\n`;
+        message += `<i>Motivo: Nueva señal opuesta detectada. Rotación de capital.</i>`;
+
+        try {
+            await this.bot.sendMessage(TradingConfig.telegram.chatId, message, { parse_mode: 'HTML' });
+            console.log(`[Telegram] Sent REVERSAL alert for ${symbol}`);
+        } catch (error: any) {
+            console.error(`[Telegram] Failed to send Reversal Alert: ${error.message}`);
+        }
+    }
 }
 
 // Singleton Export

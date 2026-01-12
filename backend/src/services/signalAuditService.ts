@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { AIOpportunity } from '../core/types';
 import { binanceStream } from './binanceStream';
+import { telegramService } from './telegramService';
 import EventEmitter from 'events';
 
 class SignalAuditService extends EventEmitter {
@@ -119,6 +120,9 @@ class SignalAuditService extends EventEmitter {
                     final_price: closePrice,
                     pnl_percent: pnl
                 }]);
+
+                // NOTIFY USER (TELEGRAM)
+                telegramService.sendReversalAlert(opp.symbol, reversalSignal.side, opp.side, closePrice, pnl);
 
                 // Eliminar del array local inmediatamente
                 this.activeSignals = this.activeSignals.filter(s => s.id !== reversalSignal.id);
