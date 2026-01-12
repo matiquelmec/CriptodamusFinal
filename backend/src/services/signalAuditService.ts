@@ -62,11 +62,13 @@ class SignalAuditService extends EventEmitter {
         if (!this.supabase) return;
 
         for (const opp of opportunities) {
-            // Deduplicación básica: No registrar si ya existe una señal OPEN para este par/dirección en la última hora
+            // Deduplicación ESTRICTA:
+            // Si ya hay una señal VIVA (PENDING/ACTIVE/OPEN) para este par + dirección, IGNORAR la nueva.
+            // Evita stacking de órdenes idénticas.
             const isDuplicate = this.activeSignals.find((s: any) =>
                 s.symbol === opp.symbol &&
                 s.side === opp.side &&
-                (Date.now() - Number(s.created_at)) < 60 * 60 * 1000
+                ['PENDING', 'ACTIVE', 'OPEN'].includes(s.status)
             );
 
             if (isDuplicate) continue;
