@@ -55,6 +55,8 @@ class SignalAuditService extends EventEmitter {
         }
     }
 
+    private processingSignatures = new Set<string>();
+
     /**
      * Registra una nueva señal recibida del Scanner
      */
@@ -62,67 +64,83 @@ class SignalAuditService extends EventEmitter {
         if (!this.supabase) return;
 
         for (const opp of opportunities) {
-            // Deduplicación ESTRICTA:
-            // Si ya hay una señal VIVA (PENDING/ACTIVE/OPEN) para este par + dirección, IGNORAR la nueva.
-            // Evita stacking de órdenes idénticas.
+            const sigKey = `${opp.symbol}-${opp.side}`; // e.g. "FIL/USDT-SHORT"
+
+            // 0. CHECK LOCK (Concurrency Protection)
+            if (this.processingSignatures.has(sigKey)) {
+                console.log(`🛡️ [SignalAudit] Bloqueado por Race Condition: ${sigKey}`);
+                continue;
+            }
+
+            // 1. CHECK ACTIVE SIGNALS (Database/Cache Protection)
+            // Deduplicación ESTRICTA: Normalizamos símbolos para evitar errores FIL/USDT vs FILUSDT
             const isDuplicate = this.activeSignals.find((s: any) =>
-                s.symbol === opp.symbol &&
+                s.symbol.replace('/', '') === opp.symbol.replace('/', '') &&
                 s.side === opp.side &&
                 ['PENDING', 'ACTIVE', 'OPEN'].includes(s.status)
             );
 
-            if (isDuplicate) continue;
+            if (isDuplicate) {
+                // console.log(`🛡️ [SignalAudit] Duplicado Detectado (Cache): ${sigKey}`);
+                continue;
+            }
 
-            // SMART EXECUTION: Verificar activación inmediata
-            // Si el precio actual ya está en zona, entramos directo (ACTIVE) en lugar de PENDING
-            const entryTarget = opp.entryZone.currentPrice || opp.entryZone.max;
-            const buffer = entryTarget * 0.003; // 0.3% Tolerance
-            const currentPrice = opp.entryZone.currentPrice || 0;
+            // LOCK IMMEDIATELY
+            this.processingSignatures.add(sigKey);
 
-            let initialStatus = 'PENDING';
+            try {
+                // SMART EXECUTION: Verificar activación inmediata
+                const entryTarget = opp.entryZone.currentPrice || opp.entryZone.max;
+                const buffer = entryTarget * 0.003;
+                const currentPrice = opp.entryZone.currentPrice || 0;
 
-            if (currentPrice > 0) {
-                const canEnterNow = (opp.side === 'LONG')
-                    ? currentPrice <= (entryTarget + buffer)
-                    : currentPrice >= (entryTarget - buffer);
+                let initialStatus = 'PENDING';
 
-                if (canEnterNow) {
-                    initialStatus = 'ACTIVE';
-                    console.log(`⚡ [SignalAudit] Ejecución Inmediata (Market): ${opp.symbol} @ ${currentPrice}`);
+                if (currentPrice > 0) {
+                    const canEnterNow = (opp.side === 'LONG')
+                        ? currentPrice <= (entryTarget + buffer)
+                        : currentPrice >= (entryTarget - buffer);
+
+                    if (canEnterNow) {
+                        initialStatus = 'ACTIVE';
+                        console.log(`⚡ [SignalAudit] Ejecución Inmediata (Market): ${opp.symbol} @ ${currentPrice}`);
+                    }
                 }
-            }
 
-            const payload = {
-                signal_id: opp.id,
-                symbol: opp.symbol,
-                side: opp.side,
-                status: initialStatus, // ACTIVE if entering at market, otherwise PENDING
-                strategy: opp.strategy,
-                timeframe: opp.timeframe,
-                entry_price: entryTarget,
-                tp1: opp.takeProfits.tp1,
-                tp2: opp.takeProfits.tp2,
-                tp3: opp.takeProfits.tp3,
-                stop_loss: opp.stopLoss,
-                confidence_score: opp.confidenceScore,
-                created_at: Date.now()
-            };
+                const payload = {
+                    signal_id: opp.id,
+                    symbol: opp.symbol,
+                    side: opp.side,
+                    status: initialStatus,
+                    strategy: opp.strategy,
+                    timeframe: opp.timeframe,
+                    entry_price: entryTarget,
+                    tp1: opp.takeProfits.tp1,
+                    tp2: opp.takeProfits.tp2,
+                    tp3: opp.takeProfits.tp3,
+                    stop_loss: opp.stopLoss,
+                    confidence_score: opp.confidenceScore,
+                    created_at: Date.now()
+                };
 
-            const { data, error } = await this.supabase
-                .from('signals_audit')
-                .insert(payload)
-                .select();
+                const { data, error } = await this.supabase
+                    .from('signals_audit')
+                    .insert(payload)
+                    .select();
 
-            if (error) {
-                console.error("❌ [SignalAudit] Error inserting signal:", error.message, error.details);
-            }
+                if (error) {
+                    console.error("❌ [SignalAudit] Error inserting signal:", error.message);
+                }
 
-            if (!error && data) {
-                this.activeSignals.push(data[0]);
-                // Activar stream de precio para este símbolo
-                const streamSymbol = opp.symbol.toLowerCase().replace('/', '') + '@aggTrade';
-                binanceStream.addStream(streamSymbol);
-                console.log(`✅ [SignalAudit] Signal Registered: ${opp.symbol} ${opp.side} (${opp.id})`);
+                if (!error && data) {
+                    this.activeSignals.push(data[0]);
+                    const streamSymbol = opp.symbol.toLowerCase().replace('/', '') + '@aggTrade';
+                    binanceStream.addStream(streamSymbol);
+                    console.log(`✅ [SignalAudit] Signal Registered: ${opp.symbol} ${opp.side} (${opp.id})`);
+                }
+            } finally {
+                // UNLOCK ALWAYS
+                this.processingSignatures.delete(sigKey);
             }
         }
     }
