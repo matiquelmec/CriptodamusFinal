@@ -8,12 +8,12 @@ export interface FeedItem {
     content?: string;
 }
 
-{ name: 'Google News', url: 'https://news.google.com/rss/search?q=cryptocurrency+when:1d&hl=en-US&gl=US&ceid=US:en' },
-{ name: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/' },
-{ name: 'Cointelegraph', url: 'https://cointelegraph.com/rss' },
-// { name: 'The Block', url: 'https://www.theblock.co/rss' }, // BLOCKED
-{ name: 'CryptoSlate', url: 'https://cryptoslate.com/feed/' },
-{ name: 'Decrypt', url: 'https://decrypt.co/feed' }
+export const RSS_SOURCES = [
+    { name: 'Google News', url: 'https://news.google.com/rss/search?q=cryptocurrency+when:1d&hl=en-US&gl=US&ceid=US:en' },
+    { name: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/' },
+    { name: 'Cointelegraph', url: 'https://cointelegraph.com/rss' },
+    { name: 'The Block', url: 'https://www.theblock.co/rss' },
+    { name: 'Decrypt', url: 'https://decrypt.co/feed' }
 ];
 
 export async function fetchRSSFields(): Promise<FeedItem[]> {
@@ -27,8 +27,7 @@ export async function fetchRSSFields(): Promise<FeedItem[]> {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Accept': 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8'
-                },
-                timeout: 5000 // Force timeout so it doesn't hang
+                }
             });
             if (!xml) return [];
 
@@ -64,8 +63,8 @@ export async function fetchRSSFields(): Promise<FeedItem[]> {
             }
 
             return items;
-        } catch (error: any) {
-            console.warn(`[RSS] Failed to fetch ${source.name}: ${error.message || 'Unknown Error'}`); // Clean Log
+        } catch (error) {
+            console.warn(`[RSS] Failed to fetch ${source.name}:`, error);
             return [];
         }
     });
