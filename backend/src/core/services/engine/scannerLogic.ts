@@ -27,7 +27,7 @@ import { calculateDCAPlan } from '../dcaCalculator';
 import { fetchCryptoData, fetchCandles } from '../api/binanceApi';
 import { getMarketRisk, calculateFundamentalTier, calculateKellySize, getVolatilityAdjustedLeverage, calculatePortfolioCorrelation } from './riskEngine';
 import { fetchCryptoSentiment } from '../../../services/newsService'; // NEW: Sentiment Engine
-import { estimateLiquidationClusters } from '../../../services/engine/liquidationEngine'; // NEW: Liquidation Engine
+import { estimateLiquidationClusters, getRealLiquidationClusters } from '../../../services/engine/liquidationEngine'; // NEW: Liquidation Engine
 import { fetchGlobalMarketData } from '../../../services/globalMarketService'; // NEW: Global Macro Engine
 
 import { calculateEMA } from '../mathUtils';
@@ -501,7 +501,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     fundamentalTier || 'B',
                     { // Predictive Targets
                         rsiReversal: indicators.rsiExpert?.target || undefined,
-                        liquidationCluster: undefined, // Add if available
+                        liquidationCluster: ((await getRealLiquidationClusters(coin.symbol))[0]?.priceMin) || (estimateLiquidationClusters([], [], indicators.price)[0]?.priceMin), // Try Real -> Fallback Estimate
                         orderBookWall: undefined // Add if available
                     }
                 );

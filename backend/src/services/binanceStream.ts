@@ -1,4 +1,13 @@
 import WebSocket from 'ws';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ESM Polyfill for loading .env if needed (though usually loaded at app start)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 /**
  * Types & Interfaces for Strict Typing
@@ -42,6 +51,7 @@ export interface CVDState {
     volume: number;
     delta: number;
     price: number;
+    symbol?: string; // Added optional symbol for events
 }
 
 interface CVDPayload {
@@ -69,6 +79,11 @@ class BinanceStreamService {
     private recentLiquidations: LiquidationEvent[];
     private cvdState: Record<string, CVDState>;
 
+    // Real Data Accumulator (Supabase Integration)
+    private supabase: any = null;
+    private liquidationBuffer: LiquidationEvent[] = [];
+    private flushInterval: NodeJS.Timeout | null = null;
+
     constructor() {
         this.baseUrl = 'wss://fstream.binance.com/ws';
         this.streams = new Set<string>();
@@ -83,6 +98,49 @@ class BinanceStreamService {
         // Initial streams: Global Liquidations + BTC AggTrade (Benchmark)
         this.addStream('!forceOrder@arr');
         this.addStream('btcusdt@aggTrade');
+
+        // Init Database Connection
+        const SUPABASE_URL = process.env.SUPABASE_URL;
+        const SUPABASE_KEY = process.env.SUPABASE_KEY;
+        if (SUPABASE_URL && SUPABASE_KEY) {
+            this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+            this.startFlushing();
+        } else {
+            console.warn('⚠️ [BinanceStream] No Supabase credentials. Real Data Accumulator disabled.');
+        }
+    }
+
+    private startFlushing() {
+        // Flush every 10 seconds
+        this.flushInterval = setInterval(() => this.flushLiquidations(), 10 * 1000);
+    }
+
+    private async flushLiquidations() {
+        if (!this.supabase || this.liquidationBuffer.length === 0) return;
+
+        const batch = [...this.liquidationBuffer];
+        this.liquidationBuffer = []; // Clear buffer immediately
+
+        try {
+            const { error } = await this.supabase
+                .from('liquidation_heatmap')
+                .insert(batch.map(l => ({
+                    symbol: l.symbol,
+                    price: l.price,
+                    volume: l.usdValue,
+                    side: l.side === 'SELL' ? 'LONG_LIQ' : 'SHORT_LIQ', // Binance: SELL means Long was sold (liquidated)
+                    timestamp: l.time
+                })));
+
+            if (error) {
+                console.error('❌ [BinanceStream] Error flushing liquidations:', error.message);
+                // Optional: Put back in buffer? Risk of memory leak. Better verify DB.
+            } else {
+                // console.log(`💾 [BinanceStream] Flushed ${batch.length} liquidations to DB.`);
+            }
+        } catch (e) {
+            console.error('❌ [BinanceStream] Flush exception:', e);
+        }
     }
 
     public addStream(streamName: string): void {
@@ -166,7 +224,7 @@ class BinanceStreamService {
         // DEBUG: Active
         // console.log('RAW MSG:', msg.e);
         if (!msg.e) {
-            console.log('🔍 [BinanceStream] System Msg:', JSON.stringify(msg));
+            // console.log('🔍 [BinanceStream] System Msg:', JSON.stringify(msg));
         } else {
             // console.log('📨 [BinanceStream] Event:', msg.e);
         }
@@ -182,9 +240,14 @@ class BinanceStreamService {
                 usdValue: parseFloat(msg.o.ap) * parseFloat(msg.o.q)
             };
 
-            // Keep last 50 liquidations
+            // Keep last 50 liquidations (RAM cache for immediate UI)
             this.recentLiquidations.unshift(liq);
             if (this.recentLiquidations.length > 50) this.recentLiquidations.pop();
+
+            // Add to Persistent Buffer (DB)
+            if (this.supabase) {
+                this.liquidationBuffer.push(liq);
+            }
 
             this.notifySubscribers({ type: 'liquidation', data: liq });
         }

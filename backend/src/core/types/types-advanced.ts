@@ -188,7 +188,7 @@ export interface DerivativesData {
     openInterestValue: number | null;      // En USD
     fundingRate: number;            // Funding Rate actual (0.01% = 0.0001)
     fundingRateDaily: number;       // Annualized approximation or Daily
-    buySellRatio: number;           // Long/Short Ratio accounts
+    buySellRatio: number | null;    // Long/Short Ratio accounts
 }
 
 import { DivergenceType } from './index';

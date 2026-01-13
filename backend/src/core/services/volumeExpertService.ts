@@ -101,7 +101,7 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
                 openInterestValue: 0,
                 fundingRate: 0,
                 fundingRateDaily: 0,
-                buySellRatio: 1
+                buySellRatio: null
             };
         }
 
@@ -375,7 +375,7 @@ export async function getExpertVolumeAnalysis(symbol: string): Promise<VolumeExp
 
     // Simple liquidity proxy (Funding stability + CVD volume)
     // Real depth requires OrderBook endpoint (heavy), simplifying for now.
-    const liquidityScore = Math.min(100, Math.max(0, 50 + (derivatives.openInterestValue > 10000000 ? 30 : 0)));
+    const liquidityScore = Math.min(100, Math.max(0, 50 + ((derivatives.openInterestValue || 0) > 10000000 ? 30 : 0)));
 
     return {
         derivatives,

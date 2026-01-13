@@ -1,12 +1,91 @@
-
 import { LiquidationCluster, OrderBookAnalysis } from '../../core/types/types-advanced';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ESM Config
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, '../../../.env') });
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const supabase = (SUPABASE_URL && SUPABASE_KEY) ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 /**
- * 1. Hyblock Capital Style Liquidation Estimation
+ * 0. REAL DATA: Liquidation Heatmap from Database
+ * Queries the "Blood Collector" table to find actual recent Rekt Zones.
+ */
+export async function getRealLiquidationClusters(symbol: string): Promise<LiquidationCluster[]> {
+    if (!supabase) return [];
+
+    try {
+        const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+
+        // Fetch raw liquidations for the symbol in last 24h
+        const { data, error } = await supabase
+            .from('liquidation_heatmap')
+            .select('price, volume, side')
+            .eq('symbol', symbol)
+            .gt('timestamp', twentyFourHoursAgo);
+
+        if (error || !data || data.length === 0) return [];
+
+        // Aggregate into buckets (Clusters)
+        // Simple clustering: round to nearest 0.5% price point? Or dynamic?
+        // Let's use a bucket size proportional to price (0.2%)
+        const clusters: LiquidationCluster[] = [];
+        const bucketMap = new Map<string, LiquidationCluster>();
+
+        // Estimate price for bucket size calc from first entry or just use logic
+        const avgPrice = data[0].price;
+        const bucketSize = avgPrice * 0.002; // 0.2%
+
+        data.forEach(liq => {
+            const bucketKey = Math.floor(liq.price / bucketSize);
+            const key = `${liq.side}-${bucketKey}`;
+
+            if (!bucketMap.has(key)) {
+                bucketMap.set(key, {
+                    priceMin: Number.MAX_VALUE,
+                    priceMax: Number.MIN_VALUE,
+                    totalVolume: 0,
+                    strength: 0, // Will map volume to strength
+                    type: liq.side // Already mapped in binanceStream as LONG_LIQ or SHORT_LIQ
+                });
+            }
+
+            const cluster = bucketMap.get(key)!;
+            cluster.priceMin = Math.min(cluster.priceMin, liq.price);
+            cluster.priceMax = Math.max(cluster.priceMax, liq.price);
+            cluster.totalVolume += liq.volume;
+        });
+
+        // Convert Map to Array and Normalize Strength
+        let maxVol = 0;
+        bucketMap.forEach(c => {
+            if (c.totalVolume > maxVol) maxVol = c.totalVolume;
+        });
+
+        bucketMap.forEach(c => {
+            // Strength 0-100 based on volume relative to biggest cluster
+            c.strength = Math.round((c.totalVolume / maxVol) * 100);
+            clusters.push(c);
+        });
+
+        // Return Top 5 Big Clusters
+        return clusters.sort((a, b) => b.totalVolume - a.totalVolume).slice(0, 5);
+
+    } catch (e) {
+        console.error("❌ Error fetching real liquidations:", e);
+        return [];
+    }
+}
+
+/**
+ * 1. Hyblock Capital Style Liquidation Estimation (FALLBACK)
  * Logic: Pivot Highs/Lows act as anchor points for high leverage stops.
- * Formula:
- * - Short Liq = PivotHigh + (PivotHigh * 1/Leverage)
- * - Long Liq = PivotLow - (PivotLow * 1/Leverage)
  */
 export function estimateLiquidationClusters(
     highs: number[],

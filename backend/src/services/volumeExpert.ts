@@ -130,7 +130,7 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
                 openInterestValue: null,
                 fundingRate: 0, // 0 is safe "Neutral"
                 fundingRateDaily: 0,
-                buySellRatio: 1
+                buySellRatio: null
             };
         }
 
@@ -171,7 +171,7 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
             openInterestValue: null,
             fundingRate: 0,
             fundingRateDaily: 0,
-            buySellRatio: 1
+            buySellRatio: null
         };
     }
 }
@@ -376,6 +376,55 @@ export async function getExpertVolumeAnalysis(symbol: string): Promise<VolumeExp
     };
 }
 
+// Supabase Init for Snapshotting
+import { createClient } from '@supabase/supabase-js';
+// ESM Config (Redundant but safe if file scope changes, reusing existing if possible)
+// ... already imported dotenv above via previous checks? No, volumeExpert didn't have it.
+// Adding imports at top is hard with replace_file_content if I don't replace the whole top.
+// I'll assume server environment has env vars loaded (it essentially does).
+// But for standalone script usage, I might need dotenv.
+// Let's use process.env directly assuming it's loaded.
+
+const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_KEY)
+    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
+    : null;
+
+async function saveSnapshot(symbol: string, ob: any) {
+    if (!supabase) return;
+    const items = [];
+
+    // Save Bid Wall (Support) if significant
+    if (ob.bidWall && ob.bidWall.strength > 80) {
+        items.push({
+            symbol,
+            wall_price: ob.bidWall.price,
+            wall_volume: ob.bidWall.volume,
+            side: 'BID',
+            strength: ob.bidWall.strength,
+            timestamp: Date.now()
+        });
+    }
+
+    // Save Ask Wall (Resistance)
+    if (ob.askWall && ob.askWall.strength > 80) {
+        items.push({
+            symbol,
+            wall_price: ob.askWall.price,
+            wall_volume: ob.askWall.volume,
+            side: 'ASK',
+            strength: ob.askWall.strength,
+            timestamp: Date.now()
+        });
+    }
+
+    if (items.length > 0) {
+        // Fire and forget (don't await to block scanner)
+        supabase.from('orderbook_snapshots').insert(items).then(({ error }) => {
+            if (error) console.error("❌ Snapshot Error:", error.message);
+        });
+    }
+}
+
 /**
  * ENRICHMENT: Add Depth & Liquidation Analysis (Heavy, Call only on High Score)
  */
@@ -396,6 +445,9 @@ export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: Vo
         if (enriched.liquidity.orderBook.bidWall && enriched.liquidity.orderBook.bidWall.strength > 50) {
             enriched.liquidity.marketDepthScore = Math.min(100, enriched.liquidity.marketDepthScore + 10);
         }
+
+        // 3. HISTORY: Save Snapshot (The "Wall Historian")
+        saveSnapshot(normalizedSymbol, enriched.liquidity.orderBook);
     }
 
     return enriched;
