@@ -22,40 +22,36 @@ let model: tf.LayersModel | null = null;
 const LOOKBACK = 50;
 
 // Reutilizamos la lógica de Binance
+import { SmartFetch } from '../core/services/SmartFetch';
+
+// Reutilizamos la lógica de Binance (Proxied via SmartFetch)
 async function fetchRecentCandles(symbol: string, interval: string = '15m', limit: number = 100) {
-    let url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    // SmartFetch automatically handles BIFROST_URL proxying for binance.com
+    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+
     try {
-        const res = await fetch(url);
+        const data = await SmartFetch.get<any[]>(url);
 
-        // Handle Geo-Blocking / 451 / 403 redirected to HTML
-        const contentType = res.headers.get("content-type");
-        if (contentType && contentType.includes("text/html")) {
-            console.warn(`⚠️ [Binance] Geo-Block/HTML detected for ${symbol}.`);
-            throw new Error("Binance Geo-Blocked (HTML Response)");
-        }
-
-        if (res.status === 451 || res.status === 403) {
-            // Try US endpoint as fallback
-            console.log(`⚠️ [Binance] 451/403 for ${symbol}, trying US...`);
-            url = `https://api.binance.us/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-            const resUS = await fetch(url);
-            if (!resUS.ok) throw new Error('Binance US Error');
-            return parseBinanceResponse(await resUS.json());
-        }
-
-        if (!res.ok) throw new Error(`Binance Status: ${res.status}`);
-
-        const text = await res.text();
-        try {
-            const json = JSON.parse(text);
-            // Check for API Error format { code: -1000... }
-            if (json.code && json.msg) throw new Error(`API Error: ${json.msg}`);
-            return parseBinanceResponse(json);
-        } catch (e) {
-            throw new Error("Invalid JSON from Binance");
+        // SmartFetch returns parsed JSON. We just validate structure.
+        if (Array.isArray(data)) {
+            return parseBinanceResponse(data);
+        } else {
+            // Fallback for weird responses (e.g. object with error)
+            if ((data as any).code && (data as any).msg) throw new Error(`API Error: ${(data as any).msg}`);
+            throw new Error("Invalid format from Binance");
         }
     } catch (error: any) {
-        throw new Error(`Data Fetch Failed: ${error.message}`);
+        console.warn(`⚠️ [ML] Main Fetch failed: ${error.message}.`);
+
+        // US Fallback (Manual, just in case Proxy fails)
+        try {
+            console.log(`⚠️ [ML] Trying US Fallback for ${symbol}...`);
+            const urlUS = `https://api.binance.us/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+            const dataUS = await SmartFetch.get<any[]>(urlUS); // SmartFetch handles US too (no proxy needed usually)
+            return parseBinanceResponse(dataUS);
+        } catch (e2) {
+            throw new Error(`Data Fetch Failed (Main+US): ${error.message}`);
+        }
     }
 }
 
