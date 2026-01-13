@@ -19,6 +19,7 @@ import { StrategyRunner } from './pipeline/StrategyRunner';
 import { StrategyScorer } from './pipeline/StrategyScorer';
 import { MarketSession } from './MarketSession'; // NEW: Dynamic Time Logic
 import { FilterEngine } from './pipeline/FilterEngine';
+import { signalAuditService } from '../../../services/signalAuditService'; // Fix: Import Singleton
 
 // --- SERVICES ---
 import { getMacroContext, type MacroContext } from '../macroService';
@@ -400,8 +401,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 } catch (e) { }
 
                 // Portfolio Heatmap (Phase 8) 
-                // Mocking open positions as empty for now, in live it would pull from active trades
-                const correlationRisk = calculatePortfolioCorrelation(coin.symbol, [], style === 'MEME_SCALP');
+                // REAL: Pull active trades from Audit Service
+                const activeTrades = signalAuditService.getActiveSignals().map((s: any) => s.symbol);
+                const correlationRisk = calculatePortfolioCorrelation(coin.symbol, activeTrades, style === 'MEME_SCALP');
 
                 // --- FINAL SCORE NORMALIZATION & REALISM ---
                 // We ensure the score never exceeds 100% (Institutional Standard)
@@ -510,6 +512,16 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     tp2: dcaPlan.takeProfits.tp2.price,
                     tp3: dcaPlan.takeProfits.tp3.price
                 };
+
+                // DYNAMIC R:R CALCULATION
+                // Formula: (TP2 - AvgEntry) / (AvgEntry - StopLoss)
+                let dynamicRR = 2.5; // Default fallback
+                if (dcaPlan.averageEntry && dcaPlan.stopLoss && dcaPlan.takeProfits.tp2.price) {
+                    const risk = Math.abs(dcaPlan.averageEntry - dcaPlan.stopLoss);
+                    const reward = Math.abs(dcaPlan.takeProfits.tp2.price - dcaPlan.averageEntry);
+                    if (risk > 0) dynamicRR = parseFloat((reward / risk).toFixed(2));
+                }
+                opportunity.riskRewardRatio = dynamicRR;
 
                 // --- STAGE 5.5: PROFESSIONAL TRADER GATEKEEPER ---
                 // Apply Proximity Penalty from DCA engine

@@ -59,6 +59,13 @@ class SignalAuditService extends EventEmitter {
     private processingSignatures = new Set<string>();
 
     /**
+     * Retorna las señales activas para el Portfolio Manager.
+     */
+    public getActiveSignals() {
+        return this.activeSignals;
+    }
+
+    /**
      * Registra una nueva señal recibida del Scanner
      */
     public async registerSignals(opportunities: AIOpportunity[]) {
