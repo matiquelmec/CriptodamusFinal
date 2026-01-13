@@ -26,14 +26,34 @@ async function fetchRecentCandles(symbol: string, interval: string = '15m', limi
     let url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
     try {
         const res = await fetch(url);
-        if (res.status === 451) {
+
+        // Handle Geo-Blocking / 451 / 403 redirected to HTML
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("text/html")) {
+            console.warn(`⚠️ [Binance] Geo-Block/HTML detected for ${symbol}.`);
+            throw new Error("Binance Geo-Blocked (HTML Response)");
+        }
+
+        if (res.status === 451 || res.status === 403) {
+            // Try US endpoint as fallback
+            console.log(`⚠️ [Binance] 451/403 for ${symbol}, trying US...`);
             url = `https://api.binance.us/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
             const resUS = await fetch(url);
             if (!resUS.ok) throw new Error('Binance US Error');
             return parseBinanceResponse(await resUS.json());
         }
-        if (!res.ok) throw new Error('Binance Error');
-        return parseBinanceResponse(await res.json());
+
+        if (!res.ok) throw new Error(`Binance Status: ${res.status}`);
+
+        const text = await res.text();
+        try {
+            const json = JSON.parse(text);
+            // Check for API Error format { code: -1000... }
+            if (json.code && json.msg) throw new Error(`API Error: ${json.msg}`);
+            return parseBinanceResponse(json);
+        } catch (e) {
+            throw new Error("Invalid JSON from Binance");
+        }
     } catch (error: any) {
         throw new Error(`Data Fetch Failed: ${error.message}`);
     }
@@ -122,7 +142,24 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
             };
 
             model = await tf.loadLayersModel(ioHandler);
-            console.log("✅ Cerebro Listo para Predicciones.");
+
+            // Validate Transformation Shape (Stale Model Protection)
+            const inputShape = model.inputs[0].shape; // e.g. [null, 50, 4]
+            const featureCount = inputShape[2];
+
+            if (featureCount !== 4) {
+                console.error(`❌ [ML] Incompatible Brain Detected! Expected 4 features, got ${featureCount}. Purging stale model...`);
+                // Delete stale files to force retrain/redownload next time
+                try {
+                    fs.unlinkSync(modelFile);
+                    fs.unlinkSync(weightsFile);
+                    console.log("♻️ Stale model deleted. Triggering Retrain needed.");
+                } catch (err) { /* ignore */ }
+                model = null;
+                return null;
+            }
+
+            console.log(`✅ Cerebro Listo (Input: ${inputShape}).`);
         }
 
         if (!model) return null;
@@ -180,25 +217,41 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
         // Need to be careful with alignment.
         // Let's just slice the END of every array.
 
+        // Align arrays (Slice last LOOKBACK)
         const lastReturns = returns.slice(-LOOKBACK);
         const lastRanges = ranges.slice(-LOOKBACK);
         const lastRSI = rsiSeries.slice(-LOOKBACK);
         const lastRVOL = rvolSeries.slice(-LOOKBACK);
 
+        // --- ADAPTIVE INPUT LAYER (Auto-Detect Brain Version) ---
+        const inputShape = model.inputs[0].shape;
+        const requiredFeatures = inputShape[2]; // 2 (Old Brain) or 4 (New Brain)
+
         const sequence: number[][] = [];
         for (let j = 0; j < LOOKBACK; j++) {
-            sequence.push([
-                lastReturns[j],
-                lastRanges[j],
-                lastRSI[j] / 100, // Normalize RSI
-                lastRVOL[j]
-            ]);
+            if (requiredFeatures === 2) {
+                // Legacy Mode (Old Model)
+                sequence.push([
+                    lastReturns[j],
+                    lastRanges[j]
+                ]);
+            } else {
+                // Advanced Mode (New Model)
+                sequence.push([
+                    lastReturns[j],
+                    lastRanges[j],
+                    lastRSI[j] / 100, // Normalize RSI
+                    lastRVOL[j]
+                ]);
+            }
         }
 
-        const input = tf.tensor3d([sequence], [1, LOOKBACK, 4]);
+        const input = tf.tensor3d([sequence], [1, LOOKBACK, requiredFeatures]);
         const predictionTensor = model.predict(input) as tf.Tensor;
         const probabilityData = await predictionTensor.data();
         const probability = probabilityData[0];
+
+        console.log(`🧠 Brain Prediction (${requiredFeatures} feats): ${probability.toFixed(4)}`);
 
         input.dispose();
         predictionTensor.dispose();
@@ -206,7 +259,7 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
         return {
             symbol,
             probabilityUp: probability,
-            signal: probability > 0.55 ? 'BULLISH' : probability < 0.45 ? 'BEARISH' : 'NEUTRAL', // Tightened threshold
+            signal: probability > 0.55 ? 'BULLISH' : probability < 0.45 ? 'BEARISH' : 'NEUTRAL',
             confidence: Math.abs(probability - 0.5) * 2,
             timestamp: Date.now()
         };
