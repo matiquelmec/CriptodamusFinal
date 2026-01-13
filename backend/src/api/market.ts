@@ -6,6 +6,7 @@
 import express, { Request, Response } from 'express';
 import axios from 'axios';
 import NodeCache from 'node-cache';
+import { SmartFetch } from '../core/services/SmartFetch';
 
 const router = express.Router();
 const cache = new NodeCache({ stdTTL: 30 }); // Cache de 30 segundos
@@ -225,12 +226,11 @@ router.get('/trending', async (req: Request, res: Response) => {
         }
 
         // Obtener top gainers de Binance
-        const response = await axios.get(
-            'https://api.binance.com/api/v3/ticker/24hr',
-            { timeout: 5000 }
+        const binanceData = await SmartFetch.get<any>(
+            'https://api.binance.com/api/v3/ticker/24hr'
         );
 
-        const usdtPairs: TrendingCoin[] = response.data
+        const usdtPairs: TrendingCoin[] = binanceData
             .filter((t: any) => t.symbol.endsWith('USDT'))
             .map((t: any) => ({
                 symbol: t.symbol.replace('USDT', ''),
