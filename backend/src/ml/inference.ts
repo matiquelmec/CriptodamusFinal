@@ -143,23 +143,13 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
 
             model = await tf.loadLayersModel(ioHandler);
 
-            // Validate Transformation Shape (Stale Model Protection)
+            // Validate Transformation Shape (Adaptive)
             const inputShape = model.inputs[0].shape; // e.g. [null, 50, 4]
             const featureCount = inputShape[2];
 
-            if (featureCount !== 4) {
-                console.error(`❌ [ML] Incompatible Brain Detected! Expected 4 features, got ${featureCount}. Purging stale model...`);
-                // Delete stale files to force retrain/redownload next time
-                try {
-                    fs.unlinkSync(modelFile);
-                    fs.unlinkSync(weightsFile);
-                    console.log("♻️ Stale model deleted. Triggering Retrain needed.");
-                } catch (err) { /* ignore */ }
-                model = null;
-                return null;
-            }
+            console.log(`✅ Cerebro Listo (Input: ${featureCount} features detected).`);
 
-            console.log(`✅ Cerebro Listo (Input: ${inputShape}).`);
+
         }
 
         if (!model) return null;

@@ -77,6 +77,13 @@ export class SmartFetch {
             // Update last request time for this domain
             this.lastRequestTime.set(domain, Date.now());
 
+            // Safety Check: Detect HTML (Geo-Block / Error Page) masquerading as JSON
+            const contentType = response.headers['content-type'];
+            if (contentType && (contentType.includes('text/html') || contentType.includes('application/xhtml+xml'))) {
+                console.warn(`⚠️ [SmartFetch] HTML/Geo-Block detected for ${domain}. Refusing to parse.`);
+                throw new Error(`Geo-Block: Received HTML from ${domain}`);
+            }
+
             return response.data;
         } catch (error: any) {
             // 3. Retry Logic
