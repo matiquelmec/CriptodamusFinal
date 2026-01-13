@@ -13,7 +13,7 @@ async function testVolumeExpert() {
         console.log(`✅ Analysis Complete in ${duration}s`);
         console.log("---------------------------------------------------");
         console.log(`📊 Derivatives Data:`);
-        console.log(`   - Open Interest: $${(analysis.derivatives.openInterestValue / 1_000_000).toFixed(2)}M`);
+        console.log(`   - Open Interest: $${((analysis?.derivatives?.openInterestValue || 0) / 1_000_000).toFixed(2)}M`);
         console.log(`   - Funding Rate: ${(analysis.derivatives.fundingRate * 100).toFixed(4)}%`);
         console.log("---------------------------------------------------");
         console.log(`🏦 Coinbase Premium:`);

@@ -60,7 +60,7 @@ async function runLivePulse() {
             indicators.cvd = volumeAnalysis.cvd.cvdSeries;
             indicators.volumeExpert = volumeAnalysis;
             console.log(`   - CVD Series: ${indicators.cvd && indicators.cvd.length > 0 ? '✅ OK' : '❌ MISSING'}`);
-            console.log(`   - Open Interest: ${volumeAnalysis.derivatives.openInterestValue > 0 ? '✅ OK' : '❌ MISSING'}`);
+            console.log(`   - Open Interest: ${(volumeAnalysis.derivatives?.openInterestValue || 0) > 0 ? '✅ OK' : '❌ MISSING'}`);
         } else {
             console.log(`❌ Volume Analysis Failed (IsNull)`);
         }

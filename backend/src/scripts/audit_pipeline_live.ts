@@ -16,7 +16,7 @@ async function runAudit() {
 
     try {
         const start = Date.now();
-        const opportunities = await scanMarketOpportunities('SCALP_INTRADAY');
+        const opportunities = await scanMarketOpportunities('SCALP_INTRADAY' as any);
         const duration = (Date.now() - start) / 1000;
 
         console.log(`\n✅ Escaneo Completado en ${duration.toFixed(2)}s`);
@@ -31,8 +31,8 @@ async function runAudit() {
                 console.log(`\n${i + 1}. [${opp.symbol}] ${opp.side} (Score: ${opp.confidenceScore})`);
                 console.log(`   Estrategia: ${opp.strategy}`);
                 console.log(`   Razón Técnica: ${opp.technicalReasoning}`);
-                if (opp.metrics.volumeExpert) {
-                    console.log(`   whale_activity: DETECTADA (CVD: ${opp.metrics.volumeExpert.cvd.trend})`);
+                if (opp.metrics?.volumeExpert) {
+                    console.log(`   whale_activity: DETECTADA (CVD: ${opp.metrics?.volumeExpert?.cvd.trend})`);
                 }
                 if (opp.mlPrediction) {
                     console.log(`   🧠 IA Confidence: ${opp.mlPrediction.confidence.toFixed(1)}%`);

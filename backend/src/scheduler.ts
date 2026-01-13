@@ -1,3 +1,4 @@
+// @ts-ignore
 import cron from 'node-cron';
 import { fork } from 'child_process';
 import path from 'path';

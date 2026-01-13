@@ -225,7 +225,8 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
 
         // --- ADAPTIVE INPUT LAYER (Auto-Detect Brain Version) ---
         const inputShape = model.inputs[0].shape;
-        const requiredFeatures = inputShape[2]; // 2 (Old Brain) or 4 (New Brain)
+        // tfjs input shape is (null, 50, 4) -> index 2 is features. It can be null in types but practically is number here.
+        const requiredFeatures = inputShape[2] as number; // 2 (Old Brain) or 4 (New Brain)
 
         const sequence: number[][] = [];
         for (let j = 0; j < LOOKBACK; j++) {

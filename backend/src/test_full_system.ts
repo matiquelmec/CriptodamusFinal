@@ -44,12 +44,12 @@ async function testFullSystem() {
             console.log(`   - Score: ${sample.confidenceScore}/100`);
             console.log(`   - Timeframe: ${sample.timeframe}`);
             console.log(`   - Reasoning:`);
-            sample.reasoning?.forEach(r => console.log(`     • ${r}`));
+            sample.reasoning?.forEach((r: any) => console.log(`     • ${r}`));
 
             // Check for new features in reasoning
-            const hasSentiment = sample.reasoning?.some(r => r.includes('Sentiment'));
-            const hasLiq = sample.reasoning?.some(r => r.includes('Liq Magnet'));
-            const hasML = sample.reasoning?.some(r => r.includes('IA Confluence') || r.includes('IA Divergence'));
+            const hasSentiment = sample.reasoning?.some((r: any) => r.includes('Sentiment'));
+            const hasLiq = sample.reasoning?.some((r: any) => r.includes('Liq Magnet'));
+            const hasML = sample.reasoning?.some((r: any) => r.includes('IA Confluence') || r.includes('IA Divergence'));
 
             console.log("---------------------------------------------------");
             console.log("✅ Verification Checklist:");
