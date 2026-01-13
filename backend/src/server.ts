@@ -50,6 +50,15 @@ app.use('/api/proxy', proxyRoutes);
 
 // ... (Rate Limits)
 
+// Basic Root Route to avoid 404 on home
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Criptodamus Backend API is Online',
+        version: '1.0.0',
+        docs: '/health'
+    });
+});
+
 // Health check to verify server is ALIVE
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', uptime: process.uptime() });
