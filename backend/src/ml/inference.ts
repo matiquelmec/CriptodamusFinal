@@ -134,6 +134,38 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
         // Feature Engineering (Debe ser idéntico a train.ts)
         const returns: number[] = [];
         const ranges: number[] = [];
+        const volumes: number[] = candles.map(c => c.volume);
+
+        // --- RSI CALC ---
+        const period = 14;
+        let avgGain = 0, avgLoss = 0;
+        const rsiSeries: number[] = new Array(candles.length).fill(50);
+
+        for (let i = 1; i <= period; i++) {
+            const change = candles[i].close - candles[i - 1].close;
+            if (change > 0) avgGain += change;
+            else avgLoss += Math.abs(change);
+        }
+        avgGain /= period; avgLoss /= period;
+
+        for (let i = period + 1; i < candles.length; i++) {
+            const change = candles[i].close - candles[i - 1].close;
+            const up = change > 0 ? change : 0;
+            const down = change < 0 ? Math.abs(change) : 0;
+            avgGain = ((avgGain * 13) + up) / 14;
+            avgLoss = ((avgLoss * 13) + down) / 14;
+            const rsi = 100 - (100 / (1 + (avgGain / avgLoss || 1))); // Safety div by 0
+            rsiSeries[i] = rsi;
+        }
+
+        // --- RVOL CALC ---
+        const rvolSeries: number[] = new Array(candles.length).fill(1);
+        for (let i = 20; i < candles.length; i++) {
+            let sum = 0;
+            for (let k = 1; k <= 20; k++) sum += volumes[i - k];
+            const avg = sum / 20;
+            rvolSeries[i] = avg > 0 ? Math.min(5, volumes[i] / avg) : 1;
+        }
 
         for (let i = 1; i < candles.length; i++) {
             const r = (candles[i].close - candles[i - 1].close) / candles[i - 1].close;
@@ -142,15 +174,28 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
             ranges.push(rng);
         }
 
+        // Align arrays (Slice last LOOKBACK)
+        // returns/ranges are index 0 based (from candle 1).
+        // rsi/rvol are index 0 based (from candle 0).
+        // Need to be careful with alignment.
+        // Let's just slice the END of every array.
+
         const lastReturns = returns.slice(-LOOKBACK);
         const lastRanges = ranges.slice(-LOOKBACK);
+        const lastRSI = rsiSeries.slice(-LOOKBACK);
+        const lastRVOL = rvolSeries.slice(-LOOKBACK);
 
         const sequence: number[][] = [];
         for (let j = 0; j < LOOKBACK; j++) {
-            sequence.push([lastReturns[j], lastRanges[j]]);
+            sequence.push([
+                lastReturns[j],
+                lastRanges[j],
+                lastRSI[j] / 100, // Normalize RSI
+                lastRVOL[j]
+            ]);
         }
 
-        const input = tf.tensor3d([sequence], [1, LOOKBACK, 2]);
+        const input = tf.tensor3d([sequence], [1, LOOKBACK, 4]);
         const predictionTensor = model.predict(input) as tf.Tensor;
         const probabilityData = await predictionTensor.data();
         const probability = probabilityData[0];

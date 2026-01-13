@@ -74,9 +74,10 @@ export class AdvancedAnalyzer {
 
             // CVD Divergence Check
             if (volumeExpert?.cvd?.cvdSeries && volumeExpert?.cvd?.priceSeries) {
-                const mockCandles = volumeExpert.cvd.priceSeries.map((p: number) => ({ high: p, low: p, close: p }));
+                // Create synthetic candles from price series for divergence detection
+                const syntheticCandles = volumeExpert.cvd.priceSeries.map((p: number) => ({ high: p, low: p, close: p }));
                 const cvdValues = volumeExpert.cvd.cvdSeries;
-                cvdDivergence = detectGenericDivergence(mockCandles, cvdValues, 'CVD', 5);
+                cvdDivergence = detectGenericDivergence(syntheticCandles, cvdValues, 'CVD', 5);
                 if (cvdDivergence) {
                     volumeExpert.cvd.divergence = cvdDivergence.type;
                 }

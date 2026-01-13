@@ -14,9 +14,11 @@ export function createModel(inputShape: [number, number]): tf.Sequential {
 
     // 1. Capa LSTM Principal (El "Hipocampo")
     model.add(tf.layers.lstm({
-        units: 64,
-        returnSequences: false, // Solo necesitamos el resultado final de la secuencia
-        inputShape: inputShape
+        units: 32, // Reduced from 64 for Speed on CPU
+        returnSequences: false,
+        inputShape: inputShape,
+        kernelInitializer: 'glorotUniform', // SPEED HACK: Orthogonal is too slow on CPU/JS
+        recurrentInitializer: 'glorotUniform'
     }));
 
     // 2. Dropout (Olvido selectivo para generalizar mejor)
@@ -24,14 +26,18 @@ export function createModel(inputShape: [number, number]): tf.Sequential {
 
     // 3. Capa Densa (Razonamiento)
     model.add(tf.layers.dense({
-        units: 32,
-        activation: 'relu'
+        units: 16, // Reduced from 32
+        activation: 'relu',
+        kernelInitializer: 'glorotUniform',
+        biasInitializer: 'zeros'
     }));
 
     // 4. Salida (Predicción: 0% a 100% probabilidad de subida)
     model.add(tf.layers.dense({
         units: 1,
-        activation: 'sigmoid'
+        activation: 'sigmoid',
+        kernelInitializer: 'glorotUniform',
+        biasInitializer: 'zeros'
     }));
 
     // Compilar el cerebro

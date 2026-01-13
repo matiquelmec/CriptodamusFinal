@@ -535,7 +535,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const bestEntryDist = Math.abs(dcaPlan.entries[0].distanceFromCurrent);
 
                 // Dynamic Threshold based on timeframe
-                const fomoThreshold = interval === '4h' ? 1.5 : 0.6; // 1.5% for Swing, 0.6% for Scalp
+                const fomoThreshold = interval === '4h' ? 2.5 : 0.6; // 2.5% for Swing (Relaxed), 0.6% for Scalp
 
                 if (!isFresh && bestEntryDist > fomoThreshold) {
                     // It's a stale signal AND we are far from the ideal entry.

@@ -47,6 +47,10 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
         };
 
         fetchHistory();
+
+        // Auto-Refresh every 5 seconds to show Real-Time PnL/Status updates
+        const interval = setInterval(fetchHistory, 5000);
+        return () => clearInterval(interval);
     }, []);
 
     const getStatusStyle = (status: string) => {

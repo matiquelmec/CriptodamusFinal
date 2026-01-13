@@ -93,6 +93,10 @@ async function fetchCoinbaseCandles(productIds: string, granularity: number = 36
  * 1. DERIVATIVES DATA (Open Interest & Funding)
  * Source: Binance Futures API (Public)
  */
+/**
+ * 1. DERIVATIVES DATA (Open Interest & Funding)
+ * Source: Binance Futures API (Public)
+ */
 export async function getDerivativesData(symbol: string): Promise<DerivativesData> {
     // Normalize symbol for Futures (BTCUSDT mostly)
     const checkSpot = symbol.replace('/', '').toUpperCase();
@@ -112,10 +116,11 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
     if (cached) return cached;
 
     try {
-        // Parallel Fetch: Open Interest + Funding Rate (Premium Index)
-        const [oiData, fundingData] = await Promise.all([
+        // Parallel Fetch: Open Interest + Funding + Long/Short Ratio (Real Data)
+        const [oiData, fundingData, lsData] = await Promise.all([
             safeFetch(`${BINANCE_FUTURES_API}/openInterest?symbol=${fSymbol}`),
-            safeFetch(`${BINANCE_FUTURES_API}/premiumIndex?symbol=${fSymbol}`)
+            safeFetch(`${BINANCE_FUTURES_API}/premiumIndex?symbol=${fSymbol}`),
+            safeFetch(`${BINANCE_FUTURES_API}/globalLongShortAccountRatio?symbol=${fSymbol}&period=5m&limit=1`)
         ]);
 
         if (!oiData) {
@@ -140,12 +145,21 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
 
         const fundingRateDaily = fundingRate * 3;
 
+        // Parse Long/Short Ratio
+        let buySellRatio = 1.0;
+        if (lsData && Array.isArray(lsData) && lsData.length > 0) {
+            buySellRatio = parseFloat(lsData[0].longShortRatio);
+        } else {
+            // Fallback only if endpoint fails
+            // console.warn(`[VolumeExpert] L/S Ratio missing for ${fSymbol}`);
+        }
+
         const result: DerivativesData = {
             openInterest,
             openInterestValue,
             fundingRate,
             fundingRateDaily,
-            buySellRatio: 1.0 // Ratio endpoint often blocked or requires stricter auth/headers, keeping simple
+            buySellRatio
         };
 
         setCache(cacheKey, result);

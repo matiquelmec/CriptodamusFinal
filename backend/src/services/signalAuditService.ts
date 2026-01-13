@@ -185,6 +185,7 @@ class SignalAuditService extends EventEmitter {
 
                 if (error) {
                     console.error("❌ [SignalAudit] Error inserting signal:", error.message);
+                    throw new Error(`SIGNAL_AUDIT_DB_ERROR: ${error.message}`); // FAIL LOUD: Scanner must know
                 }
 
                 if (!error && data) {
