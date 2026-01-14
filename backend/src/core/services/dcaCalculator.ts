@@ -334,10 +334,11 @@ export function calculateDCAPlan(
         ? confluenceAnalysis.topResistances
         : confluenceAnalysis.topSupports;
 
-    // STRICT FILTER: Only accept TPs that are PROFITABLE
+    // STRICT FILTER: Only accept TPs that are PROFITABLE relative to current price AND entry
+    const refPrice = Math.max(entries[0].price, signalPrice);
     const profitablePOIs = targetPOIs.filter(p => {
-        if (side === 'LONG') return p.price > entries[0].price * 1.005;
-        return p.price < entries[0].price * 0.995;
+        if (side === 'LONG') return p.price > refPrice * 1.005;
+        return p.price < Math.min(entries[0].price, signalPrice) * 0.995;
     });
 
     // INTELLIGENT MERGE: Combine Static POIs with Predictive Targets
@@ -428,25 +429,27 @@ export function calculateDCAPlan(
 
     const tps = tpsArray.sort((a, b) => side === 'LONG' ? a - b : b - a);
 
-    // Validate TPs are profitable relative to ENTRY 1 (Crucial for "Force Market" setups)
-    // Even if profitable vs WAP, they must be profitable vs the first execution to avoid losses on partial fills.
+    // Validate TPs are profitable relative to BOTH Current Price and Entry 1
+    // This prevents the "Immediate Closure" bug where a signal is registered at 97k 
+    // but TPs are set at 95k (leftover from deep supports).
     const entry1Price = entries[0].price;
+    const safetyRef = side === 'LONG' ? Math.max(entry1Price, signalPrice) : Math.min(entry1Price, signalPrice);
 
     if (side === 'LONG') {
-        // TP1 must be > Entry 1 (Min 0.5% gap for fees coverage)
+        // TP1 must be > Reference Price (Min 0.5% gap for fees coverage)
         const minGap = 1.005;
-        if (tps[0] <= entry1Price * minGap) {
-            tps[0] = entry1Price * minGap;
+        if (tps[0] <= safetyRef * minGap) {
+            tps[0] = safetyRef * minGap;
         }
         // Ensure TP alignment (TP1 < TP2 < TP3)
         if (tps[1] <= tps[0]) tps[1] = tps[0] + (atr * 2);
         if (tps[2] <= tps[1]) tps[2] = tps[1] + (atr * 2);
 
     } else { // SHORT
-        // TP1 must be < Entry 1
+        // TP1 must be < Reference Price
         const minGap = 0.995;
-        if (tps[0] >= entry1Price * minGap) {
-            tps[0] = entry1Price * minGap;
+        if (tps[0] >= safetyRef * minGap) {
+            tps[0] = safetyRef * minGap;
         }
         // Ensure TP alignment (TP1 > TP2 > TP3)
         if (tps[1] >= tps[0]) tps[1] = tps[0] - (atr * 2);
