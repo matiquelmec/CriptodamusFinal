@@ -1,4 +1,5 @@
 import { AIOpportunity, TradingStyle, TechnicalIndicators, MarketRisk } from "../types";
+import { MLPerformanceStats } from "../types/types-advanced";
 import { TradingConfig } from '../config/tradingConfig'; // NEW: Centralized Config
 import { getCurrentSessionSimple, analyzeSessionContext, getKillZoneStatus, getSessionProximityInfo } from './sessionExpert';
 import { MacroContext } from './macroService';
@@ -73,8 +74,9 @@ export const streamMarketAnalysis = async function* (
         let response = "";
 
         // --- PHASE 0: DATA & ML PRE-FETCH ---
-        let mlPrediction = null;
-        let newsSentiment = null;
+        let mlPrediction: any = null;
+        let newsSentiment: any = null;
+        let mlBrainStats: MLPerformanceStats | null = null;
 
         try {
             const API_URL = import.meta.env.PROD
@@ -84,16 +86,18 @@ export const streamMarketAnalysis = async function* (
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-            // Parallel Pre-fetch (ML + News)
-            const [mlRes, newsRes] = await Promise.all([
+            // Parallel Pre-fetch (ML + News + ML Stats)
+            const [mlRes, newsRes, mlStatsRes] = await Promise.all([
                 fetch(`${API_URL}/api/ml/predict?symbol=${techData.symbol}`, { signal: controller.signal }).catch(() => null),
-                fetch(`${API_URL}/api/v1/market/sentiment?symbol=${techData.symbol.split('USDT')[0]}`, { signal: controller.signal }).catch(() => null)
+                fetch(`${API_URL}/api/v1/market/sentiment?symbol=${techData.symbol.split('USDT')[0]}`, { signal: controller.signal }).catch(() => null),
+                fetch(`${API_URL}/api/ml/stats`, { signal: controller.signal }).catch(() => null)
             ]);
 
             clearTimeout(timeoutId);
 
             if (mlRes && mlRes.ok) mlPrediction = await mlRes.json();
             if (newsRes && newsRes.ok) newsSentiment = await newsRes.json();
+            if (mlStatsRes && mlStatsRes.ok) mlBrainStats = await mlStatsRes.json();
 
         } catch (e) {
             console.warn("External Services unavailable for Advisor analysis");
@@ -104,13 +108,37 @@ export const streamMarketAnalysis = async function* (
         let bullishScore = 0;
         let bearishScore = 0;
 
-        // ML SCORING INJECTION
-        if (mlPrediction) {
-            if (mlPrediction.signal === 'BULLISH') {
-                bullishScore += (TradingConfig.scoring.advisor as any).ml_boost || 2;
-            } else if (mlPrediction.signal === 'BEARISH') {
-                bearishScore += (TradingConfig.scoring.advisor as any).ml_boost || 2;
+        // ML SCORING INJECTION (ADAPTIVE WEIGHTING)
+        if (mlPrediction && mlBrainStats) {
+            const currentRegime = techData.marketRegime?.regime || 'UNKNOWN';
+            const regimeData = mlBrainStats.regimeStats[currentRegime];
+
+            let weightMultiplier = 1.0;
+
+            // 1. Regime Affinity Boost
+            if (regimeData && regimeData.total > 5 && regimeData.rate > 70) {
+                weightMultiplier = 1.5; // Trust the brain in this regime
+            } else if (regimeData && regimeData.total > 5 && regimeData.rate < 45) {
+                weightMultiplier = 0.2; // Brain is struggleing here, Veto!
             }
+
+            // 2. Drift Penalty
+            if (mlBrainStats.isDriftDetected) {
+                weightMultiplier *= 0.5;
+            }
+
+            const baseMLBoost = (TradingConfig.scoring.advisor as any).ml_boost || 2;
+            const adaptiveBoost = baseMLBoost * weightMultiplier;
+
+            if (mlPrediction.signal === 'BULLISH') {
+                bullishScore += adaptiveBoost;
+            } else if (mlPrediction.signal === 'BEARISH') {
+                bearishScore += adaptiveBoost;
+            }
+        } else if (mlPrediction) {
+            // Fallback for legacy or if stats fail
+            if (mlPrediction.signal === 'BULLISH') bullishScore += 2;
+            else if (mlPrediction.signal === 'BEARISH') bearishScore += 2;
         }
 
         // NEWS SENTIMENT SCORING (NEW)
@@ -500,9 +528,24 @@ export const streamMarketAnalysis = async function* (
             narrativeContext.marketRegime = techData.marketRegime;
         }
 
+        // --- NEW: ADAPTIVE AI WEIGHTING (SELF-CORRECTION) ---
+        let brainStatusNarrative = "";
+        if (mlBrainStats) {
+            const currentRegime = techData.marketRegime?.regime || 'UNKNOWN';
+            const regimeData = mlBrainStats.regimeStats[currentRegime];
+            const accuracy = regimeData ? regimeData.rate : mlBrainStats.globalWinRate;
+
+            brainStatusNarrative = `\n\n🧠 **Audit de Neuronas (Brain Health):** El modelo opera con un **${accuracy.toFixed(1)}% de precisión** en regímenes de ${currentRegime}. `;
+            if (mlBrainStats.isDriftDetected) {
+                brainStatusNarrative += "⚠️ *Detección de Drift: Confianza reducida dinámicamente.*";
+            } else {
+                brainStatusNarrative += "✅ *Modelo estable.*";
+            }
+        }
+
         // 1. GENERATE NARRATIVES (AI) - Parallel Execution
         const [investmentThesis, executionPhilosophy] = await Promise.all([
-            generateInvestmentThesis(narrativeContext as any),
+            generateInvestmentThesis(narrativeContext as any, brainStatusNarrative),
             generateExecutionPlanNarrative(narrativeContext as any, finalPrimarySide)
         ]);
 

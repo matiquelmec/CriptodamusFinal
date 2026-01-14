@@ -134,6 +134,15 @@ app.get('/api/ml/predict', async (req, res) => {
     }
 });
 
+app.get('/api/ml/stats', async (req, res) => {
+    try {
+        const stats = await signalAuditService.getAdvancedMLMetrics();
+        res.json(stats);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch ML stats' });
+    }
+});
+
 import { fetchCryptoSentiment, fetchMarketNews } from './services/newsService';
 app.get('/api/v1/market/sentiment', async (req, res) => {
     try {

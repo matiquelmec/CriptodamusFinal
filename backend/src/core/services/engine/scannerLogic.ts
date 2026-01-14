@@ -226,8 +226,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     if (totalScore > 50) {
                         mlResult = await predictNextMove(coin.symbol, candles);
                         if (mlResult) {
-                            // PERSISTENCE: Log to model_predictions table
-                            savePrediction(coin.symbol, mlResult.probabilityUp);
+                            // PERSISTENCE: Log to model_predictions table (Robust Audit)
+                            const regime = indicators.marketRegime?.regime || 'UNKNOWN';
+                            savePrediction(coin.symbol, mlResult.probabilityUp, mlResult.signal, regime);
 
                             // PREDICTION BOOST/PENALTY
                             // NEW: ML Safety Check - Ignore ML Short if Daily Structure is Bullish

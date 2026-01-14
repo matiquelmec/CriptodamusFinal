@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { AIOpportunity } from '../core/types';
+import { MLPerformanceStats } from '../core/types/types-advanced';
 import { binanceStream } from './binanceStream';
 import { telegramService } from './telegramService';
 import { SmartFetch } from '../core/services/SmartFetch'; // Import SmartFetch for Proxy Polling
@@ -15,6 +16,14 @@ class SignalAuditService extends EventEmitter {
     private lastWSTick: number = Date.now(); // Heartbeat for Watchdog
     private lastPollSuccess: number = 0;
     private lastAuditError: string | null = null;
+    private mlBrainStatus: MLPerformanceStats = {
+        globalWinRate: 0,
+        recentWinRate: 0,
+        totalPredictions: 0,
+        regimeStats: {},
+        lastUpdated: 0,
+        isDriftDetected: false
+    };
 
     // CONSTANTES INSTITUCIONALES
     private readonly FEE_RATE = 0.001; // 0.1% (Maker/Taker blend estimate w/ BNB discount)
@@ -538,6 +547,69 @@ class SignalAuditService extends EventEmitter {
     public async forceAuditPass() {
         console.log("🚑 [SignalAudit] Manual Audit Pass Triggered...");
         return await this.checkHealthAndPoll(true);
+    }
+
+    /**
+     * GOD MODE: ADVANCED ML ANALYTICS
+     * Calculates model accuracy, regime-specific affinity and drift.
+     */
+    public async getAdvancedMLMetrics() {
+        if (!this.supabase) return this.mlBrainStatus;
+
+        // Cache check (15m TTL)
+        if (Date.now() - this.mlBrainStatus.lastUpdated < 15 * 60 * 1000 && this.mlBrainStatus.lastUpdated !== 0) {
+            return this.mlBrainStatus;
+        }
+
+        try {
+            const { data, error } = await this.supabase
+                .from('model_predictions')
+                .select('actual_outcome, market_regime, probability, signal')
+                .not('actual_outcome', 'is', null)
+                .order('prediction_time', { ascending: false })
+                .limit(200);
+
+            if (error || !data || data.length === 0) return this.mlBrainStatus;
+
+            const total = data.length;
+            const wins = data.filter((p: any) => p.actual_outcome === 1).length;
+            const winRate = (wins / total) * 100;
+
+            // Regime Analysis
+            const regimes: Record<string, { total: number, wins: number, rate: number }> = {};
+            data.forEach((p: any) => {
+                const r = p.market_regime || 'UNKNOWN';
+                if (!regimes[r]) regimes[r] = { total: 0, wins: 0, rate: 0 };
+                regimes[r].total++;
+                if (p.actual_outcome === 1) regimes[r].wins++;
+            });
+
+            Object.keys(regimes).forEach(k => {
+                regimes[k].rate = (regimes[k].wins / regimes[k].total) * 100;
+            });
+
+            // Drift Detection (Last 20 vs Last 200)
+            const recent = data.slice(0, 20);
+            const recentWins = recent.filter((p: any) => p.actual_outcome === 1).length;
+            const recentRate = (recentWins / recent.length) * 100;
+            const isDriftDetected = total > 40 && (recentRate < winRate - 15);
+
+            this.mlBrainStatus = {
+                globalWinRate: Number(winRate.toFixed(2)),
+                recentWinRate: Number(recentRate.toFixed(2)),
+                regimeStats: regimes,
+                totalPredictions: total,
+                isDriftDetected,
+                lastUpdated: Date.now()
+            };
+
+            console.log(`🧠 [ML-Audit] Advanced Stats Updated: ${winRate.toFixed(2)}% Accuracy | Drift: ${isDriftDetected ? '⚠️ YES' : '✅ NO'}`);
+            return this.mlBrainStatus;
+
+        } catch (e) {
+            console.error("❌ [ML-Audit] Failed to calculate advanced metrics:", e);
+            return this.mlBrainStatus;
+        }
     }
 
     private async checkHealthAndPoll(force: boolean = false) {

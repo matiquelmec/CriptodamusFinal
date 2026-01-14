@@ -124,7 +124,7 @@ const SignalCard: React.FC<SignalCardProps> = ({ data, onSelect, onShowDetails }
                 {data.freezeSignal?.active && <span className="shrink-0 text-cyan-400 font-bold ml-1">❄️ SMART</span>}
                 {data.mlPrediction && (
                     <span className={`shrink-0 font-bold border-l border-border/50 pl-3 md:pl-4 ${data.mlPrediction.signal === 'BULLISH' ? 'text-success' : 'text-danger'}`}>
-                        AI: {data.mlPrediction.signal.charAt(0)}
+                        AI: {data.mlPrediction.signal.charAt(0)} ({(data.mlPrediction.probability > 1 ? data.mlPrediction.probability : data.mlPrediction.probability * 100).toFixed(0)}%)
                     </span>
                 )}
             </div>

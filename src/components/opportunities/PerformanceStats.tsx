@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Target, TrendingUp, BarChart2, Activity, HelpCircle } from 'lucide-react';
+import { Target, TrendingUp, BarChart2, Activity, HelpCircle, Cpu, Brain, Zap } from 'lucide-react';
 import axios from 'axios';
+import { MLPerformanceStats } from '../../types/types-advanced';
 
 import AuditHistory from './AuditHistory';
 import AuditEducational from './AuditEducational';
@@ -16,6 +17,7 @@ interface Stats {
 
 const PerformanceStats: React.FC = () => {
     const [stats, setStats] = useState<Stats | null>(null);
+    const [mlStats, setMLStats] = useState<MLPerformanceStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [showHistory, setShowHistory] = useState(false);
     const [showEducation, setShowEducation] = useState(false);
@@ -27,9 +29,14 @@ const PerformanceStats: React.FC = () => {
 
     const fetchStats = async () => {
         try {
-            const url = `${getBaseUrl()}/api/performance/stats`;
-            const response = await axios.get(url);
-            setStats(response.data);
+            const baseUrl = getBaseUrl();
+            const [perfRes, mlRes] = await Promise.all([
+                axios.get(`${baseUrl}/api/performance/stats`),
+                axios.get(`${baseUrl}/api/ml/stats`).catch(() => null)
+            ]);
+
+            setStats(perfRes.data);
+            if (mlRes) setMLStats(mlRes.data);
         } catch (error) {
             console.error("Error fetching performance stats:", error);
         } finally {
@@ -51,7 +58,7 @@ const PerformanceStats: React.FC = () => {
     return (
         <div className="mb-6 mx-4 p-[1px] rounded-3xl bg-gradient-to-r from-emerald-500/20 via-blue-500/10 to-rose-500/20 shadow-2xl">
             <div className="bg-[#0a0c10]/90 backdrop-blur-2xl rounded-[23px] p-6 border border-white/5">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 items-center mb-2">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-8 items-center mb-2">
 
                     {/* Win Rate Item */}
                     <div className="flex flex-col items-center md:items-start md:flex-row gap-2 md:gap-4 group text-center md:text-left">
@@ -88,6 +95,22 @@ const PerformanceStats: React.FC = () => {
                             <div className="text-[9px] md:text-[11px] uppercase tracking-wider font-bold text-slate-400/80 mb-1">En Vigilancia</div>
                             <div className="text-xl md:text-2xl font-bold text-white">
                                 {stats.open} <span className="text-[8px] md:text-[10px] uppercase font-bold text-slate-500 ml-1">Vivas</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Brain Health (ML) Item */}
+                    <div className="flex flex-col items-center md:items-start md:flex-row gap-2 md:gap-4 group text-center md:text-left border-t md:border-t-0 border-white/5 pt-4 md:pt-0 border-l border-white/5 pl-0 md:pl-4">
+                        <div className={`p-2 md:p-3.5 rounded-xl md:rounded-2xl border transition-all duration-300 group-hover:scale-105 ${mlStats?.isDriftDetected ? 'bg-rose-500/10 border-rose-500/20' : 'bg-purple-500/10 border-purple-500/20'}`}>
+                            {mlStats?.isDriftDetected ? <Zap className="text-rose-400" size={20} /> : <Brain className="text-purple-400" size={20} />}
+                        </div>
+                        <div className="relative">
+                            <div className="text-[9px] md:text-[11px] uppercase tracking-wider font-bold text-slate-400/80 mb-1 flex items-center gap-1.5">
+                                Brain Health
+                                {mlStats?.isDriftDetected && <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />}
+                            </div>
+                            <div className={`text-xl md:text-2xl font-black tracking-tight ${mlStats?.isDriftDetected ? 'text-rose-400' : 'text-purple-400'}`}>
+                                {mlStats ? `${mlStats.globalWinRate.toFixed(1)}%` : '---'}
                             </div>
                         </div>
                     </div>

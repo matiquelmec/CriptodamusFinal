@@ -217,3 +217,19 @@ export interface VolumeExpertAnalysis {
         liquidationClusters?: LiquidationCluster[]; // Optional
     };
 }
+
+// --- ML PERFORMANCE & BRAIN HEALTH ---
+export interface MLRegimeStat {
+    total: number;
+    wins: number;
+    rate: number;
+}
+
+export interface MLPerformanceStats {
+    globalWinRate: number;
+    recentWinRate: number;
+    totalPredictions: number;
+    isDriftDetected: boolean;
+    regimeStats: Record<string, MLRegimeStat>;
+    lastUpdated: number;
+}

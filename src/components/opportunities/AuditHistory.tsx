@@ -13,6 +13,7 @@ interface HistoricalSignal {
     pnl_percent: number;
     created_at: number;
     closed_at: number;
+    ml_probability?: number; // NEW
 }
 
 interface AuditHistoryProps {
@@ -153,6 +154,16 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
                                     </div>
                                 )}
                             </div>
+
+                            {/* ML Confidence Badge */}
+                            {(sig.ml_probability !== undefined && sig.ml_probability !== null) && (
+                                <div className="hidden xs:flex flex-col items-center px-2 py-1 rounded-lg bg-purple-500/5 border border-purple-500/10">
+                                    <span className="text-[7px] text-purple-400 font-black uppercase tracking-tighter">AI Conf</span>
+                                    <span className="text-[10px] font-mono font-bold text-purple-300">
+                                        {(sig.ml_probability > 1 ? sig.ml_probability : sig.ml_probability * 100).toFixed(0)}%
+                                    </span>
+                                </div>
+                            )}
 
                             {/* Status Badge */}
                             <div className={`px-2 py-1 sm:px-2.5 sm:py-1 rounded-full border text-[8px] sm:text-[9px] font-black flex items-center gap-1.5 uppercase transition-all ${getStatusStyle(sig.status)}`}>

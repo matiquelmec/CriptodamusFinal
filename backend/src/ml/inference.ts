@@ -260,7 +260,13 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
 /**
  * PERSISTENCE: Save prediction to Supabase for audit
  */
-export async function savePrediction(symbol: string, probability: number, modelVersion: string = 'v1') {
+export async function savePrediction(
+    symbol: string,
+    probability: number,
+    signal: string = 'NEUTRAL',
+    marketRegime: string = 'UNKNOWN',
+    modelVersion: string = 'v1'
+) {
     if (!supabase) return;
 
     try {
@@ -268,7 +274,10 @@ export async function savePrediction(symbol: string, probability: number, modelV
             .from('model_predictions')
             .insert({
                 symbol,
-                predicted_price: probability, // Repurposed for probability
+                probability,
+                signal,
+                market_regime: marketRegime,
+                predicted_price: probability, // Still sync legacy column
                 prediction_time: Date.now(),
                 model_version: modelVersion
             });
