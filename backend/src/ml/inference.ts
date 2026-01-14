@@ -256,3 +256,25 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
         return null;
     }
 }
+
+/**
+ * PERSISTENCE: Save prediction to Supabase for audit
+ */
+export async function savePrediction(symbol: string, probability: number, modelVersion: string = 'v1') {
+    if (!supabase) return;
+
+    try {
+        const { error } = await supabase
+            .from('model_predictions')
+            .insert({
+                symbol,
+                predicted_price: probability, // Repurposed for probability
+                prediction_time: Date.now(),
+                model_version: modelVersion
+            });
+
+        if (error) throw error;
+    } catch (e) {
+        console.error("⚠️ [ML] Failed to save prediction to DB:", e);
+    }
+}

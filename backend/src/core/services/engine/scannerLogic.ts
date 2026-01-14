@@ -31,7 +31,7 @@ import { estimateLiquidationClusters, getRealLiquidationClusters } from '../../.
 import { fetchGlobalMarketData } from '../../../services/globalMarketService'; // NEW: Global Macro Engine
 
 import { calculateEMA } from '../mathUtils';
-import { predictNextMove } from '../../../ml/inference'; // NEW: Brain Import
+import { predictNextMove, savePrediction } from '../../../ml/inference'; // NEW: Brain Import
 import { getExpertVolumeAnalysis, enrichWithDepthAndLiqs } from '../../../services/volumeExpert'; // NEW: Volume Expert Service
 import { VolumeExpertAnalysis } from '../../types/types-advanced'; // NEW: Correct Type Import
 
@@ -226,6 +226,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     if (totalScore > 50) {
                         mlResult = await predictNextMove(coin.symbol, candles);
                         if (mlResult) {
+                            // PERSISTENCE: Log to model_predictions table
+                            savePrediction(coin.symbol, mlResult.probabilityUp);
+
                             // PREDICTION BOOST/PENALTY
                             // NEW: ML Safety Check - Ignore ML Short if Daily Structure is Bullish
                             const dailyBullish = macroContext?.btcRegime.regime === 'BULL' || (macroContext?.btcRegime.currentPrice || 0) > (macroContext?.btcRegime.ema200 || 0);

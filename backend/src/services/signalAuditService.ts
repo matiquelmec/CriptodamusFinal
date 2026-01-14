@@ -159,6 +159,7 @@ class SignalAuditService extends EventEmitter {
                     timeframe: opp.timeframe,
                     entry_price: entryTarget, // Plan Price
                     activation_price: activationPrice, // Real Execution Price
+                    max_price_reached: activationPrice, // Initial extreme is entry
                     fees_paid: fees,
                     tp1: opp.takeProfits.tp1,
                     tp2: opp.takeProfits.tp2,
@@ -251,6 +252,7 @@ class SignalAuditService extends EventEmitter {
 
                     updates.activation_price = realEntry;
                     updates.fees_paid = (realEntry * this.FEE_RATE);
+                    updates.max_price_reached = realEntry; // Start tracking from entry
 
                     console.log(`🚀 [SignalAudit] Filled: ${signal.symbol} @ $${realEntry.toFixed(4)}`);
                 }
@@ -263,6 +265,17 @@ class SignalAuditService extends EventEmitter {
                 // Use Real Entry if available, else theoretical
                 const basePrice = updates.activation_price || signal.activation_price || signal.entry_price;
                 const currentStage = signal.stage || 0; // 0=Fresh, 1=TP1 Hit, 2=TP2 Hit
+
+                // --- NEW: EXTREME PRICE TRACKING ---
+                const prevMax = signal.max_price_reached;
+                const isNewExtreme = (signal.side === 'LONG')
+                    ? (prevMax === null || currentPrice > prevMax)
+                    : (prevMax === null || currentPrice < prevMax);
+
+                if (isNewExtreme) {
+                    updates.max_price_reached = currentPrice;
+                    signal.max_price_reached = currentPrice; // Local cache immediate update
+                }
 
                 // Stop Loss Logic (Trailing if Partial)
                 // If Stage >= 1 (TP1 Hit), Stop Loss moves to Breakeven
@@ -345,7 +358,7 @@ class SignalAuditService extends EventEmitter {
         }
 
         if (signalsToUpdate.length > 0) {
-            this.syncUpdates(signalsToUpdate);
+            await this.syncUpdates(signalsToUpdate);
         }
     }
 
