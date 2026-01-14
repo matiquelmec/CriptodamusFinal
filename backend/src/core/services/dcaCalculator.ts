@@ -218,22 +218,21 @@ export function calculateDCAPlan(
     const isHighQualitySetup = closestValidSupport && closestValidSupport.score >= 4;
 
     if ((isMomentumRegime || isHighQualitySetup) && tier !== 'C') {
-        if (closestValidSupport) {
-            // Found a "Breakout Support"
-            // Strategy: Promoted to Entry 1 with Momentum Tag.
+        const momentumPrice = closestValidSupport?.price || signalPrice;
 
-            // 1. Remove it if it was already selected (to avoid dupe and ensure it moves to top)
-            selectedPOIs = selectedPOIs.filter(p => p.price !== closestValidSupport.price);
+        // 1. Remove it if it was already selected (to avoid dupe)
+        selectedPOIs = selectedPOIs.filter(p => Math.abs(p.price - momentumPrice) / momentumPrice > 0.001);
 
-            // 2. Inject at Top
-            selectedPOIs.unshift({
-                ...closestValidSupport,
-                factors: [...closestValidSupport.factors, "🚀 Momentum Entry"]
-            });
+        // 2. Inject at Top
+        selectedPOIs.unshift({
+            price: momentumPrice,
+            score: closestValidSupport?.score || 5,
+            factors: closestValidSupport ? [...closestValidSupport.factors, "🚀 Momentum Entry"] : ["🚀 Force Market Entry"],
+            type: side === 'LONG' ? 'SUPPORT' : 'RESISTANCE'
+        });
 
-            // 3. Trim to 3
-            selectedPOIs = selectedPOIs.slice(0, 3);
-        }
+        // 3. Trim to 3
+        selectedPOIs = selectedPOIs.slice(0, 3);
     }
 
     // 3.5 FORCE MARKET ENTRY - REMOVED FOR "NO FOMO" UPDATE
@@ -312,9 +311,19 @@ export function calculateDCAPlan(
     else if (tier === 'C') atrMultiplier = 2.0;
 
     const finalDeepest = entries[entries.length - 1].price;
-    const stopLoss = side === 'LONG'
+    const baseStopLoss = side === 'LONG'
         ? finalDeepest - (atr * atrMultiplier)
         : finalDeepest + (atr * atrMultiplier);
+
+    // INSTITUTIONAL GUARD: Hard floor for Stop Loss (Min 1.0% from entry1 to allow breathing room)
+    const entry1 = entries[0].price;
+    const slDistPercent = Math.abs(entry1 - baseStopLoss) / entry1;
+    const minSLDist = 0.012; // 1.2% minimum safety buffer
+
+    let stopLoss = baseStopLoss;
+    if (slDistPercent < minSLDist) {
+        stopLoss = side === 'LONG' ? entry1 * (1 - minSLDist) : entry1 * (1 + minSLDist);
+    }
 
     // 8. Calcular riesgo total
     const riskPerShare = Math.abs(averageEntry - stopLoss) / averageEntry;
@@ -327,8 +336,8 @@ export function calculateDCAPlan(
 
     // STRICT FILTER: Only accept TPs that are PROFITABLE
     const profitablePOIs = targetPOIs.filter(p => {
-        if (side === 'LONG') return p.price > averageEntry * 1.001;
-        return p.price < averageEntry * 0.999;
+        if (side === 'LONG') return p.price > entries[0].price * 1.005;
+        return p.price < entries[0].price * 0.995;
     });
 
     // INTELLIGENT MERGE: Combine Static POIs with Predictive Targets
@@ -341,19 +350,19 @@ export function calculateDCAPlan(
     if (predictiveTargets) {
         // 1. RSI Target (High Accuracy)
         if (predictiveTargets.rsiReversal) {
-            const isProfitable = side === 'LONG' ? predictiveTargets.rsiReversal > averageEntry * 1.005 : predictiveTargets.rsiReversal < averageEntry * 0.995;
+            const isProfitable = side === 'LONG' ? predictiveTargets.rsiReversal > entries[0].price * 1.005 : predictiveTargets.rsiReversal < entries[0].price * 0.995;
             if (isProfitable) smartTargets.push({ price: predictiveTargets.rsiReversal, score: 20, label: '🎯 RSI Target' });
         }
         // 2. Liquidity Magnet (High Probability)
         if (predictiveTargets.liquidationCluster) {
-            const isProfitable = side === 'LONG' ? predictiveTargets.liquidationCluster > averageEntry * 1.005 : predictiveTargets.liquidationCluster < averageEntry * 0.995;
+            const isProfitable = side === 'LONG' ? predictiveTargets.liquidationCluster > entries[0].price * 1.005 : predictiveTargets.liquidationCluster < entries[0].price * 0.995;
             if (isProfitable) smartTargets.push({ price: predictiveTargets.liquidationCluster, score: 18, label: '🧲 Liquidity' });
         }
         // 3. Sell Wall (Smart Exit)
         if (predictiveTargets.orderBookWall) {
             // Front-run wall by 0.2% to ensure fill before the rejection
             const safePrice = side === 'LONG' ? predictiveTargets.orderBookWall * 0.998 : predictiveTargets.orderBookWall * 1.002;
-            const isProfitable = side === 'LONG' ? safePrice > averageEntry * 1.005 : safePrice < averageEntry * 0.995;
+            const isProfitable = side === 'LONG' ? safePrice > entries[0].price * 1.005 : safePrice < entries[0].price * 0.995;
             if (isProfitable) smartTargets.push({ price: safePrice, score: 15, label: '🧱 Wall Front-Run' });
         }
     }
@@ -379,8 +388,8 @@ export function calculateDCAPlan(
         }
     }
 
-    // Sort for TPs: Closest to entry is TP1
-    uniqueTargets.sort((a, b) => Math.abs(a.price - averageEntry) - Math.abs(b.price - averageEntry));
+    // Sort for TPs: Closest to Entry 1 is TP1 (Use entries[0] instead of weighted average for safer scaling)
+    uniqueTargets.sort((a, b) => Math.abs(a.price - entries[0].price) - Math.abs(b.price - entries[0].price));
 
     // Fallback if empty (shouldn't happen often with confluence)
     let tpsArray: number[] = [];
@@ -424,9 +433,10 @@ export function calculateDCAPlan(
     const entry1Price = entries[0].price;
 
     if (side === 'LONG') {
-        // TP1 must be > Entry 1
-        if (tps[0] <= entry1Price) {
-            tps[0] = entry1Price + (atr * 1.5); // Force profitable TP1
+        // TP1 must be > Entry 1 (Min 0.5% gap for fees coverage)
+        const minGap = 1.005;
+        if (tps[0] <= entry1Price * minGap) {
+            tps[0] = entry1Price * minGap;
         }
         // Ensure TP alignment (TP1 < TP2 < TP3)
         if (tps[1] <= tps[0]) tps[1] = tps[0] + (atr * 2);
@@ -434,8 +444,9 @@ export function calculateDCAPlan(
 
     } else { // SHORT
         // TP1 must be < Entry 1
-        if (tps[0] >= entry1Price) {
-            tps[0] = entry1Price - (atr * 1.5); // Force profitable TP1
+        const minGap = 0.995;
+        if (tps[0] >= entry1Price * minGap) {
+            tps[0] = entry1Price * minGap;
         }
         // Ensure TP alignment (TP1 > TP2 > TP3)
         if (tps[1] >= tps[0]) tps[1] = tps[0] - (atr * 2);

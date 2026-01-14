@@ -200,6 +200,21 @@ app.get('/api/performance/history', async (req, res) => {
     }
 });
 
+app.get('/api/performance/stream-status', (req, res) => {
+    try {
+        const snapshot = binanceStream.getSnapshot();
+        res.json({
+            isAlive: binanceStream.isAlive,
+            bufferSize: (binanceStream as any).liquidationBuffer?.length || 0,
+            recentLiquidationsCount: snapshot.liquidations.length,
+            cvdPairsCount: Object.keys(snapshot.cvd).length,
+            timestamp: Date.now()
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch stream status' });
+    }
+});
+
 
 // Error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

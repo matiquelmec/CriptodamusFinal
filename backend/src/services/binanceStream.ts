@@ -116,8 +116,13 @@ class BinanceStreamService {
     }
 
     private async flushLiquidations() {
-        if (!this.supabase || this.liquidationBuffer.length === 0) return;
+        if (!this.supabase) {
+            // console.log('⚠️ [BinanceStream] Cannot flush: Supabase not initialized.');
+            return;
+        }
+        if (this.liquidationBuffer.length === 0) return;
 
+        const batchSize = this.liquidationBuffer.length;
         const batch = [...this.liquidationBuffer];
         this.liquidationBuffer = []; // Clear buffer immediately
 
@@ -128,15 +133,14 @@ class BinanceStreamService {
                     symbol: l.symbol,
                     price: l.price,
                     volume: l.usdValue,
-                    side: l.side === 'SELL' ? 'LONG_LIQ' : 'SHORT_LIQ', // Binance: SELL means Long was sold (liquidated)
+                    side: l.side === 'SELL' ? 'LONG_LIQ' : 'SHORT_LIQ',
                     timestamp: l.time
                 })));
 
             if (error) {
                 console.error('❌ [BinanceStream] Error flushing liquidations:', error.message);
-                // Optional: Put back in buffer? Risk of memory leak. Better verify DB.
             } else {
-                // console.log(`💾 [BinanceStream] Flushed ${batch.length} liquidations to DB.`);
+                console.log(`💾 [BinanceStream] Successfully flushed ${batchSize} liquidations to Supabase.`);
             }
         } catch (e) {
             console.error('❌ [BinanceStream] Flush exception:', e);
@@ -144,11 +148,11 @@ class BinanceStreamService {
     }
 
     public addStream(streamName: string): void {
-        const lowerStream = streamName.toLowerCase();
-        if (!this.streams.has(lowerStream)) {
-            this.streams.add(lowerStream);
+        const stream = streamName;
+        if (!this.streams.has(stream)) {
+            this.streams.add(stream);
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.sendSubscribe([lowerStream]);
+                this.sendSubscribe([stream]);
             }
         }
     }
@@ -163,12 +167,13 @@ class BinanceStreamService {
         this.ws = new WebSocket(url);
 
         this.ws.on('open', () => {
-            console.log('[BinanceStream] Connected to Binance Futures.');
+            console.log('✅ [BinanceStream] Connected to Binance Futures WebSocket.');
             this.isAlive = true;
             this.heartbeat();
 
             // Re-subscribe to all (in case we only connected with a subset or none)
             if (this.streams.size > 0) {
+                console.log(`📡 [BinanceStream] Subscribing to ${this.streams.size} streams...`);
                 this.sendSubscribe(Array.from(this.streams));
             }
         });
@@ -239,6 +244,8 @@ class BinanceStreamService {
                 time: msg.o.T,
                 usdValue: parseFloat(msg.o.ap) * parseFloat(msg.o.q)
             };
+
+            // console.log(`🔥 [BinanceStream] LIQ Detected: ${liq.symbol} ${liq.side} | $${liq.usdValue.toFixed(0)}`);
 
             // Keep last 50 liquidations (RAM cache for immediate UI)
             this.recentLiquidations.unshift(liq);

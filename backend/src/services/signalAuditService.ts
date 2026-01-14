@@ -285,7 +285,10 @@ class SignalAuditService extends EventEmitter {
                     // TP1 Check
                     if (currentStage < 1) {
                         const tp1Hit = (signal.side === 'LONG') ? currentPrice >= signal.tp1 : currentPrice <= signal.tp1;
-                        if (tp1Hit) {
+                        // SECURITY: Only hit TP1 if currentPrice is also better than basePrice (to avoid inverted TP logic from previous bugs)
+                        const isProfitable = (signal.side === 'LONG') ? currentPrice > basePrice : currentPrice < basePrice;
+
+                        if (tp1Hit && isProfitable) {
                             updates.status = 'PARTIAL_WIN';
                             updates.stage = 1;
                             updates.realized_pnl_percent = this.calculateNetPnL(basePrice, currentPrice, signal.side, signal.fees_paid, 0.4); // 40% out
@@ -357,6 +360,12 @@ class SignalAuditService extends EventEmitter {
 
     private async syncUpdates(updates: any[]) {
         for (const upd of updates) {
+            // PRO INTEGRITY GATE: Force WIN to LOSS if net PnL is negative (prevents accounting errors in UI)
+            if (upd.status === 'WIN' && (upd.pnl_percent || 0) <= 0) {
+                console.warn(`🛡️ [SignalAudit] Integrity Guard: Converting WIN to LOSS for ${upd.id} due to non-positive PnL (${upd.pnl_percent?.toFixed(2)}%)`);
+                upd.status = 'LOSS';
+            }
+
             const { id, ...data } = upd;
             const { error } = await this.supabase
                 .from('signals_audit')
@@ -404,7 +413,17 @@ class SignalAuditService extends EventEmitter {
         if (error || !data) return [];
 
         const combined = [...this.activeSignals, ...data];
-        const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
+
+        // Ensure numeric fields are non-null for UI safety (toFixed crash prevention)
+        const sanitized = combined.map(sig => ({
+            ...sig,
+            pnl_percent: sig.pnl_percent ?? 0,
+            realized_pnl_percent: sig.realized_pnl_percent ?? 0,
+            final_price: sig.final_price ?? sig.entry_price ?? 0,
+            fees_paid: sig.fees_paid ?? 0
+        }));
+
+        const unique = Array.from(new Map(sanitized.map(item => [item.id, item])).values());
 
         return unique.sort((a: any, b: any) => {
             const scoreA = ['ACTIVE', 'PARTIAL_WIN'].includes(a.status) ? 1 : 0;
