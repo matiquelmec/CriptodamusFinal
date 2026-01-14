@@ -357,10 +357,11 @@ class SignalAuditService extends EventEmitter {
 
     private async syncUpdates(updates: any[]) {
         for (const upd of updates) {
+            const { id, ...data } = upd;
             const { error } = await this.supabase
                 .from('signals_audit')
-                .update(upd)
-                .eq('id', upd.id);
+                .update(data)
+                .eq('id', id);
 
             if (!error && (upd.status === 'WIN' || upd.status === 'LOSS')) {
                 this.activeSignals = this.activeSignals.filter((s: any) => s.id !== upd.id);
