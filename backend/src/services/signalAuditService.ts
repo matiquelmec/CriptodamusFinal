@@ -416,8 +416,8 @@ class SignalAuditService extends EventEmitter {
         const { data, error } = await this.supabase.from('signals_audit').select('status, pnl_percent');
         if (error || !data) return { winRate: 0, total: 0, wins: 0, closed: 0, open: 0, profitFactor: 0 };
 
-        const closed = data.filter((s: any) => ['WIN', 'LOSS'].includes(s.status));
-        const winsCount = closed.filter((s: any) => s.status === 'WIN').length;
+        const closed = data.filter((s: any) => ['WIN', 'LOSS', 'PARTIAL_WIN'].includes(s.status));
+        const winsCount = closed.filter((s: any) => ['WIN', 'PARTIAL_WIN'].includes(s.status)).length;
 
         let grossProfit = 0, grossLoss = 0;
         closed.forEach((s: any) => {

@@ -203,17 +203,21 @@ export function calculateDCAPlan(
     // --- MOMENTUM ENTRY LOGIC (Bull Run Adaptation) ---
     // Problem: In strong trends, high score POIs are too deep (e.g. 90k when price is 97k).
     // Solution: Force inclusion of the closest valid support (Breakout Level) if we are TRENDING.
-    if (marketRegime?.regime === 'TRENDING' && tier !== 'C') {
-        const proximityLimit = 0.04; // Look for support within 4% of price
+    const proximityLimit = 0.04; // Look for support within 4% of price
 
-        // Find the closest support that is NOT already in selectedPOIs
-        // relevantPOIs is already filtered by side (Supports below price for LONG)
-        const closestValidSupport = relevantPOIs.find(p => {
-            const dist = Math.abs((signalPrice - p.price) / signalPrice);
-            const alreadySelected = selectedPOIs.some(sp => sp.price === p.price);
-            // Must be close, acceptable score (>=2), and not selected
-            return dist < proximityLimit && p.score >= 2 && !alreadySelected;
-        });
+    // Find the closest support that is NOT already in selectedPOIs
+    // relevantPOIs is already filtered by side (Supports below price for LONG)
+    const closestValidSupport = relevantPOIs.find(p => {
+        const dist = Math.abs((signalPrice - p.price) / signalPrice);
+        const alreadySelected = selectedPOIs.some(sp => sp.price === p.price);
+        // Must be close, acceptable score (>=2), and not selected
+        return dist < proximityLimit && p.score >= 2 && !alreadySelected;
+    });
+
+    const isMomentumRegime = marketRegime?.regime === 'TRENDING' || marketRegime?.regime === 'VOLATILE';
+    const isHighQualitySetup = closestValidSupport && closestValidSupport.score >= 4;
+
+    if ((isMomentumRegime || isHighQualitySetup) && tier !== 'C') {
 
         if (closestValidSupport) {
             // Found a "Breakout Support" (e.g. EMA50 or S/R Flip)
