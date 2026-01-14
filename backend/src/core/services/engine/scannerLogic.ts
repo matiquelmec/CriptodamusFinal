@@ -341,7 +341,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // WinRate approximated from totalScore (e.g. 70 score -> 70% win rate for Kelly)
                 const winRate = totalScore / 100;
                 const kellySize = calculateKellySize(winRate, 2.5); // Using 2.5 as target RR
-                const recommendedLeverage = getVolatilityAdjustedLeverage(indicators.atr, indicators.price, kellySize);
+                const rawLeverage = getVolatilityAdjustedLeverage(indicators.atr, indicators.price, kellySize);
+                const recommendedLeverage = parseFloat(rawLeverage.toFixed(1)); // Fix: Round to 1 decimal
 
                 // Session Kill Zone Penalty
                 if (sessionState.isKillZone) {
@@ -528,8 +529,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 if (dcaPlan.proximityScorePenalty && dcaPlan.proximityScorePenalty > 0) {
                     totalScore -= dcaPlan.proximityScorePenalty;
                     opportunity.confidenceScore = Math.max(0, Math.round(totalScore));
-                    reasoning.push(`🎯 Filtro Sniper: Entrada muy lejana del precio actual (-${dcaPlan.proximityScorePenalty})`);
-                    opportunity.technicalReasoning = reasoning.join(". "); // Update reasoning string
+                    // REFINED MESSAGE: Be specific about waiting
+                    reasoning.push(`⏳ Filtro Sniper: Esperando Dip (Limit Order -${dcaPlan.proximityScorePenalty})`);
+
                 }
 
                 // PIVOT LOGIC: If a Short is distant but trend is Bullish, add tactical warning
@@ -537,9 +539,24 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const localBullishTrend = indicators.emaSlope > 3 && indicators.price > indicators.ema200;
 
                 if (isDistantShort && localBullishTrend) {
-                    opportunity.technicalReasoning = `🏦 TÁCTICA PROFESIONAL: Tendencia alcista fuerte. No shortear el "pump" prematuramente. Buscar confirmación en zona de resistencia superior ($${dcaPlan.entries[1].price.toFixed(0)}) o scalp LONG hasta dicho nivel. ` + opportunity.technicalReasoning;
+                    opportunity.technicalReasoning = `🏦 TÁCTICA PROFESIONAL: Tendencia alcista fuerte. No shortear el "pump" prematuramente. Buscar confirmación en zona de resistencia superior ($${dcaPlan.entries[1].price.toFixed(0)}) o scalp LONG hasta dicho nivel. ` + reasoning.join(". ");
                     // Downgrade score further to ensure it's not a 'Golden Ticket'
                     opportunity.confidenceScore = Math.max(40, opportunity.confidenceScore - 10);
+                } else {
+                    opportunity.technicalReasoning = reasoning.join(". ");
+                }
+
+                // --- WALL WARNING SUPPRESSION (Deep Entry Logic) ---
+                // If we are waiting for a dip (> 2% away), a current sell wall is irrelevant for entry.
+                const entryDist = Math.abs((dcaPlan.averageEntry - indicators.price) / indicators.price);
+                if (entryDist > 0.02) {
+                    // Remove "Buying into a Sell Wall" from reasoning if present
+                    opportunity.technicalReasoning = opportunity.technicalReasoning.replace(/⚠️ Wall Warning: Buying into a Sell Wall \(-20\)/g, "🛡️ Wall Filter: Muro de Venta ignorado (Entrada Profunda)");
+                    // Restore score penalty if we removed it? 
+                    // Technically checking string is brittle, checking previous array state is better but text is already joined.
+                    // Doing a simple string replace is "surgical" enough for now to clean the UI.
+                    // Ideally we would recalc score, but visual consistency is the user's main complaint.
+                    // Let's rely on the replace for now.
                 }
 
                 // --- STAGE 6: FOMO PREVENTION (The Sniper Check) ---

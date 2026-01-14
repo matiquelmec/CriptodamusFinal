@@ -200,6 +200,47 @@ export function calculateDCAPlan(
     // For SHORT, we want LOW P (Closest above price) to HIGH P. Ascending.
     selectedPOIs.sort((a, b) => side === 'LONG' ? b.price - a.price : a.price - b.price);
 
+    // --- MOMENTUM ENTRY LOGIC (Bull Run Adaptation) ---
+    // Problem: In strong trends, high score POIs are too deep (e.g. 90k when price is 97k).
+    // Solution: Force inclusion of the closest valid support (Breakout Level) if we are TRENDING.
+    if (marketRegime?.regime === 'TRENDING' && tier !== 'C') {
+        const proximityLimit = 0.04; // Look for support within 4% of price
+
+        // Find the closest support that is NOT already in selectedPOIs
+        // relevantPOIs is already filtered by side (Supports below price for LONG)
+        const closestValidSupport = relevantPOIs.find(p => {
+            const dist = Math.abs((signalPrice - p.price) / signalPrice);
+            const alreadySelected = selectedPOIs.some(sp => sp.price === p.price);
+            // Must be close, acceptable score (>=2), and not selected
+            return dist < proximityLimit && p.score >= 2 && !alreadySelected;
+        });
+
+        if (closestValidSupport) {
+            // Found a "Breakout Support" (e.g. EMA50 or S/R Flip)
+            // Strategy: Inject as Entry 1. Keep Entry 2 and 3 as Safety Nets (Deepest).
+            // We remove the middle one or the last one? Usually keep the Deepest as Entry 3.
+
+            if (selectedPOIs.length >= 3) {
+                selectedPOIs.pop(); // Remove the deepest/furthest to make room? 
+                // actually entry 3 is usually the deepest. entry 1 is closest.
+                // If we unshift, we add to front. So we remove the last one (deepest of the old set) 
+                // or the one with lowest score?
+                // Let's keep the absolute deepest as catastrophe insurance.
+                // So we keep index 0 (old closest) and index 2 (old deepest)? 
+                // Let's just pop the last one to keep size 3.
+                // Wait, if I unshift, I check closer.
+                // [Deep1, Deep2, Deep3] -> [NewClose, Deep1, Deep2]
+                // This ensures coverage from Top to Mid-Deep.
+            }
+            selectedPOIs.unshift({
+                ...closestValidSupport,
+                factors: [...closestValidSupport.factors, "🚀 Momentum Entry"]
+            });
+            // Trim to 3
+            selectedPOIs = selectedPOIs.slice(0, 3);
+        }
+    }
+
     // 3.5 FORCE MARKET ENTRY - REMOVED FOR "NO FOMO" UPDATE
     // We now respect the technical levels even if distant.
     // If the price is far from the first POI, it becomes a "Limit Order" setup automatically.
