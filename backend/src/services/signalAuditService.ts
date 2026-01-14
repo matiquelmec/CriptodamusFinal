@@ -13,6 +13,8 @@ class SignalAuditService extends EventEmitter {
     private auditInterval: NodeJS.Timeout | null = null;
     private healthCheckInterval: NodeJS.Timeout | null = null;
     private lastWSTick: number = Date.now(); // Heartbeat for Watchdog
+    private lastPollSuccess: number = 0;
+    private lastAuditError: string | null = null;
 
     // CONSTANTES INSTITUCIONALES
     private readonly FEE_RATE = 0.001; // 0.1% (Maker/Taker blend estimate w/ BNB discount)
@@ -432,52 +434,71 @@ class SignalAuditService extends EventEmitter {
             wins: winsCount,
             winRate: closed.length > 0 ? (winsCount / closed.length) * 100 : 0,
             open: data.filter((s: any) => ['OPEN', 'ACTIVE', 'PENDING', 'PARTIAL_WIN'].includes(s.status)).length,
-            profitFactor: Number(profitFactor.toFixed(2))
+            profitFactor: Number(profitFactor.toFixed(2)),
+            // Diagnostic Metadata
+            techInfo: {
+                lastWSTick: this.lastWSTick,
+                lastPollSuccess: this.lastPollSuccess,
+                lastError: this.lastAuditError,
+                isWSAlive: (Date.now() - this.lastWSTick) < 60000,
+                activeTrackingCount: this.activeSignals.length
+            }
         };
     }
 
     /**
-     * HYBRID FALLBACK MECHANISM (Institutional Robustness)
-     * If WebSocket dies (Geo-Block silence), this POLLS the API via Proxy to keep signals alive.
+     * MANUAL AUDIT PASS (Diagnostic/Recovery)
+     * Allows forcing a poll cycle via API or Scheduler.
      */
-    private async checkHealthAndPoll() {
+    public async forceAuditPass() {
+        console.log("🚑 [SignalAudit] Manual Audit Pass Triggered...");
+        return await this.checkHealthAndPoll(true);
+    }
+
+    private async checkHealthAndPoll(force: boolean = false) {
         const timeSinceLastTick = Date.now() - this.lastWSTick;
         const SILENCE_THRESHOLD = 45000; // 45 Seconds of silence = BROKEN
 
-        if (timeSinceLastTick > SILENCE_THRESHOLD && this.activeSignals.length > 0) {
-            console.warn(`⚠️ [SignalAudit] WS Silence Detected (${(timeSinceLastTick / 1000).toFixed(0)}s). Engaging Proxy Polling...`);
+        if (force || (timeSinceLastTick > SILENCE_THRESHOLD && this.activeSignals.length > 0)) {
+            if (!force) {
+                console.warn(`⚠️ [SignalAudit] WS Silence Detected (${(timeSinceLastTick / 1000).toFixed(0)}s). Engaging Proxy Polling...`);
+            }
 
             try {
-                // Use SmartFetch (Automatic Proxy Routing) to bypass Geo-Block
                 const allPrices = await SmartFetch.get<any[]>('https://fapi.binance.com/fapi/v1/ticker/price');
 
                 if (Array.isArray(allPrices)) {
-                    // Create a map for O(1) lookup
                     const priceMap = new Map(allPrices.map(p => [p.symbol, parseFloat(p.price)]));
-
-                    // Manually pump updates for all active signals
-                    // Note: We do NOT update lastWSTick here to keep "Red Alert" status until WS recovers,
-                    // OR we update it to suppress logs? 
-                    // Let's update it to prevent excessive polling if the loop is fast.
-                    // But our loop is 30s. So we just update status.
-
                     let updatesCount = 0;
-                    for (const signal of this.activeSignals) {
-                        const symbolRaw = signal.symbol.replace('/', '');
-                        const price = priceMap.get(symbolRaw);
 
-                        if (price) {
-                            await this.processPriceTick(signal.symbol, price);
-                            updatesCount++;
+                    for (const signal of this.activeSignals) {
+                        try {
+                            const symbolRaw = signal.symbol.replace('/', '');
+                            const price = priceMap.get(symbolRaw);
+
+                            if (price) {
+                                await this.processPriceTick(signal.symbol, price);
+                                updatesCount++;
+                            }
+                        } catch (signalErr: any) {
+                            console.error(`❌ [SignalAudit] Error processing ${signal.symbol}:`, signalErr.message);
                         }
                     }
-                    console.log(`🚑 [SignalAudit] Proxy Pulse: Updated ${updatesCount} active signals via REST.`);
-                    this.lastWSTick = Date.now(); // Reset watchdog to avoid double polling immediately
+
+                    this.lastPollSuccess = Date.now();
+                    this.lastAuditError = null;
+                    console.log(`🚑 [SignalAudit] Audit Pass Complete: Updated ${updatesCount} signals.`);
+
+                    if (!force) this.lastWSTick = Date.now();
+                    return { success: true, updated: updatesCount };
                 }
             } catch (e: any) {
-                console.error(`❌ [SignalAudit] Proxy Poll Failed: ${e.message}`);
+                this.lastAuditError = e.message;
+                console.error(`❌ [SignalAudit] Audit Pass Failed: ${e.message}`);
+                return { success: false, error: e.message };
             }
         }
+        return { success: true, status: 'No pass needed' };
     }
 }
 

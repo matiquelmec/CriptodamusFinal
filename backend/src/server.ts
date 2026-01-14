@@ -179,6 +179,16 @@ app.get('/api/performance/stats', async (req, res) => {
     }
 });
 
+app.get('/api/performance/audit-pass', async (req, res) => {
+    try {
+        console.log("⚡ [Diagnostic] Triggering Manual Audit Pass...");
+        const result = await signalAuditService.forceAuditPass();
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 
 app.get('/api/performance/history', async (req, res) => {
     try {
