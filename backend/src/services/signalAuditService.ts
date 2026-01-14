@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { AIOpportunity } from '../core/types';
 import { binanceStream } from './binanceStream';
 import { telegramService } from './telegramService';
+import { SmartFetch } from '../core/services/SmartFetch'; // Import SmartFetch for Proxy Polling
 import EventEmitter from 'events';
 
 // ... (Imports remain same)
@@ -10,6 +11,8 @@ class SignalAuditService extends EventEmitter {
     private supabase: any = null;
     private activeSignals: any[] = [];
     private auditInterval: NodeJS.Timeout | null = null;
+    private healthCheckInterval: NodeJS.Timeout | null = null;
+    private lastWSTick: number = Date.now(); // Heartbeat for Watchdog
 
     // CONSTANTES INSTITUCIONALES
     private readonly FEE_RATE = 0.001; // 0.1% (Maker/Taker blend estimate w/ BNB discount)
@@ -40,6 +43,10 @@ class SignalAuditService extends EventEmitter {
 
         // 3. Proceso de expiración (cada 5m)
         this.auditInterval = setInterval(() => this.checkExpirations(), 5 * 60 * 1000);
+
+        // 4. HYBRID WATCHDOG (Cada 30s)
+        // Detects partial connection failure (Ghost WS) and switches to Polling
+        this.healthCheckInterval = setInterval(() => this.checkHealthAndPoll(), 30 * 1000);
     }
 
     private async reloadActiveSignals() {
@@ -211,6 +218,8 @@ class SignalAuditService extends EventEmitter {
     }
 
     private async processPriceTick(symbol: string, currentPrice: number) {
+        this.lastWSTick = Date.now(); // Update Heartbeat
+
         if (this.activeSignals.length === 0) return;
 
         const signalsToUpdate = [];
@@ -425,6 +434,50 @@ class SignalAuditService extends EventEmitter {
             open: data.filter((s: any) => ['OPEN', 'ACTIVE', 'PENDING', 'PARTIAL_WIN'].includes(s.status)).length,
             profitFactor: Number(profitFactor.toFixed(2))
         };
+    }
+
+    /**
+     * HYBRID FALLBACK MECHANISM (Institutional Robustness)
+     * If WebSocket dies (Geo-Block silence), this POLLS the API via Proxy to keep signals alive.
+     */
+    private async checkHealthAndPoll() {
+        const timeSinceLastTick = Date.now() - this.lastWSTick;
+        const SILENCE_THRESHOLD = 45000; // 45 Seconds of silence = BROKEN
+
+        if (timeSinceLastTick > SILENCE_THRESHOLD && this.activeSignals.length > 0) {
+            console.warn(`⚠️ [SignalAudit] WS Silence Detected (${(timeSinceLastTick / 1000).toFixed(0)}s). Engaging Proxy Polling...`);
+
+            try {
+                // Use SmartFetch (Automatic Proxy Routing) to bypass Geo-Block
+                const allPrices = await SmartFetch.get<any[]>('https://fapi.binance.com/fapi/v1/ticker/price');
+
+                if (Array.isArray(allPrices)) {
+                    // Create a map for O(1) lookup
+                    const priceMap = new Map(allPrices.map(p => [p.symbol, parseFloat(p.price)]));
+
+                    // Manually pump updates for all active signals
+                    // Note: We do NOT update lastWSTick here to keep "Red Alert" status until WS recovers,
+                    // OR we update it to suppress logs? 
+                    // Let's update it to prevent excessive polling if the loop is fast.
+                    // But our loop is 30s. So we just update status.
+
+                    let updatesCount = 0;
+                    for (const signal of this.activeSignals) {
+                        const symbolRaw = signal.symbol.replace('/', '');
+                        const price = priceMap.get(symbolRaw);
+
+                        if (price) {
+                            await this.processPriceTick(signal.symbol, price);
+                            updatesCount++;
+                        }
+                    }
+                    console.log(`🚑 [SignalAudit] Proxy Pulse: Updated ${updatesCount} active signals via REST.`);
+                    this.lastWSTick = Date.now(); // Reset watchdog to avoid double polling immediately
+                }
+            } catch (e: any) {
+                console.error(`❌ [SignalAudit] Proxy Poll Failed: ${e.message}`);
+            }
+        }
     }
 }
 
