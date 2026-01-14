@@ -209,38 +209,29 @@ export function calculateDCAPlan(
     // relevantPOIs is already filtered by side (Supports below price for LONG)
     const closestValidSupport = relevantPOIs.find(p => {
         const dist = Math.abs((signalPrice - p.price) / signalPrice);
-        const alreadySelected = selectedPOIs.some(sp => sp.price === p.price);
-        // Must be close, acceptable score (>=2), and not selected
-        return dist < proximityLimit && p.score >= 2 && !alreadySelected;
+        // Must be close and acceptable score (>=2)
+        // We REMOVED the !alreadySelected check to allow "Upgrading" an existing POI to Momentum status
+        return dist < proximityLimit && p.score >= 2;
     });
 
     const isMomentumRegime = marketRegime?.regime === 'TRENDING' || marketRegime?.regime === 'VOLATILE';
     const isHighQualitySetup = closestValidSupport && closestValidSupport.score >= 4;
 
     if ((isMomentumRegime || isHighQualitySetup) && tier !== 'C') {
-
         if (closestValidSupport) {
-            // Found a "Breakout Support" (e.g. EMA50 or S/R Flip)
-            // Strategy: Inject as Entry 1. Keep Entry 2 and 3 as Safety Nets (Deepest).
-            // We remove the middle one or the last one? Usually keep the Deepest as Entry 3.
+            // Found a "Breakout Support"
+            // Strategy: Promoted to Entry 1 with Momentum Tag.
 
-            if (selectedPOIs.length >= 3) {
-                selectedPOIs.pop(); // Remove the deepest/furthest to make room? 
-                // actually entry 3 is usually the deepest. entry 1 is closest.
-                // If we unshift, we add to front. So we remove the last one (deepest of the old set) 
-                // or the one with lowest score?
-                // Let's keep the absolute deepest as catastrophe insurance.
-                // So we keep index 0 (old closest) and index 2 (old deepest)? 
-                // Let's just pop the last one to keep size 3.
-                // Wait, if I unshift, I check closer.
-                // [Deep1, Deep2, Deep3] -> [NewClose, Deep1, Deep2]
-                // This ensures coverage from Top to Mid-Deep.
-            }
+            // 1. Remove it if it was already selected (to avoid dupe and ensure it moves to top)
+            selectedPOIs = selectedPOIs.filter(p => p.price !== closestValidSupport.price);
+
+            // 2. Inject at Top
             selectedPOIs.unshift({
                 ...closestValidSupport,
                 factors: [...closestValidSupport.factors, "🚀 Momentum Entry"]
             });
-            // Trim to 3
+
+            // 3. Trim to 3
             selectedPOIs = selectedPOIs.slice(0, 3);
         }
     }
@@ -280,7 +271,10 @@ export function calculateDCAPlan(
     const initialRR = estReward / estRisk;
 
     // IF R:R IS POOR (< 1.5), AGGRESSIVELY SHIFT ENTRIES DEEPER
-    if (initialRR < 1.5) {
+    // EXCEPTION: If this is a Momentum Entry, we respect the level (Breakout/Wall) and rely on tighter management or high probability.
+    const hasMomentumEntry = entries.some(e => e.factors.some(f => f.includes("Momentum")));
+
+    if (initialRR < 1.5 && !hasMomentumEntry) {
         // Shift Factor: Demand 2% better price on all entries
         const shiftMult = side === 'LONG' ? 0.98 : 1.02;
         entries = entries.map(e => ({
