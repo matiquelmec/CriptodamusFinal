@@ -166,6 +166,7 @@ class SignalAuditService extends EventEmitter {
                     tp3: opp.takeProfits.tp3,
                     stop_loss: opp.stopLoss,
                     confidence_score: opp.confidenceScore,
+                    ml_probability: opp.mlPrediction ? (opp.mlPrediction.probability / 100) : null,
                     stage: 0, // 0 = Entry Phase
                     created_at: Date.now()
                 };
@@ -386,9 +387,60 @@ class SignalAuditService extends EventEmitter {
                 .eq('id', id);
 
             if (!error && (upd.status === 'WIN' || upd.status === 'LOSS')) {
+                const finalPnL = upd.pnl_percent || 0;
                 this.activeSignals = this.activeSignals.filter((s: any) => s.id !== upd.id);
-                console.log(`🎯 [SignalAudit] CERRADA (${upd.status}): ${upd.id} | Net PnL: ${upd.pnl_percent?.toFixed(2)}%`);
+                console.log(`🎯 [SignalAudit] CERRADA (${upd.status}): ${upd.id} | Net PnL: ${finalPnL.toFixed(2)}%`);
+
+                // ML FEEDBACK LOOP: Update model_predictions outcome
+                this.updateMLOutcome(upd.id, finalPnL, upd.status).catch(e =>
+                    console.error(`⚠️ [ML-Audit] Failed to sync outcome:`, e)
+                );
             }
+        }
+    }
+
+    /**
+     * Finds the nearest ML prediction for this signal and updates its outcome
+     */
+    private async updateMLOutcome(signalId: string, pnl: number, status: string) {
+        // Find the signal in the DB to get symbol and timestamp
+        const { data: signal } = await this.supabase
+            .from('signals_audit')
+            .select('symbol, created_at, side')
+            .eq('id', signalId)
+            .single();
+
+        if (!signal) return;
+
+        // Find nearest prediction in a 5-minute window
+        const windowMs = 5 * 60 * 1000;
+        const startTime = signal.created_at - windowMs;
+        const endTime = signal.created_at + windowMs;
+
+        const { data: predictions } = await this.supabase
+            .from('model_predictions')
+            .select('id, predicted_price')
+            .eq('symbol', signal.symbol)
+            .gte('prediction_time', startTime)
+            .lte('prediction_time', endTime)
+            .order('prediction_time', { ascending: false });
+
+        if (predictions && predictions.length > 0) {
+            // Update the most recent one in that window
+            const pred = predictions[0];
+
+            // Accuracy Logic: 
+            // If WIN -> Outcome = 1 (IA was right)
+            // If LOSS -> Outcome = 0 (IA was wrong)
+            // Or use PnL directly for regression models
+            const outcome = status === 'WIN' ? 1 : 0;
+
+            await this.supabase
+                .from('model_predictions')
+                .update({ actual_outcome: outcome })
+                .eq('id', pred.id);
+
+            console.log(`🧠 [ML-Audit] Loop Closed: Prediction ${pred.id} marked as ${outcome === 1 ? 'ACCURATE' : 'INACCURATE'} (PnL: ${pnl.toFixed(2)}%)`);
         }
     }
 
