@@ -400,6 +400,7 @@ export interface AIOpportunity {
         };
         chartPatterns?: ChartPattern[];
         harmonics?: import('./types-advanced').HarmonicPattern[];
+        marketRegime?: import('./types-advanced').MarketRegime; // NEW: Propagated for safety filters
     };
     chartPatterns?: ChartPattern[]; // NEW: Smart Geometric Patterns
     dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI

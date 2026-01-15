@@ -71,8 +71,20 @@ class SignalAuditService extends EventEmitter {
             .in('status', ['PENDING', 'ACTIVE', 'OPEN', 'PARTIAL_WIN']); // Added PARTIAL_WIN
 
         if (!error && data) {
-            this.activeSignals = data;
-            console.log(`🛡️ [SignalAudit] Seguimiento activo de ${data.length} señales.`);
+            this.activeSignals = data.map((sig: any) => {
+                // Hydrate DCA if exists in technical_reasoning
+                if (sig.technical_reasoning && sig.technical_reasoning.includes('{"dca":')) {
+                    try {
+                        const parts = sig.technical_reasoning.split(' | ');
+                        const dcaData = JSON.parse(parts[0]);
+                        sig.dcaPlan = dcaData.dca;
+                    } catch (e) {
+                        // console.error("Error parsing DCA:", e);
+                    }
+                }
+                return sig;
+            });
+            console.log(`🛡️ [SignalAudit] Seguimiento activo de ${data.length} señales (DCA Hydrated).`);
 
             data.forEach((sig: any) => {
                 const streamSymbol = sig.symbol.toLowerCase().replace('/', '') + '@aggTrade';
@@ -104,14 +116,10 @@ class SignalAuditService extends EventEmitter {
             );
 
             if (existingPosition) {
-                // Si existe posición contraria (Hedge/Reversal), la cerramos primero.
-                if (existingPosition.side !== opp.side) {
-                    await this.handleReversal(existingPosition, opp);
-                } else {
-                    // Si es la misma dirección, IGNORAMOS la nueva señal.
-                    // console.log(`🛡️ [SignalAudit] Skip ${opp.symbol}: Posición ya activa (${existingPosition.status}).`);
-                    continue;
-                }
+                // SINGLE POSITION ENFORCEMENT: Ignore new signal if we already have one.
+                // Reversal logic removed to prevent "panting" / unprofessional flip-flopping.
+                // The existing trade MUST run to SL or TP.
+                continue;
             }
 
             this.processingSignatures.add(sigKey);
@@ -143,6 +151,7 @@ class SignalAuditService extends EventEmitter {
                     const canEnterNow = (opp.side === 'LONG')
                         ? currentPrice <= (entryTarget + buffer)
                         : currentPrice >= (entryTarget - buffer);
+
 
                     if (canEnterNow) {
                         initialStatus = 'ACTIVE';
@@ -177,7 +186,8 @@ class SignalAuditService extends EventEmitter {
                     confidence_score: opp.confidenceScore,
                     ml_probability: opp.mlPrediction ? (opp.mlPrediction.probability / 100) : null,
                     stage: 0, // 0 = Entry Phase
-                    created_at: Date.now()
+                    created_at: Date.now(),
+                    technical_reasoning: JSON.stringify({ dca: opp.dcaPlan || null }) + " | " + (opp.technicalReasoning || '')
                 };
 
                 const { data, error } = await this.supabase
@@ -189,7 +199,7 @@ class SignalAuditService extends EventEmitter {
                     this.activeSignals.push(data[0]);
                     const streamSymbol = opp.symbol.toLowerCase().replace('/', '') + '@aggTrade';
                     binanceStream.addStream(streamSymbol);
-                    console.log(`✅ [SignalAudit] Registered: ${opp.symbol} ${opp.side} (${initialStatus})`);
+                    console.log(`✅ [SignalAudit] Registered: ${opp.symbol} ${opp.side} (PRO Strategy)`);
                 }
             } finally {
                 this.processingSignatures.delete(sigKey);
@@ -197,38 +207,7 @@ class SignalAuditService extends EventEmitter {
         }
     }
 
-    private async handleReversal(oldSig: any, newOpp: AIOpportunity) {
-        console.log(`🔄 [SignalAudit] REVERSAL: Closing ${oldSig.symbol} ${oldSig.side} for new ${newOpp.side}`);
-
-        const closePrice = newOpp.entryZone.currentPrice || newOpp.entryZone.max;
-        const entryPrice = oldSig.activation_price || oldSig.entry_price;
-
-        // PnL Calculation (Net with Fees)
-        const rawPnL = ((closePrice - entryPrice) / entryPrice) * 100 * (oldSig.side === 'LONG' ? 1 : -1);
-
-        // Add Exit Fee
-        const exitFee = (closePrice * this.FEE_RATE);
-        const totalFees = (oldSig.fees_paid || 0) + exitFee;
-        const feeImpactPercent = (totalFees / entryPrice) * 100; // Approx impact on RoI
-
-        const netPnL = rawPnL - feeImpactPercent;
-
-        const finalStatus = netPnL >= 0 ? 'WIN' : 'LOSS';
-
-        await this.syncUpdates([{
-            id: oldSig.id,
-            status: finalStatus,
-            closed_at: Date.now(),
-            final_price: closePrice,
-            pnl_percent: netPnL,
-            fees_paid: totalFees,
-            realized_pnl_percent: netPnL
-        }]);
-
-        // Notify
-        telegramService.sendReversalAlert(newOpp.symbol, oldSig.side, newOpp.side, closePrice, netPnL);
-        this.activeSignals = this.activeSignals.filter(s => s.id !== oldSig.id);
-    }
+    // handleReversal was removed to prevent unprofessional flip-flopping.
 
     private async processPriceTick(symbol: string, currentPrice: number) {
         this.lastWSTick = Date.now(); // Update Heartbeat
@@ -255,115 +234,140 @@ class SignalAuditService extends EventEmitter {
 
                 if (entryTouched) {
                     updates.status = 'ACTIVE';
-
-                    // Real Execution Logic
-                    const slippage = currentPrice * 0.0002; // Limit Order Slippage (smaller than market)
+                    const slippage = currentPrice * 0.0002;
                     const realEntry = (signal.side === 'LONG') ? currentPrice + slippage : currentPrice - slippage;
-
                     updates.activation_price = realEntry;
                     updates.fees_paid = (realEntry * this.FEE_RATE);
-                    updates.max_price_reached = realEntry; // Start tracking from entry
-
-                    console.log(`🚀 [SignalAudit] Filled: ${signal.symbol} @ $${realEntry.toFixed(4)}`);
+                    updates.max_price_reached = realEntry;
+                    updates.stage = 0;
+                    console.log(`🚀 [SignalAudit] Filled E1: ${signal.symbol} @ $${realEntry.toFixed(4)}`);
                 }
             }
 
-            // FASE 2: Position Management (Active Trades)
+            // FASE 2: Active Management (DCA & TP)
             const isActive = signal.status === 'ACTIVE' || updates.status === 'ACTIVE' || signal.status === 'PARTIAL_WIN';
 
             if (isActive) {
-                // Use Real Entry if available, else theoretical
-                const basePrice = updates.activation_price || signal.activation_price || signal.entry_price;
-                const currentStage = signal.stage || 0; // 0=Fresh, 1=TP1 Hit, 2=TP2 Hit
+                const isLong = signal.side === 'LONG';
+                const originalWAP = updates.activation_price || signal.activation_price || signal.entry_price;
+                let currentWAP = originalWAP;
+                const currentStage = signal.stage || 0; // 0=Fresh, 1=TP1 Hit, etc.
+                const sl = signal.stop_loss;
+                const { tp1, tp2, tp3 } = signal;
 
-                // --- NEW: EXTREME PRICE TRACKING ---
+                // --- 2A: DCA ENTRY MANAGEMENT ---
+                // If we haven't hit a TP yet (Stage 0), we look for DCA Entry 2 & 3
+                if (currentStage === 0 && signal.dcaPlan) {
+                    const entries = signal.dcaPlan.entries || [];
+                    const e2 = entries.find((e: any) => e.level === 2)?.price;
+                    const e3 = entries.find((e: any) => e.level === 3)?.price;
+
+                    // Entry 2 (30% weight)
+                    if (e2 && !signal.e2_filled) {
+                        const hitE2 = isLong ? currentPrice <= e2 : currentPrice >= e2;
+                        if (hitE2) {
+                            // Weight: E1 (40), E2 (30) => New WAP = (E1*40 + E2*30)/70
+                            currentWAP = (originalWAP * 40 + e2 * 30) / 70;
+                            updates.activation_price = currentWAP;
+                            signal.e2_filled = true; // Session cache
+                            updates.fees_paid = (signal.fees_paid || 0) + (e2 * this.FEE_RATE * 0.3); // Partial fee
+                            console.log(`📡 [SignalAudit] DCA E2 Filled: ${signal.symbol} (New WAP: $${currentWAP.toFixed(4)})`);
+                        }
+                    }
+
+                    // Entry 3 (30% weight)
+                    if (e3 && signal.e2_filled && !signal.e3_filled) {
+                        const hitE3 = isLong ? currentPrice <= e3 : currentPrice >= e3;
+                        if (hitE3) {
+                            // Weight: WAP_Current (70), E3 (30) => New WAP = (WAP*70 + E3*30)/100
+                            currentWAP = (currentWAP * 70 + e3 * 30) / 100;
+                            updates.activation_price = currentWAP;
+                            signal.e3_filled = true;
+                            updates.fees_paid = (signal.fees_paid || 0) + (e3 * this.FEE_RATE * 0.3);
+                            console.log(`📡 [SignalAudit] DCA E3 Filled: ${signal.symbol} (Final WAP: $${currentWAP.toFixed(4)})`);
+                        }
+                    }
+                }
+
+                // --- 2B: EXTREME TRACKING ---
                 const prevMax = signal.max_price_reached;
-                const isNewExtreme = (signal.side === 'LONG')
-                    ? (prevMax === null || currentPrice > prevMax)
-                    : (prevMax === null || currentPrice < prevMax);
-
+                const isNewExtreme = isLong ? (currentPrice > (prevMax || 0)) : (currentPrice < (prevMax || 999999));
                 if (isNewExtreme) {
                     updates.max_price_reached = currentPrice;
-                    signal.max_price_reached = currentPrice; // Local cache immediate update
+                    signal.max_price_reached = currentPrice;
                 }
 
-                // Stop Loss Logic (Trailing if Partial)
-                // If Stage >= 1 (TP1 Hit), Stop Loss moves to Breakeven
-                let effectiveSL = signal.stop_loss;
+                // --- 2C: SMART BREAKEVEN & STOP LOSS ---
+                // Once TP1 is hit (Stage 1+), move SL to current WAP (Breakeven)
+                let effectiveSL = sl;
                 if (currentStage >= 1) {
-                    effectiveSL = basePrice; // Breakeven
+                    effectiveSL = currentWAP;
                 }
 
-                // Check Stop Loss
-                const slHit = (signal.side === 'LONG') ? currentPrice <= effectiveSL : currentPrice >= effectiveSL;
+                const slHit = isLong ? currentPrice <= effectiveSL : currentPrice >= effectiveSL;
 
                 if (slHit) {
                     shouldClose = true;
-                    updates.status = currentStage > 0 ? 'WIN' : 'LOSS'; // BE is techincally a wash, but saved fees make it slight loss usually. Logic: if stage>0 it's a "scratch" win.
-                    if (currentStage > 0) updates.status = 'WIN'; // Secured Profit
+                    updates.status = currentStage > 0 ? 'WIN' : 'LOSS';
+                    if (currentStage > 0) {
+                        console.log(`🛡️ [SignalAudit] Smart Breakeven Hit: ${signal.symbol} (Secured Profit)`);
+                    } else {
+                        console.log(`⛔ [SignalAudit] Technical Stop Loss Hit: ${signal.symbol} @ $${currentPrice}`);
+                    }
                 } else {
-                    // Check Take Profits
-                    // Priority: Check highest TPs first? No, sequential.
-
-                    // TP1 Check
+                    // --- 2D: TP SEQUENTIAL MANAGEMENT ---
+                    // TP1 (40% out)
                     if (currentStage < 1) {
-                        const tp1Hit = (signal.side === 'LONG') ? currentPrice >= signal.tp1 : currentPrice <= signal.tp1;
-                        // SECURITY: Only hit TP1 if currentPrice is also better than basePrice (to avoid inverted TP logic from previous bugs)
-                        const isProfitable = (signal.side === 'LONG') ? currentPrice > basePrice : currentPrice < basePrice;
-
-                        if (tp1Hit && isProfitable) {
-                            updates.status = 'PARTIAL_WIN';
+                        const tp1Hit = isLong ? currentPrice >= tp1 : currentPrice <= tp1;
+                        if (tp1Hit) {
                             updates.stage = 1;
-                            updates.realized_pnl_percent = this.calculateNetPnL(basePrice, currentPrice, signal.side, signal.fees_paid, 0.4); // 40% out
-                            console.log(`💰 [SignalAudit] TP1 Hit: ${signal.symbol} (Moving SL to BE)`);
+                            updates.status = 'PARTIAL_WIN';
+                            updates.realized_pnl_percent = this.calculateNetPnL(currentWAP, tp1, signal.side, 0, 0.4);
+                            console.log(`💰 [SignalAudit] TP1 Hit: ${signal.symbol} (SL -> Breakeven Active)`);
                         }
                     }
-
-                    // TP2 Check
-                    if (currentStage < 2) {
-                        const tp2Hit = (signal.side === 'LONG') ? currentPrice >= signal.tp2 : currentPrice <= signal.tp2;
+                    // TP2 (30% out)
+                    else if (currentStage < 2) {
+                        const tp2Hit = isLong ? currentPrice >= tp2 : currentPrice <= tp2;
                         if (tp2Hit) {
-                            updates.status = 'PARTIAL_WIN'; // Still running for TP3
                             updates.stage = 2;
-                            // Add PnL accumulation logic here ideally, simplest to recalculate realized based on stages
+                            const profit2 = this.calculateNetPnL(currentWAP, tp2, signal.side, 0, 0.3);
+                            updates.realized_pnl_percent = (signal.realized_pnl_percent || 0) + profit2;
                             console.log(`💰💰 [SignalAudit] TP2 Hit: ${signal.symbol}`);
                         }
                     }
-
-                    // TP3 Check (Final Exit)
-                    const tp3Hit = (signal.side === 'LONG') ? currentPrice >= signal.tp3 : currentPrice <= signal.tp3;
-                    if (tp3Hit) {
-                        shouldClose = true;
-                        updates.status = 'WIN';
-                        updates.stage = 3;
-                        console.log(`🚀🚀🚀 [SignalAudit] TP3 MOON: ${signal.symbol}`);
+                    // TP3 (30% out / Final Moon)
+                    else if (currentStage < 3) {
+                        const tp3Hit = isLong ? currentPrice >= tp3 : currentPrice <= tp3;
+                        if (tp3Hit) {
+                            shouldClose = true;
+                            updates.status = 'WIN';
+                            updates.stage = 3;
+                            const profit3 = this.calculateNetPnL(currentWAP, tp3, signal.side, 0, 0.3);
+                            updates.pnl_percent = (signal.realized_pnl_percent || 0) + profit3;
+                            console.log(`🚀🚀🚀 [SignalAudit] TP3 Target Reached: ${signal.symbol}`);
+                        }
                     }
                 }
             }
 
             if (Object.keys(updates).length > 0) {
-                // Determine closing metrics if closing
                 if (shouldClose) {
                     updates.closed_at = Date.now();
                     updates.final_price = currentPrice;
 
-                    const basePrice = updates.activation_price || signal.activation_price || signal.entry_price;
-                    const prevFees = signal.fees_paid || 0;
-                    const exitFee = currentPrice * this.FEE_RATE;
-
-                    // Final Net PnL w/ Fees
-                    const rawPnL = ((currentPrice - basePrice) / basePrice) * 100 * (signal.side === 'LONG' ? 1 : -1);
-                    const feeImpact = ((prevFees + exitFee) / basePrice) * 100;
-
-                    updates.pnl_percent = rawPnL - feeImpact;
-                    updates.fees_paid = prevFees + exitFee;
+                    // Final PnL Fallback (if stopped at BE or SL)
+                    if (!updates.pnl_percent) {
+                        const currentWAP = updates.activation_price || signal.activation_price || signal.entry_price;
+                        const weightLeft = (signal.stage === 0) ? 1.0 : (signal.stage === 1 ? 0.6 : (signal.stage === 2 ? 0.3 : 0));
+                        const finalChunk = this.calculateNetPnL(currentWAP, currentPrice, signal.side, currentPrice * this.FEE_RATE, weightLeft);
+                        updates.pnl_percent = (signal.realized_pnl_percent || 0) + finalChunk;
+                    }
                 }
 
                 updates.id = signal.id;
                 signalsToUpdate.push(updates);
-
-                // Update Local Cache Immediately to prevent oscillation
-                Object.assign(signal, updates);
+                Object.assign(signal, updates); // Sync cache
             }
         }
 
@@ -374,9 +378,8 @@ class SignalAuditService extends EventEmitter {
 
     private calculateNetPnL(entry: number, exit: number, side: string, fees: number, sizeRatio: number): number {
         const raw = ((exit - entry) / entry) * 100 * (side === 'LONG' ? 1 : -1);
-        // Fee approximation for this chunk
-        const feePct = 0.1;
-        return (raw - feePct) * sizeRatio;
+        const feeRatio = 0.001; // 0.1% per trade
+        return (raw - (feeRatio * 100)) * sizeRatio;
     }
 
     // ... (syncUpdates, checkExpirations, getRecentSignals, getPerformanceStats remain mostly same but updated headers)
@@ -609,6 +612,30 @@ class SignalAuditService extends EventEmitter {
         } catch (e) {
             console.error("❌ [ML-Audit] Failed to calculate advanced metrics:", e);
             return this.mlBrainStatus;
+        }
+    }
+
+    /**
+     * Retrieves recent signal history for a specific symbol.
+     * Used by FilterEngine for Apex Whipsaw protection.
+     */
+    public async getRecentSymbolHistory(symbol: string, hours: number = 4) {
+        if (!this.supabase) return [];
+        const since = Date.now() - (hours * 60 * 60 * 1000);
+
+        try {
+            const { data, error } = await this.supabase
+                .from('signals_audit')
+                .select('side, status, closed_at, pnl_percent')
+                .eq('symbol', symbol)
+                .gte('created_at', since)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (e) {
+            console.error(`❌ [SignalAudit] Error fetching history for ${symbol}:`, e);
+            return [];
         }
     }
 

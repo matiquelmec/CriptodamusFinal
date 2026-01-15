@@ -71,4 +71,62 @@ export class FilterEngine {
 
         return { discarded: false };
     }
+
+    /**
+     * APEX SAFETY: Multi-factored Whipsaw Protection
+     * Ensures reversals after losses meet institutional-grade conviction levels.
+     */
+    static checkApexSafety(
+        opportunity: AIOpportunity,
+        history: any[],
+        mlStats: any | null // Use any for robustness against type drift
+    ): { discarded: boolean; reason?: string; penalty?: number } {
+        if (!history || history.length === 0) return { discarded: false };
+
+        const lastSignal = history[0];
+        const isLoss = lastSignal.status === 'LOSS';
+        const isOpposite = lastSignal.side !== opportunity.side;
+        const safety = (TradingConfig.risk as any).safety; // Use cast to avoid compile errors if types haven't refreshed
+
+        if (!safety) return { discarded: false };
+
+        // 1. APEX WHIPSAW PROTECTION (Direction Flip after Loss)
+        if (isLoss && isOpposite) {
+            let penalty = safety.direction_flip_penalty;
+
+            // A. ML Regime Performance Guard
+            // If Brain Health in this regime is low, double the penalty
+            const currentRegime = opportunity.metrics?.marketRegime?.regime;
+            if (mlStats && currentRegime && mlStats.regimeStats && mlStats.regimeStats[currentRegime]) {
+                const accuracy = mlStats.regimeStats[currentRegime].rate;
+                if (accuracy < 0.5) {
+                    penalty *= 1.5;
+                }
+            }
+
+            // B. Institutional Volume Guard
+            // A reversal after a loss MUST be backed by a volume climax
+            const rvol = opportunity.metrics?.rvol || 0;
+            if (rvol < 2.0) {
+                return {
+                    discarded: true,
+                    reason: `Apex Guard: Reversal requires Volume Climax (>2.0x), found ${rvol.toFixed(1)}x`
+                };
+            }
+
+            // C. High Conviction Threshold
+            const adjustedScore = opportunity.confidenceScore - penalty;
+            if (adjustedScore < safety.high_conviction_threshold) {
+                return {
+                    discarded: true,
+                    reason: `Apex Guard: Reversal Confidence ${adjustedScore.toFixed(0)} < ${safety.high_conviction_threshold} (Penalty: -${penalty})`
+                };
+            }
+        }
+
+        // 2. CONSECUTIVE LOSS COOLDOWN (Future Expansion)
+        // If 2+ losses in a row, we could block the asset entirely here.
+
+        return { discarded: false };
+    }
 }

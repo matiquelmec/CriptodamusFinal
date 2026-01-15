@@ -41,6 +41,14 @@ export const TradingConfig = {
         macro: {
             dxy_risk: 104.0,       // DXY Index Level considered "Risk Off"
             gold_risk_off: 2750.0  // Gold Price ($) indicating Flight to Safety
+        },
+        // NEW: Institutional Safety Filters
+        safety: {
+            whipsaw_cooldown_hours: 4,
+            direction_flip_penalty: 25,
+            high_conviction_threshold: 85,
+            min_sl_distance_percent: 1.2,
+            smart_breakeven_buffer_percent: 0.1 // Fee coverage
         }
     },
 

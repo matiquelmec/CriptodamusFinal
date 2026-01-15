@@ -588,6 +588,19 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
 
                 // FINAL GATEKEEPER
+                const history = await signalAuditService.getRecentSymbolHistory(coin.symbol);
+                const mlStats = await signalAuditService.getAdvancedMLMetrics();
+
+                // Propagate Regime for Filters
+                if (!opportunity.metrics) opportunity.metrics = { rvol: indicators.rvol, rsi: indicators.rsi, vwapDist: 0, structure: '', specificTrigger: '' };
+                opportunity.metrics.marketRegime = indicators.marketRegime;
+
+                const safetyGate = FilterEngine.checkApexSafety(opportunity, history, mlStats);
+                if (safetyGate.discarded) {
+                    console.log(`[Safety] Rejected ${coin.symbol}: ${safetyGate.reason}`);
+                    return;
+                }
+
                 const gate = FilterEngine.shouldDiscard(opportunity, risk, style);
                 if (!gate.discarded) {
                     opportunities.push(opportunity);
