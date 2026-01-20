@@ -594,8 +594,8 @@ class SignalAuditService extends EventEmitter {
     public async getAdvancedMLMetrics() {
         if (!this.supabase) return this.mlBrainStatus;
 
-        // Cache check (15m TTL)
-        if (Date.now() - this.mlBrainStatus.lastUpdated < 15 * 60 * 1000 && this.mlBrainStatus.lastUpdated !== 0) {
+        // Cache check (1m TTL) - Faster updates for Pro users
+        if (Date.now() - this.mlBrainStatus.lastUpdated < 60 * 1000 && this.mlBrainStatus.lastUpdated !== 0) {
             return this.mlBrainStatus;
         }
 
@@ -607,7 +607,18 @@ class SignalAuditService extends EventEmitter {
                 .order('prediction_time', { ascending: false })
                 .limit(200);
 
-            if (error || !data || data.length === 0) return this.mlBrainStatus;
+            if (error || !data || data.length === 0) {
+                // RESET STATE if DB is empty (Factory Reset handling)
+                this.mlBrainStatus = {
+                    globalWinRate: 0,
+                    recentWinRate: 0,
+                    regimeStats: {},
+                    totalPredictions: 0,
+                    isDriftDetected: false,
+                    lastUpdated: Date.now()
+                };
+                return this.mlBrainStatus;
+            }
 
             const total = data.length;
             const wins = data.filter((p: any) => p.actual_outcome === 1).length;
