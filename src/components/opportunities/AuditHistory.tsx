@@ -6,7 +6,7 @@ interface HistoricalSignal {
     id: string;
     symbol: string;
     side: 'LONG' | 'SHORT';
-    status: 'WIN' | 'LOSS' | 'EXPIRED' | 'ACTIVE' | 'PENDING' | 'OPEN';
+    status: 'WIN' | 'LOSS' | 'EXPIRED' | 'ACTIVE' | 'PENDING' | 'OPEN' | 'PARTIAL_WIN';
     strategy: string;
     entry_price: number;
     final_price: number;
@@ -136,21 +136,38 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
                         </div>
 
                         <div className="flex items-center gap-3 sm:gap-6 ml-2">
-                            {/* PnL */}
+                            {/* PnL & Status Info */}
                             <div className="text-right flex flex-col min-w-[65px] sm:min-w-[90px]">
                                 {['WIN', 'LOSS', 'EXPIRED'].includes(sig.status) ? (
                                     <div className="flex flex-col items-end">
                                         <span className={`text-xs sm:text-sm font-bold font-mono ${(sig.pnl_percent || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'} drop-shadow-md`}>
                                             {(sig.pnl_percent || 0) >= 0 ? '+' : ''}{(sig.pnl_percent || 0).toFixed(1)}%
                                         </span>
-                                        <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">PNL</span>
+                                        <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">PNL FINAL</span>
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-end">
-                                        <span className={`text-xs sm:text-sm font-bold font-mono ${sig.status === 'ACTIVE' ? 'text-blue-400 animate-pulse' : 'text-amber-400'} truncate drop-shadow-[0_0_8px_rgba(96,165,250,0.3)]`}>
-                                            ${(sig.entry_price || 0) > 100 ? (sig.entry_price || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) : (sig.entry_price || 0).toFixed(2)}
-                                        </span>
-                                        <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">{sig.status === 'ACTIVE' ? 'ENTRY ACTIVE' : 'ENTRY ZONE'}</span>
+                                        {/* LIVE PNL OR ENTRY ZONE */}
+                                        {sig.status === 'ACTIVE' || sig.status === 'PARTIAL_WIN' ? (
+                                            <>
+                                                <span className={`text-xs sm:text-sm font-bold font-mono ${(sig.pnl_percent || 0) >= 0 ? 'text-emerald-400 animate-pulse' : 'text-rose-400 animate-pulse'} drop-shadow-md`}>
+                                                    {(sig.pnl_percent || 0) >= 0 ? '+' : ''}{(sig.pnl_percent || 0).toFixed(2)}%
+                                                </span>
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-[7px] bg-blue-500/20 px-1 rounded text-blue-300">LIVE</span>
+                                                    <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">
+                                                        ${(sig.final_price || sig.entry_price || 0).toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="text-xs sm:text-sm font-bold font-mono text-amber-400 truncate drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]">
+                                                    ${(sig.entry_price || 0) > 100 ? (sig.entry_price || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) : (sig.entry_price || 0).toFixed(2)}
+                                                </span>
+                                                <span className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">ENTRY ZONE</span>
+                                            </>
+                                        )}
                                     </div>
                                 )}
                             </div>

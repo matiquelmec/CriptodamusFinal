@@ -223,6 +223,11 @@ class SignalAuditService extends EventEmitter {
             let updates: any = {};
             let shouldClose = false;
 
+            // TRACKING: Always update current price & floating PnL for UI visibility
+            // We use a throttle or significant change check to avoid DB spam, 
+            // but for "Pro" feel we want fairly frequent updates (e.g. every 1% move or every 10 mins)
+            // Ideally, we store "last_persisted_price" in memory to check delta.
+
             // FASE 1: Activation (PENDING -> ACTIVE)
             if (signal.status === 'PENDING' || signal.status === 'OPEN') {
                 const entryPrice = signal.entry_price;
@@ -240,6 +245,10 @@ class SignalAuditService extends EventEmitter {
                     updates.fees_paid = (realEntry * this.FEE_RATE);
                     updates.max_price_reached = realEntry;
                     updates.stage = 0;
+
+                    // Init Floating PnL
+                    updates.pnl_percent = this.calculateNetPnL(realEntry, currentPrice, signal.side, 0, 1.0); // Unrealized
+
                     console.log(`🚀 [SignalAudit] Filled E1: ${signal.symbol} @ $${realEntry.toFixed(4)}`);
                 }
             }
@@ -256,7 +265,6 @@ class SignalAuditService extends EventEmitter {
                 const { tp1, tp2, tp3 } = signal;
 
                 // --- 2A: DCA ENTRY MANAGEMENT ---
-                // If we haven't hit a TP yet (Stage 0), we look for DCA Entry 2 & 3
                 if (currentStage === 0 && signal.dcaPlan) {
                     const entries = signal.dcaPlan.entries || [];
                     const e2 = entries.find((e: any) => e.level === 2)?.price;
@@ -266,7 +274,6 @@ class SignalAuditService extends EventEmitter {
                     if (e2 && !signal.e2_filled) {
                         const hitE2 = isLong ? currentPrice <= e2 : currentPrice >= e2;
                         if (hitE2) {
-                            // Weight: E1 (40), E2 (30) => New WAP = (E1*40 + E2*30)/70
                             currentWAP = (originalWAP * 40 + e2 * 30) / 70;
                             updates.activation_price = currentWAP;
                             signal.e2_filled = true; // Session cache
@@ -279,7 +286,6 @@ class SignalAuditService extends EventEmitter {
                     if (e3 && signal.e2_filled && !signal.e3_filled) {
                         const hitE3 = isLong ? currentPrice <= e3 : currentPrice >= e3;
                         if (hitE3) {
-                            // Weight: WAP_Current (70), E3 (30) => New WAP = (WAP*70 + E3*30)/100
                             currentWAP = (currentWAP * 70 + e3 * 30) / 100;
                             updates.activation_price = currentWAP;
                             signal.e3_filled = true;
@@ -298,17 +304,36 @@ class SignalAuditService extends EventEmitter {
                 }
 
                 // --- 2C: SMART BREAKEVEN & STOP LOSS ---
-                // Once TP1 is hit (Stage 1+), move SL to current WAP (Breakeven)
                 let effectiveSL = sl;
                 if (currentStage >= 1) {
-                    effectiveSL = currentWAP;
+                    effectiveSL = currentWAP; // Breakeven after TP1
                 }
 
                 const slHit = isLong ? currentPrice <= effectiveSL : currentPrice >= effectiveSL;
 
+                // Calculate Floating PnL for UI (Unrealized)
+                // If partial closed, weight is less.
+                const weightLeft = (currentStage === 0) ? 1.0 : (currentStage === 1 ? 0.6 : (currentStage === 2 ? 0.3 : 0));
+
+                // For UI purposes, we want the "Trade PnL" (Realized + Unrealized) or just Unrealized of remaining?
+                // Standard: Show "Net Position PnL".
+                // We'll trust realized_pnl_percent + current floating.
+                const floatingPnL = this.calculateNetPnL(currentWAP, currentPrice, signal.side, 0, weightLeft);
+                const totalPnL = (signal.realized_pnl_percent || 0) + floatingPnL;
+
+                // Update live metrics on object usually, but for DB we throttle.
+                // However, to fix "stagnant UI", we force update if sufficient time passed or huge move.
+                const lastSync = signal.last_sync || 0;
+                if (Date.now() - lastSync > 30000) { // Sync every 30s
+                    updates.last_sync = Date.now();
+                    updates.final_price = currentPrice; // Use this as "Current Price" in UI
+                    updates.pnl_percent = totalPnL; // Live PnL
+                }
+
                 if (slHit) {
                     shouldClose = true;
                     updates.status = currentStage > 0 ? 'WIN' : 'LOSS';
+                    updates.final_price = currentPrice;
                     if (currentStage > 0) {
                         console.log(`🛡️ [SignalAudit] Smart Breakeven Hit: ${signal.symbol} (Secured Profit)`);
                     } else {
@@ -357,7 +382,7 @@ class SignalAuditService extends EventEmitter {
                     updates.final_price = currentPrice;
 
                     // Final PnL Fallback (if stopped at BE or SL)
-                    if (!updates.pnl_percent) {
+                    if (updates.status !== 'WIN' || !updates.pnl_percent) {
                         const currentWAP = updates.activation_price || signal.activation_price || signal.entry_price;
                         const weightLeft = (signal.stage === 0) ? 1.0 : (signal.stage === 1 ? 0.6 : (signal.stage === 2 ? 0.3 : 0));
                         const finalChunk = this.calculateNetPnL(currentWAP, currentPrice, signal.side, currentPrice * this.FEE_RATE, weightLeft);
@@ -392,7 +417,14 @@ class SignalAuditService extends EventEmitter {
                 upd.status = 'LOSS';
             }
 
-            const { id, ...data } = upd;
+            // Remove internal memory-only fields before sending to Supabase
+            // 'last_sync' is acceptable if we added column, otherwise we should check schema. 
+            // Assuming 'final_price' and 'pnl_percent' exist. 
+            // We strip 'last_sync' from supabase payload to be safe unless we added it. 
+            // Actually, we can just keep last_sync in memory `signal` object and not send to DB if it's not a column.
+
+            const { id, last_sync, ...data } = upd;
+
             const { error } = await this.supabase
                 .from('signals_audit')
                 .update(data)
@@ -456,20 +488,23 @@ class SignalAuditService extends EventEmitter {
         }
     }
 
-    // Reuse existing expiration logic but ensure it resets stage
+    // ...
+
     private async checkExpirations() {
         if (this.activeSignals.length === 0) return;
         const signalsToUpdate = [];
         for (const signal of this.activeSignals) {
-            const ageHours = (Date.now() - Number(signal.created_at)) / (1000 * 60 * 60);
+            // Only expire PENDING signals. Once ACTIVE, they must hit SL or TP.
             if (signal.status === 'PENDING' || signal.status === 'OPEN') {
-                const limit = signal.timeframe === '15m' ? 4 : 48;
+                const ageHours = (Date.now() - Number(signal.created_at)) / (1000 * 60 * 60);
+                const limit = signal.timeframe === '15m' ? 4 : 72; // Increased to 72h
                 if (ageHours > limit) {
+                    console.log(`⌛ [SignalAudit] Expiring stale signal: ${signal.symbol}`);
                     signalsToUpdate.push({
                         id: signal.id,
                         status: 'EXPIRED',
                         closed_at: Date.now(),
-                        final_price: signal.entry_price, // No PnL impact
+                        final_price: signal.entry_price,
                         pnl_percent: 0,
                         fees_paid: 0
                     });
