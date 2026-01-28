@@ -1,5 +1,6 @@
 import { MarketData, FearAndGreedData } from '../../types';
 import { SmartCache } from './caching/smartCache'; // NEW: Smart Caching Service
+import { CEXConnector } from './CEXConnector'; // NEW: Professional Source
 
 // --- INTERFACES TO REMOVE 'ANY' RISKS ---
 interface BinanceTicker {
@@ -87,19 +88,17 @@ export const fetchCryptoData = async (mode: 'volume' | 'memes' = 'volume'): Prom
 // --- BINANCE FETCH STRATEGY ---
 const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData[]> => {
     try {
-        const response = await fetchWithTimeout(`${BINANCE_API_BASE}/ticker/24hr`);
-        if (!response.ok) throw new Error(`Binance returned ${response.status}`);
-
-        const data: BinanceTicker[] = await response.json();
+        const { data, integrity } = await CEXConnector.getTickers();
+        if (!data || !Array.isArray(data)) throw new Error("Binance Authenticated Ticker failed");
 
         // Ignored symbols (Stablecoins, Leverage tokens, Non-tradable)
         const ignoredPatterns = [
             'USDCUSDT', 'FDUSDUSDT', 'TUSDUSDT', 'USDPUSDT', 'EURUSDT', 'DAIUSDT', 'BUSDUSDT',
             'UPUSDT', 'DOWNUSDT', 'BULLUSDT', 'BEARUSDT', 'USDT', 'PAXGUSDT',
-            'USDEUSDT', 'USD1USDT', 'BFUSDUSDT', 'AEURUSDT' // Added problematic symbols causing 400
+            'USDEUSDT', 'USD1USDT', 'BFUSDUSDT', 'AEURUSDT'
         ];
 
-        let filteredData = data.filter((ticker: BinanceTicker) => {
+        let filteredData = data.filter((ticker: any) => {
             const symbol = ticker.symbol;
             return symbol.endsWith('USDT') &&
                 !ignoredPatterns.includes(symbol) &&
@@ -108,30 +107,28 @@ const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
         });
 
         if (mode === 'memes') {
-            filteredData = filteredData.filter((ticker: BinanceTicker) => {
+            filteredData = filteredData.filter((ticker: any) => {
                 const baseSymbol = ticker.symbol.replace('USDT', '');
-                // Check specific list or 1000-prefix (e.g. 1000SATS, 1000PEPE sometimes used)
                 return MEME_SYMBOLS.includes(baseSymbol) || MEME_SYMBOLS.includes(baseSymbol.replace('1000', ''));
             });
-            // Sort memes by Volume too
-            filteredData = filteredData.sort((a: BinanceTicker, b: BinanceTicker) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
+            filteredData = filteredData.sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
         } else {
             // Default: Top 50 by Volume
             filteredData = filteredData
-                .sort((a: BinanceTicker, b: BinanceTicker) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
+                .sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
                 .slice(0, 50);
         }
 
-        return filteredData.map((ticker: BinanceTicker) => {
+        return filteredData.map((ticker: any) => {
             const rawSymbol = ticker.symbol.replace('USDT', '');
             return {
-                id: ticker.symbol, // Binance Symbol ID
+                id: ticker.symbol,
                 symbol: `${rawSymbol}/USDT`,
                 price: parseFloat(ticker.lastPrice),
                 change24h: parseFloat(ticker.priceChangePercent),
-                rsi: 50, // Placeholder, calculated properly in detailed analysis
+                rsi: 50,
                 volume: formatVolume(parseFloat(ticker.quoteVolume)),
-                rawVolume: parseFloat(ticker.quoteVolume), // NEW: Raw number
+                rawVolume: parseFloat(ticker.quoteVolume),
                 trend: (parseFloat(ticker.priceChangePercent) > 0.5 ? 'bullish' : 'bearish') as 'bullish' | 'bearish'
             };
         });
@@ -216,18 +213,19 @@ export const fetchCandles = async (symbolId: string, interval: string): Promise<
 
     try {
         if (isBinance) {
-            // Fetching 1000 candles to ensure deep data for EMA200 calculation (Institutional Precision)
-            const res = await fetchWithTimeout(`${BINANCE_API_BASE}/klines?symbol=${symbolId}&interval=${interval}&limit=1000`, {}, 8000);
-            if (!res.ok) throw new Error("Binance Candle Error");
-            const data: Array<Array<string | number>> = await res.json();
-            const parsedData = data.map((d) => ({
+            // Priority: Authenticated CEXConnector
+            const { data, integrity } = await CEXConnector.getKlines(symbolId, interval, 1000);
+
+            if (!data) throw new Error("Binance Authenticated Candle Error");
+
+            const parsedData = data.map((d: any) => ({
                 timestamp: Number(d[0]),
                 open: parseFloat(String(d[1])),
                 high: parseFloat(String(d[2])),
                 low: parseFloat(String(d[3])),
                 close: parseFloat(String(d[4])),
                 volume: parseFloat(String(d[5])),
-                takerBuyBaseVolume: parseFloat(String(d[9])) // Index 9: Taker Buy Base Asset Volume
+                takerBuyBaseVolume: parseFloat(String(d[9]))
             }));
 
             // Determine TTL based on Interval (Hybrid Freshness)
@@ -325,9 +323,11 @@ export const fetchCandles = async (symbolId: string, interval: string): Promise<
 
 export const fetchOrderBook = async (symbol: string, limit: number = 50): Promise<{ bids: [string, string][], asks: [string, string][] } | null> => {
     try {
-        const res = await fetchWithTimeout(`${BINANCE_API_BASE}/depth?symbol=${symbol}&limit=${limit}`, {}, 3000);
-        if (!res.ok) return null;
-        return await res.json();
+        const { data, integrity } = await CEXConnector.getBinanceFutures<any>('/fapi/v1/depth', {
+            symbol: symbol,
+            limit: limit
+        });
+        return data;
     } catch (e) {
         return null;
     }

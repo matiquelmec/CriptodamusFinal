@@ -64,16 +64,33 @@ export class CEXConnector {
     }
 
     /**
+     * Fetch 24h Tickers for all USDT pairs
+     */
+    public static async getTickers(): Promise<{ data: any[] | null; integrity: number }> {
+        // We use the futures tickers as they are more relevant for the trading system
+        return this.getBinanceFutures<any[]>('/fapi/v1/ticker/24hr');
+    }
+
+    /**
+     * Fetch Klines (Candles) for a specific symbol
+     */
+    public static async getKlines(symbol: string, interval: string, limit: number = 500): Promise<{ data: any[] | null; integrity: number }> {
+        const normalizedSymbol = symbol.replace('/', '').toUpperCase();
+        return this.getBinanceFutures<any[]>('/fapi/v1/klines', {
+            symbol: normalizedSymbol,
+            interval,
+            limit
+        });
+    }
+
+    /**
      * Specialized: Fetch REAL Taker Buy/Sell Volume (CVD)
      * High Fidelity: Uses REAL taker volume from klines which works through proxies.
      */
     public static async getRealCVD(symbol: string, interval: string = '5m'): Promise<{ delta: number; integrity: number }> {
-        const normalizedSymbol = symbol.replace('/', '').toUpperCase();
-
         try {
-            // We use the standard /fapi/v1/klines which is institutional but works through current proxy
-            const url = `${this.BINANCE_FUTURES_URL}/fapi/v1/klines?symbol=${normalizedSymbol}&interval=${interval}&limit=1`;
-            const data = await SmartFetch.get<any[]>(url);
+            // Use the internal getKlines which handles auth and proxying
+            const { data, integrity } = await this.getKlines(symbol, interval, 1);
 
             if (data && data.length > 0) {
                 const kline = data[0];
@@ -84,7 +101,7 @@ export class CEXConnector {
                 // Calculate normalized delta (-1 to 1)
                 const delta = totalVol > 0 ? (takerBuyVol - takerSellVol) / totalVol : 0;
 
-                return { delta, integrity: 1.0 }; // Real data from Binance
+                return { delta, integrity };
             }
         } catch (e: any) {
             console.error(`[CEXConnector] Failed to fetch CVD from Klines: ${e.message}`);

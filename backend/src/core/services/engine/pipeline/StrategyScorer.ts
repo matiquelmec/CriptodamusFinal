@@ -7,6 +7,7 @@
 
 import { TechnicalIndicators } from '../../../types';
 import { TradingConfig } from '../../../config/tradingConfig';
+import { SentimentAnalysis } from '../../../../services/newsService';
 
 export interface ScoringResult {
     score: number;
@@ -16,7 +17,7 @@ export interface ScoringResult {
 
 export class StrategyScorer {
 
-    static score(symbol: string, indicators: TechnicalIndicators, signalSide: 'LONG' | 'SHORT' = 'LONG'): ScoringResult {
+    static score(symbol: string, indicators: TechnicalIndicators, signalSide: 'LONG' | 'SHORT' = 'LONG', sentiment?: SentimentAnalysis): ScoringResult {
         let score = 0;
         const reasoning: string[] = [];
         const strategies: string[] = [];
@@ -28,17 +29,12 @@ export class StrategyScorer {
             reasoning.push(`✅ Trend Aligned (Bullish EMA Hierarchy) (+${weights.ema_alignment_bullish})`);
         } else if (indicators.trendStatus.emaAlignment === 'BEARISH') {
             score += weights.ema_alignment_bearish; // Context dependent, usually for shorts
-            // reasoning.push(`⚠️ Bearish Trend Alignment`); 
         }
 
         // 2. Momentum (RSI)
         if (indicators.rsi < TradingConfig.indicators.rsi.oversold) {
             score += weights.rsi_oversold;
             reasoning.push(`✅ RSI Oversold (<${TradingConfig.indicators.rsi.oversold}) (+${weights.rsi_oversold})`);
-        } else if (indicators.rsi > TradingConfig.indicators.rsi.overbought) {
-            // Context needs to handle Short vs Long. 
-            // For now we assume general "Activity" scoring, specifics handled by FilterEngine
-            // score += weights.rsi_overbought; 
         }
 
         // 3. Advanced Patterns
@@ -73,8 +69,6 @@ export class StrategyScorer {
             score += weights.cvd_divergence_boost;
             reasoning.push(`🐋 CVD Divergence (Whale Accumulation) (+${weights.cvd_divergence_boost})`);
         } else if (indicators.volumeExpert?.cvd?.divergence?.includes('ABSORPTION')) {
-            // PROFESSIONAL TRADER RULE: Absorption must align with RSI context to be a valid reversal signal.
-            // If price is overbought (RSI > 75) and we see "Absorption", but no SHORT signal, it's just a strong pump.
             const isShortAbsorption = indicators.volumeExpert.cvd.divergence === 'CVD_ABSORPTION_SELL' && indicators.rsi > 70;
             const isLongAbsorption = indicators.volumeExpert.cvd.divergence === 'CVD_ABSORPTION_BUY' && indicators.rsi < 30;
 
@@ -82,18 +76,14 @@ export class StrategyScorer {
                 score += weights.cvd_divergence_boost;
                 reasoning.push(`🧱 Passive Absorption Detected (Institutional Reversal) (+${weights.cvd_divergence_boost})`);
             } else {
-                score += 5; // Reduced boost for absorption without extreme context
+                score += 5;
                 reasoning.push(`🧱 Micro-Absorption Detected (+5)`);
             }
         }
 
-        // 5.2 Liquidation Fuel (DIRECTIONAL MAGNETS)
+        // 5.2 Liquidation Fuel
         if (indicators.volumeExpert?.liquidity?.liquidationClusters) {
             const liqs = indicators.volumeExpert.liquidity.liquidationClusters;
-
-            // If we have a cluster in the direction of the trade (Magnet)
-            // For LONG, we target SHORT_LIQs (above price)
-            // For SHORT, we target LONG_LIQs (below price)
             const magnet = liqs.find(c =>
                 (c.type === 'SHORT_LIQ' && signalSide === 'LONG') ||
                 (c.type === 'LONG_LIQ' && signalSide === 'SHORT')
@@ -105,74 +95,43 @@ export class StrategyScorer {
                     score += weights.liquidation_flutter;
                     reasoning.push(`🧲 Liquidity Magnet: Near ${magnet.type} Cluster (+${weights.liquidation_flutter})`);
                 }
-            } else {
-                // Check if price is sitting on our OWN side's liquidations (Risk)
-                const threat = liqs.find(c =>
-                    (c.type === 'LONG_LIQ' && signalSide === 'LONG') ||
-                    (c.type === 'SHORT_LIQ' && signalSide === 'SHORT')
-                );
-                if (threat) {
-                    const distPercent = Math.abs(threat.priceMin - indicators.price) / indicators.price;
-                    if (distPercent < 0.005) {
-                        score -= 20;
-                        reasoning.push(`⚠️ Liquidation Threat: Entering near our own side's Liquidation Cluster (-20)`);
-                    }
-                }
             }
         }
 
-        // 5.3 Institutional Walls (DIRECTIONAL)
+        // 5.3 Institutional Walls
         if (indicators.volumeExpert?.liquidity?.orderBook) {
             const ob = indicators.volumeExpert.liquidity.orderBook;
             const bidWall = ob.bidWall;
             const askWall = ob.askWall;
 
-            // Check Support (Bids) - Only for Longs
             if (bidWall && bidWall.strength > 70 && signalSide === 'LONG') {
                 const dist = Math.abs(indicators.price - bidWall.price) / indicators.price;
                 if (dist < 0.015) {
                     score += 15;
                     reasoning.push(`🧱 Structural Support: Buy Wall at $${bidWall.price.toFixed(2)} (+15)`);
                 }
-            } else if (bidWall && bidWall.strength > 70 && signalSide === 'SHORT') {
-                // Penalty if shorting into a wall?
-                const dist = Math.abs(indicators.price - bidWall.price) / indicators.price;
-                if (dist < 0.005) {
-                    score -= 20;
-                    reasoning.push(`⚠️ Wall Warning: Shorting into a Buy Wall (-20)`);
-                }
             }
-
-            // Check Resistance (Asks) - Only for Shorts
             if (askWall && askWall.strength > 70 && signalSide === 'SHORT') {
                 const dist = Math.abs(indicators.price - askWall.price) / indicators.price;
                 if (dist < 0.015) {
                     score += 15;
                     reasoning.push(`🧱 Structural Resistance: Sell Wall at $${askWall.price.toFixed(2)} (+15)`);
                 }
-            } else if (askWall && askWall.strength > 70 && signalSide === 'LONG') {
-                // Penalty for buying into resistance
-                const dist = Math.abs(indicators.price - askWall.price) / indicators.price;
-                if (dist < 0.005) {
-                    score -= 20;
-                    reasoning.push(`⚠️ Wall Warning: Buying into a Sell Wall (-20)`);
-                }
             }
         }
 
-        // 5.5 Fair Value Gaps (The Magnet) - NEW CONNECTED FEATURE
+        // 5.5 Fair Value Gaps
         if (indicators.fairValueGaps?.bullish) {
-            // Find FVG we are inside or just above
             const activeFVG = indicators.fairValueGaps.bullish.find(fvg =>
-                indicators.price >= fvg.bottom && indicators.price <= (fvg.top * 1.01) // Inside or 1% above
+                indicators.price >= fvg.bottom && indicators.price <= (fvg.top * 1.01)
             );
             if (activeFVG) {
-                score += weights.order_block_retest; // Similar weight to OB retest
+                score += weights.order_block_retest;
                 reasoning.push(`🧲 FVG Support: Retesting Bullish Imbalance (+${weights.order_block_retest})`);
             }
         }
 
-        // 5.6 Volume Profile (The Value) - NEW CONNECTED FEATURE
+        // 5.6 Volume Profile
         if (indicators.volumeProfile) {
             const pocDist = Math.abs(indicators.price - indicators.volumeProfile.poc) / indicators.price;
             if (pocDist < 0.01 && indicators.price > indicators.volumeProfile.poc) {
@@ -181,7 +140,7 @@ export class StrategyScorer {
             }
         }
 
-        // 5.7 Ichimoku Cloud (The Trend) - NEW CONNECTED FEATURE
+        // 5.7 Ichimoku Cloud
         if (indicators.ichimokuData) {
             const cloudTop = Math.max(indicators.ichimokuData.senkouA, indicators.ichimokuData.senkouB);
             if (indicators.price > cloudTop && indicators.ichimokuData.chikouSpanFree) {
@@ -190,29 +149,33 @@ export class StrategyScorer {
             }
         }
 
+        // 5.8 Sentiment Awareness (News Integration)
+        if (sentiment) {
+            const isBullishSentiment = sentiment.sentiment === 'BULLISH';
+            const isBearishSentiment = sentiment.sentiment === 'BEARISH';
 
-
-        // 5.4 Harmonic Precision (DIRECTIONAL)
-        if (indicators.harmonicPatterns && indicators.harmonicPatterns.length > 0) {
-            const pattern = indicators.harmonicPatterns[0];
-            if (pattern.direction === (signalSide === 'LONG' ? 'BULLISH' : 'BEARISH')) {
-                score += weights.harmonic_pattern;
-                strategies.push(`HARMONIC_${pattern.type}`);
-                reasoning.push(`✨ ${pattern.type} Harmonic Pattern (+${weights.harmonic_pattern})`);
-            } else {
-                score -= 10;
-                reasoning.push(`⚠️ Pattern Divergence: Structural Setup opposes Signal`);
+            if (signalSide === 'LONG' && isBullishSentiment) {
+                const boost = Math.round(sentiment.score * 15);
+                score += boost;
+                reasoning.push(`📰 Bullish Sentiment (News/Social) (+${boost}): "${sentiment.summary}"`);
+            } else if (signalSide === 'SHORT' && isBearishSentiment) {
+                const boost = Math.round(Math.abs(sentiment.score) * 15);
+                score += boost;
+                reasoning.push(`📰 Bearish Sentiment (News/Social) (+${boost}): "${sentiment.summary}"`);
+            } else if ((signalSide === 'LONG' && isBearishSentiment) || (signalSide === 'SHORT' && isBullishSentiment)) {
+                const penalty = 20;
+                score -= penalty;
+                reasoning.push(`⚠️ Sentiment Conflict: News mood opposes Signal (-${penalty})`);
             }
         }
 
-        // 6. "God Mode" / Golden Ticket
-        // If multiple strong signals align
+        // 6. God Mode Threshold
         if (score > TradingConfig.scoring.god_mode_threshold) {
             reasoning.push(`🔥 GOD MODE: Extremely High Confluence`);
         }
 
         return {
-            score: Math.min(100, score),
+            score: Math.max(0, Math.min(100, score)),
             reasoning,
             strategies
         };

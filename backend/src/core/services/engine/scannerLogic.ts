@@ -172,7 +172,17 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
 
                 const signalSide: 'LONG' | 'SHORT' = (strategyResult.primaryStrategy?.signal === 'SHORT') ? 'SHORT' : 'LONG';
-                const baseScoreResult = StrategyScorer.score(coin.symbol, indicators, signalSide);
+
+                // NEW: Per-Coin Sentiment Analysis (Institutional Context)
+                let coinSentiment = undefined;
+                try {
+                    // We only fetch sentiment for coins that at least have a strategy signal
+                    coinSentiment = await fetchCryptoSentiment(coin.id.replace('USDT', ''));
+                } catch (e) {
+                    console.warn(`[Scanner] Sentiment fetch failed for ${coin.symbol}`);
+                }
+
+                const baseScoreResult = StrategyScorer.score(coin.symbol, indicators, signalSide, coinSentiment);
 
                 // Initial Score (Capped to baseline level before boosts)
                 let totalScore = Math.min(100, (baseScoreResult.score + (strategyResult.primaryStrategy?.score || 0) + strategyResult.scoreBoost) / 1.5);
@@ -190,16 +200,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     totalScore = applyMacroFilters(totalScore, coin.symbol, signalSide, macroContext);
                 }
 
-                // NEW: Sentiment Filter
-                if (globalSentiment.score > 0.3 && signalSide === 'LONG') {
-                    totalScore += 10;
-                    reasoning.push("🗞️ Sentiment: Positive News Catalyst");
-                } else if (globalSentiment.score < -0.3 && signalSide === 'SHORT') {
-                    totalScore += 10;
-                    reasoning.push("🗞️ Sentiment: Negative News FUD");
-                } else if ((globalSentiment.score > 0.5 && signalSide === 'SHORT') || (globalSentiment.score < -0.5 && signalSide === 'LONG')) {
-                    totalScore -= 20; // Fight against extreme narrative
-                    reasoning.push("⚠️ Sentiment Warning: Fighting the Narrative");
+                // NEW: News Sentiment Integration moved to StrategyScorer for granular logic
+                // But we still apply some global sentiment context here if needed
+                if (globalSentiment.score > 0.5 && signalSide === 'LONG') {
+                    totalScore += 5;
+                    reasoning.push("🗞️ Market Mood: Global Bullish Bias");
                 }
 
                 // Apply Technical Context (ADX Range Filter) - HARDENING
