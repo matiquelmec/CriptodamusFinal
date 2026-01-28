@@ -2,6 +2,7 @@
 import { VolumeExpertAnalysis, DerivativesData, CVDData } from '../core/types/types-advanced';
 import { estimateLiquidationClusters, analyzeOrderBook } from './engine/liquidationEngine';
 import { SmartFetch } from '../core/services/SmartFetch';
+import { CEXConnector } from '../core/services/api/CEXConnector'; // NEW: Professional Source
 
 // ============================================================================
 // CONSTANTS & ENDPOINTS
@@ -275,7 +276,20 @@ export async function getInstantCVD(symbol: string): Promise<CVDData> {
     const fSymbol = symbol.replace('/', '').toUpperCase();
 
     try {
-        // Fetch last 500 trades
+        // Professional Pivot: Try CEXConnector first
+        const realCVD = await CEXConnector.getRealCVD(symbol);
+        if (realCVD.integrity >= 1.0) {
+            return {
+                current: realCVD.delta,
+                trend: realCVD.delta > 0.05 ? 'BULLISH' : realCVD.delta < -0.05 ? 'BEARISH' : 'NEUTRAL',
+                divergence: null,
+                candleDelta: realCVD.delta,
+                cvdSeries: [], // Private API series needs more granular fetching if needed
+                priceSeries: []
+            };
+        }
+
+        // Fallback to Public aggTrades (Integrity 0.5)
         const trades = await SmartFetch.get<any[]>(`${BINANCE_SPOT_API}/aggTrades?symbol=${fSymbol}&limit=500`, { timeout: 5000 });
 
         let cvdDelta = 0;

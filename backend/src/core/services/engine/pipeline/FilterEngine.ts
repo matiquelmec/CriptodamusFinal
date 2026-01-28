@@ -35,20 +35,37 @@ export class FilterEngine {
             return { discarded: true, reason: `Score ${opportunity.confidenceScore} below Institutional Threshold ${minScore}` };
         }
 
-        // 3. THE GATEKEEPER (Liquidity & Trend Filters)
+        // 3. THE IRON GATEKEEPERS (Volume, Strength & Exhaustion)
         if (opportunity.metrics) {
-            const { adx, volume24h } = opportunity.metrics;
+            const { adx, volume24h, rvol, rsi } = opportunity.metrics;
             const filters = TradingConfig.scoring.filters;
+            const isReversionStrategy = (style === 'SCALP_AGRESSIVE' && opportunity.technicalReasoning.includes('Mean Reversion')) ||
+                opportunity.strategy === 'mean_reversion' ||
+                opportunity.strategy === 'freeze_protocol';
 
-            // Liquidity Check
+            // A. Liquidity Check
             if (volume24h && volume24h < filters.min_volume_24h) {
                 return { discarded: true, reason: `Low Liquidity ($${(volume24h / 1000000).toFixed(1)}M < $5M)` };
             }
 
-            // Trend Strength Check (Ignore for Mean Reversion strategies)
-            const isReversionStrategy = style === 'SCALP_AGRESSIVE' && opportunity.technicalReasoning.includes('Mean Reversion');
-            if (!isReversionStrategy && adx && adx < filters.min_adx) {
-                return { discarded: true, reason: `Weak Trend (ADX ${adx} < ${filters.min_adx})` };
+            // B. Volume Integrity (RVOL) - Mandatory for Trend/Breakout
+            if (!isReversionStrategy && rvol && rvol < 1.8) {
+                return { discarded: true, reason: `Insufficient Volume Confirmation (RVOL ${rvol.toFixed(2)} < 1.8). Bull Trap Risk.` };
+            }
+
+            // C. RSI Exhaustion Guard (Buying the Top / Selling the Bottom)
+            if (!isReversionStrategy) {
+                if (opportunity.side === 'LONG' && rsi > 70) {
+                    return { discarded: true, reason: `RSI Overextended (${rsi.toFixed(1)} > 70). Chasing Top.` };
+                }
+                if (opportunity.side === 'SHORT' && rsi < 30) {
+                    return { discarded: true, reason: `RSI Overextended (${rsi.toFixed(1)} < 30). Chasing Bottom.` };
+                }
+            }
+
+            // D. Trend Strength Check (Higher Threshold: 25)
+            if (!isReversionStrategy && adx && adx < 25) {
+                return { discarded: true, reason: `Weak Structural Trend (ADX ${adx.toFixed(1)} < 25)` };
             }
         }
 

@@ -34,6 +34,7 @@ import { calculateEMA } from '../mathUtils';
 import { predictNextMove, savePrediction } from '../../../ml/inference'; // NEW: Brain Import
 import { getExpertVolumeAnalysis, enrichWithDepthAndLiqs } from '../../../services/volumeExpert'; // NEW: Volume Expert Service
 import { VolumeExpertAnalysis } from '../../types/types-advanced'; // NEW: Correct Type Import
+import { CEXConnector } from '../api/CEXConnector'; // NEW: Professional Source
 
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {
     // 0. INITIALIZATION
@@ -95,18 +96,44 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 indicators.symbol = coin.symbol;
                 indicators.price = candles[candles.length - 1].close;
 
-                // --- STAGE 2: EXPERT VOLUME & LIQUIDITY (God Tier) ---
+                // --- STAGE 2.1: DATA INTEGRITY SENTINEL (Hard Sentinel) ---
+                let dataIntegrity = 1.0;
+                const isRealBinance = coin.id.toUpperCase().endsWith('USDT');
+
+                // If using CoinCap fallback, integrity is compromise (0.1)
+                if (!isRealBinance) {
+                    dataIntegrity = 0.1;
+                    console.warn(`[Sentinel] ${coin.symbol} using unreliable fallback. Rejecting signal.`);
+                    return; // ABORT: Professional standard requires 100% real data
+                }
+
+                // --- STAGE 2.2: EXPERT VOLUME & LIQUIDITY (God Tier) ---
                 let volumeAnalysis: VolumeExpertAnalysis | undefined;
                 try {
+                    // Try Authenticated CEX Connector first (Integrity 1.0)
+                    const realCVD = await CEXConnector.getRealCVD(coin.symbol);
+                    const realOI = await CEXConnector.getOpenInterest(coin.symbol);
+
+                    if (realCVD.integrity < 1.0 || realOI.integrity < 1.0) {
+                        console.warn(`[Sentinel] ${coin.symbol}: Authenticated flow failed. Signal discarded to prevent phantom data.`);
+                        return; // HARD ABORT: No real data, no signal.
+                    }
+
                     // Fetch base expert data (OI, Funding, CVD)
                     volumeAnalysis = await getExpertVolumeAnalysis(coin.symbol);
-                    // ENRICH: Get Order Book Walls & Liquidation Clusters
                     if (volumeAnalysis) {
+                        // Override with authenticated high-fidelity data
+                        volumeAnalysis.cvd.current = realCVD.delta;
+                        volumeAnalysis.derivatives.openInterestValue = realOI.value;
+
                         const highs = candles.map(c => c.high);
                         const lows = candles.map(c => c.low);
                         volumeAnalysis = await enrichWithDepthAndLiqs(coin.symbol, volumeAnalysis, highs, lows, indicators.price);
                     }
-                } catch (e) { }
+                } catch (e) {
+                    console.error(`[Sentinel] Critical data failure for ${coin.symbol}`, e);
+                    return;
+                }
 
                 // --- STAGE 2.5: ADVANCED ANALYSIS (Institutional) ---
                 const advancedData = await AdvancedAnalyzer.compute(
