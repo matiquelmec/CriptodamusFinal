@@ -23,84 +23,105 @@ export class StrategyScorer {
         const strategies: string[] = [];
         const weights = TradingConfig.scoring.weights;
 
-        // 1. Trend Alignment (EMA)
-        if (indicators.trendStatus.emaAlignment === 'BULLISH') {
+        const isLong = signalSide === 'LONG';
+        const isShort = signalSide === 'SHORT';
+
+        // 1. Trend Alignment (Institutional EMA Hierarchy)
+        const trend = indicators.trendStatus.emaAlignment;
+        const trendSide = trend === 'BULLISH' ? 'LONG' : trend === 'BEARISH' ? 'SHORT' : 'NEUTRAL';
+
+        if (signalSide === trendSide) {
             score += weights.ema_alignment_bullish;
-            reasoning.push(`✅ Trend Aligned (Bullish EMA Hierarchy) (+${weights.ema_alignment_bullish})`);
-        } else if (indicators.trendStatus.emaAlignment === 'BEARISH') {
-            score += weights.ema_alignment_bearish; // Context dependent, usually for shorts
+            reasoning.push(`✅ Trend Aligned (${trend} EMA Hierarchy) (+${weights.ema_alignment_bullish})`);
+        } else if (trendSide !== 'NEUTRAL') {
+            const penalty = 15;
+            score -= penalty;
+            reasoning.push(`⚠️ Trend Conflict: Fighting against EMA trend (-${penalty})`);
         }
 
-        // 2. Momentum (RSI)
-        if (indicators.rsi < TradingConfig.indicators.rsi.oversold) {
-            score += weights.rsi_oversold;
-            reasoning.push(`✅ RSI Oversold (<${TradingConfig.indicators.rsi.oversold}) (+${weights.rsi_oversold})`);
+        // 2. Momentum (RSI Side-Aware)
+        if (isLong) {
+            if (indicators.rsi < TradingConfig.indicators.rsi.oversold) {
+                score += weights.rsi_oversold;
+                reasoning.push(`✅ Momentum: RSI Oversold (Bullish Reversal) (+${weights.rsi_oversold})`);
+            } else if (indicators.rsi > 70) {
+                score -= 10;
+                reasoning.push(`⚠️ Momentum: RSI Overbought (Bullish Exhaustion) (-10)`);
+            }
+        } else {
+            if (indicators.rsi > TradingConfig.indicators.rsi.overbought) {
+                score += weights.rsi_overbought;
+                reasoning.push(`✅ Momentum: RSI Overbought (Bearish Rejection) (+${weights.rsi_overbought})`);
+            } else if (indicators.rsi < 30) {
+                score -= 10;
+                reasoning.push(`⚠️ Momentum: RSI Oversold (Bearish Exhaustion) (-10)`);
+            }
         }
 
-        // 3. Advanced Patterns
-        if (indicators.nPattern?.detected && indicators.nPattern.type === 'BULLISH') {
-            score += weights.chart_pattern_breakout;
-            strategies.push('N_PATTERN');
-            reasoning.push(`✅ Bullish N-Pattern (Break & Retest) (+${weights.chart_pattern_breakout})`);
+        // 3. Patterns (Context Validated)
+        if (indicators.nPattern?.detected) {
+            const nTrendSide = indicators.nPattern.type === 'BULLISH' ? 'LONG' : 'SHORT';
+            if (nTrendSide === signalSide) {
+                score += weights.chart_pattern_breakout;
+                strategies.push('N_PATTERN');
+                reasoning.push(`✅ ${signalSide} N-Pattern: Break & Retest Confirmed (+${weights.chart_pattern_breakout})`);
+            }
         }
 
-        if (indicators.boxTheory?.active && indicators.boxTheory.signal === 'BULLISH') {
-            score += weights.chart_pattern_breakout;
-            strategies.push('BOX_THEORY');
-            reasoning.push(`✅ Box Theory Rejection from 0.5 Level (+${weights.chart_pattern_breakout})`);
+        if (indicators.boxTheory?.active) {
+            const boxSide = indicators.boxTheory.signal === 'BULLISH' ? 'LONG' : indicators.boxTheory.signal === 'BEARISH' ? 'SHORT' : 'NEUTRAL';
+            if (boxSide === signalSide) {
+                score += weights.chart_pattern_breakout;
+                strategies.push('BOX_THEORY');
+                reasoning.push(`✅ Box Theory: Rejection from 0.5 Level Aligned (+${weights.chart_pattern_breakout})`);
+            }
         }
 
-        // 4. Divergences (High Value)
+        // 4. Divergences
         if (indicators.rsiDivergence) {
-            score += weights.rsi_divergence;
-            strategies.push('DIVERGENCE');
-            reasoning.push(`💎 RSI Divergence Detected (+${weights.rsi_divergence})`);
+            const divType = indicators.rsiDivergence.type; // BULLISH or BEARISH
+            const divSide = divType === 'BULLISH' ? 'LONG' : 'SHORT';
+            if (divSide === signalSide) {
+                score += weights.rsi_divergence;
+                strategies.push('DIVERGENCE');
+                reasoning.push(`💎 RSI ${divType} Divergence Detected (+${weights.rsi_divergence})`);
+            }
         }
 
-        // 5. Institutional Flow (God Tier)
-        if (indicators.zScore < -2) {
+        // 5. Mean Reversion (Z-Score)
+        if (isLong && indicators.zScore < -2) {
             score += TradingConfig.scoring.advisor.z_score_extreme;
-            strategies.push('MEAN_REVERSION');
-            reasoning.push(`📉 Z-Score Extreme Oversold (-2 StdDev) (+${TradingConfig.scoring.advisor.z_score_extreme})`);
+            reasoning.push(`📉 Z-Score Extreme Oversold: Prime for Bounce (+${TradingConfig.scoring.advisor.z_score_extreme})`);
+        } else if (isShort && indicators.zScore > 2) {
+            score += TradingConfig.scoring.advisor.z_score_extreme;
+            reasoning.push(`📈 Z-Score Extreme Overbought: Prime for Rejection (+${TradingConfig.scoring.advisor.z_score_extreme})`);
         }
 
-        // 5.1 Smart Money Footprint (CVD)
-        if (indicators.cvdDivergence === 'BULLISH') {
-            score += weights.cvd_divergence_boost;
-            reasoning.push(`🐋 CVD Divergence (Whale Accumulation) (+${weights.cvd_divergence_boost})`);
-        } else if (indicators.volumeExpert?.cvd?.divergence?.includes('ABSORPTION')) {
-            const isShortAbsorption = indicators.volumeExpert.cvd.divergence === 'CVD_ABSORPTION_SELL' && indicators.rsi > 70;
-            const isLongAbsorption = indicators.volumeExpert.cvd.divergence === 'CVD_ABSORPTION_BUY' && indicators.rsi < 30;
-
-            if (isShortAbsorption || isLongAbsorption) {
+        // 6. Institutional Flow (CVD)
+        if (indicators.cvdDivergence && indicators.cvdDivergence !== 'NONE') {
+            const cvdSide = indicators.cvdDivergence === 'BULLISH' ? 'LONG' : indicators.cvdDivergence === 'BEARISH' ? 'SHORT' : 'NEUTRAL';
+            if (cvdSide === signalSide) {
                 score += weights.cvd_divergence_boost;
-                reasoning.push(`🧱 Passive Absorption Detected (Institutional Reversal) (+${weights.cvd_divergence_boost})`);
-            } else {
-                score += 5;
-                reasoning.push(`🧱 Micro-Absorption Detected (+5)`);
+                reasoning.push(`🐋 CVD ${signalSide} Divergence: Whale Activity Aligned (+${weights.cvd_divergence_boost})`);
             }
         }
 
-        // 5.1.1 Bubbles (Aggressive Flow)
-        if (indicators.volumeExpert?.cvd?.bubbles && indicators.volumeExpert.cvd.bubbles.length > 0) {
-            const bubbles = indicators.volumeExpert.cvd.bubbles;
-            const relevantBubble = bubbles.find(b =>
-                (b.type === 'BULLISH' && signalSide === 'LONG') ||
-                (b.type === 'BEARISH' && signalSide === 'SHORT')
-            );
-            if (relevantBubble) {
+        // Absorption Check
+        if (indicators.volumeExpert?.cvd?.divergence?.includes('ABSORPTION')) {
+            const absorptionSide = indicators.volumeExpert.cvd.divergence === 'CVD_ABSORPTION_BUY' ? 'LONG' : 'SHORT';
+            if (absorptionSide === signalSide) {
                 score += 15;
-                reasoning.push(`🫧 Institutional Bubble: Large aggressive ${relevantBubble.type} orders detected (+15)`);
+                reasoning.push(`🧱 Institutional Absorption Detected (+15)`);
             }
         }
 
-        // 5.2 Liquidation Fuel
+        // 7. Liquidity Magnets (Side-Correct)
         if (indicators.volumeExpert?.liquidity?.liquidationClusters) {
             const liqs = indicators.volumeExpert.liquidity.liquidationClusters;
-            const magnet = liqs.find(c =>
-                (c.type === 'SHORT_LIQ' && signalSide === 'LONG') ||
-                (c.type === 'LONG_LIQ' && signalSide === 'SHORT')
-            );
+            // For a LONG, we want to see SHORT liquidations above us (Magnets).
+            // Actually, usually we target opposite liquidity.
+            const oppositeLiq = isLong ? 'SHORT_LIQ' : 'LONG_LIQ';
+            const magnet = liqs.find(c => c.type === oppositeLiq);
 
             if (magnet) {
                 const distPercent = Math.abs(magnet.priceMin - indicators.price) / indicators.price;
@@ -111,91 +132,86 @@ export class StrategyScorer {
             }
         }
 
-        // 5.3 Institutional Walls
-        if (indicators.volumeExpert?.liquidity?.orderBook) {
-            const ob = indicators.volumeExpert.liquidity.orderBook;
-            const bidWall = ob.bidWall;
-            const askWall = ob.askWall;
-
-            if (bidWall && bidWall.strength > 70 && signalSide === 'LONG') {
-                const dist = Math.abs(indicators.price - bidWall.price) / indicators.price;
-                if (dist < 0.015) {
-                    score += 15;
-                    reasoning.push(`🧱 Structural Support: Buy Wall at $${bidWall.price.toFixed(2)} (+15)`);
-                }
+        // 8. Fair Value Gaps (Context Correct)
+        if (isLong && indicators.fairValueGaps?.bullish) {
+            const fvg = indicators.fairValueGaps.bullish.find(f => indicators.price >= f.bottom && indicators.price <= f.top * 1.005);
+            if (fvg) {
+                score += 15;
+                reasoning.push(`🧲 FVG Support: Testing Bullish Imbalance (+15)`);
             }
-            if (askWall && askWall.strength > 70 && signalSide === 'SHORT') {
-                const dist = Math.abs(indicators.price - askWall.price) / indicators.price;
-                if (dist < 0.015) {
-                    score += 15;
-                    reasoning.push(`🧱 Structural Resistance: Sell Wall at $${askWall.price.toFixed(2)} (+15)`);
-                }
+        } else if (isShort && indicators.fairValueGaps?.bearish) {
+            const fvg = indicators.fairValueGaps.bearish.find(f => indicators.price <= f.top && indicators.price >= f.bottom * 0.995);
+            if (fvg) {
+                score += 15;
+                reasoning.push(`🧲 FVG Resistance: Testing Bearish Imbalance (+15)`);
             }
         }
 
-        // 5.5 Fair Value Gaps
-        if (indicators.fairValueGaps?.bullish) {
-            const activeFVG = indicators.fairValueGaps.bullish.find(fvg =>
-                indicators.price >= fvg.bottom && indicators.price <= (fvg.top * 1.01)
-            );
-            if (activeFVG) {
-                score += weights.order_block_retest;
-                reasoning.push(`🧲 FVG Support: Retesting Bullish Imbalance (+${weights.order_block_retest})`);
-            }
-        }
-
-        // 5.6 Volume Profile
+        // 9. Volume Profile (AMT Logic)
         if (indicators.volumeProfile) {
-            const pocDist = Math.abs(indicators.price - indicators.volumeProfile.poc) / indicators.price;
-            if (pocDist < 0.01 && indicators.price > indicators.volumeProfile.poc) {
+            const poc = indicators.volumeProfile.poc;
+            const pocDist = Math.abs(indicators.price - poc) / indicators.price;
+
+            if (isLong && indicators.price > poc && pocDist < 0.01) {
                 score += 10;
-                reasoning.push(`📊 Volume Profile: Retesting POC as Support`);
+                reasoning.push(`📊 Volume Profile: Retesting POC as Support (+10)`);
+            } else if (isShort && indicators.price < poc && pocDist < 0.01) {
+                score += 10;
+                reasoning.push(`📊 Volume Profile: Retesting POC as Resistance (+10)`);
             }
 
-            // LVN Location Check
+            // LVN Rejection
             if (indicators.volumeProfile.lowVolumeNodes) {
-                const nearLVN = indicators.volumeProfile.lowVolumeNodes.find(lvn =>
-                    Math.abs(indicators.price - lvn) / lvn < 0.005
-                );
+                const nearLVN = indicators.volumeProfile.lowVolumeNodes.find(lvn => Math.abs(indicators.price - lvn) / lvn < 0.005);
                 if (nearLVN) {
                     score += 12;
-                    reasoning.push(`📉 AMT Location: Near LVN (Low Volume Node) - High Rejection Prob (+12)`);
+                    reasoning.push(`📉 AMT: Rejection Probable from LVN Cluster (+12)`);
                 }
             }
         }
 
-        // 5.7 Ichimoku Cloud
+        // 10. Ichimoku Alignment
         if (indicators.ichimokuData) {
             const cloudTop = Math.max(indicators.ichimokuData.senkouA, indicators.ichimokuData.senkouB);
-            if (indicators.price > cloudTop && indicators.ichimokuData.chikouSpanFree) {
+            const cloudBottom = Math.min(indicators.ichimokuData.senkouA, indicators.ichimokuData.senkouB);
+
+            if (isLong && indicators.price > cloudTop) {
                 score += 15;
-                reasoning.push(`☁️ Ichimoku: Full Kumo Breakout (Strong Trend)`);
+                reasoning.push(`☁️ Ichimoku: Bullish Cloud Breakout (+15)`);
+            } else if (isShort && indicators.price < cloudBottom) {
+                score += 15;
+                reasoning.push(`☁️ Ichimoku: Bearish Cloud Breakout (+15)`);
             }
         }
 
-        // 5.8 Sentiment Awareness (News Integration)
+        // 11. Sentiment Awareness (Contrarian Logic at Extremes)
         if (sentiment) {
             const isBullishSentiment = sentiment.sentiment === 'BULLISH';
             const isBearishSentiment = sentiment.sentiment === 'BEARISH';
+            const isExtreme = Math.abs(sentiment.score) > 0.8;
 
-            if (signalSide === 'LONG' && isBullishSentiment) {
-                const boost = Math.round(sentiment.score * 15);
-                score += boost;
-                reasoning.push(`📰 Bullish Sentiment (News/Social) (+${boost}): "${sentiment.summary}"`);
-            } else if (signalSide === 'SHORT' && isBearishSentiment) {
-                const boost = Math.round(Math.abs(sentiment.score) * 15);
-                score += boost;
-                reasoning.push(`📰 Bearish Sentiment (News/Social) (+${boost}): "${sentiment.summary}"`);
-            } else if ((signalSide === 'LONG' && isBearishSentiment) || (signalSide === 'SHORT' && isBullishSentiment)) {
-                const penalty = 20;
-                score -= penalty;
-                reasoning.push(`⚠️ Sentiment Conflict: News mood opposes Signal (-${penalty})`);
+            if (isLong) {
+                if (isBullishSentiment && !isExtreme) {
+                    score += 10;
+                    reasoning.push(`📰 Sentiment: Bullish Bias Aligned (+10)`);
+                } else if (isBearishSentiment && isExtreme) {
+                    score += 15;
+                    reasoning.push(`📰 Sentiment: Extreme Fear (Contrarian Buy Signal) (+15)`);
+                }
+            } else if (isShort) {
+                if (isBearishSentiment && !isExtreme) {
+                    score += 10;
+                    reasoning.push(`📰 Sentiment: Bearish Bias Aligned (+10)`);
+                } else if (isBullishSentiment && isExtreme) {
+                    score += 15;
+                    reasoning.push(`📰 Sentiment: Extreme Euphoria (Contrarian Sell Signal) (+15)`);
+                }
             }
         }
 
-        // 6. God Mode Threshold
-        if (score > TradingConfig.scoring.god_mode_threshold) {
-            reasoning.push(`🔥 GOD MODE: Extremely High Confluence`);
+        // Final Boost for God Mode
+        if (score >= TradingConfig.scoring.god_mode_threshold) {
+            reasoning.push(`🔥 GOD MODE: Institutional Grade Confluence`);
         }
 
         return {

@@ -10,7 +10,7 @@ import {
     calculateSlope, calculateATR, calculateZScore,
     calculateAutoFibs, calculateStochRSI, calculateIchimokuCloud,
     calculateFractals, detectNPattern, calculateBoxTheory,
-    detectBullishDivergence, calculateEMA,
+    detectBullishDivergence, detectBearishDivergence, calculateEMA,
     calculateCVD, detectCVDDivergence, // NEW: Order Flow
     calculateADX, calculateCumulativeVWAP, calculatePivotPoints, calculateRSIArray, calculateRVOL // NEW: God Mode Imports
 } from '../../mathUtils';
@@ -93,8 +93,13 @@ export class IndicatorCalculator {
 
         // Divergence Check (Heavy)
         const rsiArray = calculateRSIArray(closes, 14);
-        const rsiDivergence: TechnicalIndicators['rsiDivergence'] = detectBullishDivergence(closes, rsiArray, lows) ?
-            { type: 'BULLISH', strength: 0.8, description: 'RSI Bullish Divergence' } as any : null;
+        let rsiDivergence: TechnicalIndicators['rsiDivergence'] = null;
+
+        if (detectBullishDivergence(closes, rsiArray, lows)) {
+            rsiDivergence = { type: 'BULLISH', strength: 0.8, description: 'RSI Bullish Divergence' } as any;
+        } else if (detectBearishDivergence(closes, rsiArray, highs)) {
+            rsiDivergence = { type: 'BEARISH', strength: 0.8, description: 'RSI Bearish Divergence' } as any;
+        }
 
         // 6. ORDER FLOW (CVD) & STRUCTURE
         const cvd = calculateCVD(volumes, takerBuyVolumes);
@@ -141,12 +146,12 @@ export class IndicatorCalculator {
                 senkouB: ichimoku.senkouB,
                 chikou: closes[closes.length - 26] || closes[closes.length - 1],
                 currentPrice: closes[closes.length - 1],
-                chikouSpanFree: true,
-                chikouDirection: 'NEUTRAL',
+                chikouSpanFree: (closes[closes.length - 1] > Math.max(ichimoku.senkouA, ichimoku.senkouB)) || (closes[closes.length - 1] < Math.min(ichimoku.senkouA, ichimoku.senkouB)),
+                chikouDirection: closes[closes.length - 1] > (closes[closes.length - 26] || 0) ? 'BULLISH' : 'BEARISH',
                 futureCloud: ichimoku.senkouA > ichimoku.senkouB ? 'BULLISH' : 'BEARISH',
                 cloudThickness: Math.abs((ichimoku.senkouA - ichimoku.senkouB) / ichimoku.senkouB) * 100,
-                priceVsKijun: 0,
-                tkSeparation: 0
+                priceVsKijun: closes[closes.length - 1] - ichimoku.kijun,
+                tkSeparation: Math.abs(ichimoku.tenkan - ichimoku.kijun)
             },
             // ichimoku: removed (not in type)
 

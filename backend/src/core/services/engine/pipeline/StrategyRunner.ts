@@ -56,8 +56,14 @@ export class StrategyRunner {
             try {
                 switch (strategy.id) {
                     case 'ichimoku_dragon':
-                        result = analyzeIchimoku(highs, lows, prices);
-                        // Note: Adapter might need indicators usually, but looking at legacy code it took arrays
+                        const ichi = analyzeIchimoku(highs, lows, prices);
+                        if (ichi) {
+                            result = {
+                                score: ichi.score,
+                                signalSide: ichi.signalSide,
+                                detectionNote: ichi.detectionNote
+                            };
+                        }
                         name = "Ichimoku Cloud";
                         break;
                     case 'breakout_momentum':

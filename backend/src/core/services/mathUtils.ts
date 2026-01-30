@@ -52,6 +52,49 @@ export function detectBullishDivergence(prices: number[], rsiSeries: number[], l
     return false;
 }
 
+// Checks if Price made Higher High but RSI made Lower High
+export function detectBearishDivergence(prices: number[], rsiSeries: number[], highs: number[]) {
+    if (prices.length < 20 || rsiSeries.length < 20) return false;
+
+    // 1. Find recent high
+    let recentHighIndex = -1;
+    let recentHighPrice = -Infinity;
+    const startCheck = prices.length - 2;
+    for (let i = startCheck; i > startCheck - 3; i--) {
+        if (highs[i] > recentHighPrice) {
+            recentHighPrice = highs[i];
+            recentHighIndex = i;
+        }
+    }
+
+    // 2. Find previous swing high (look back 5 to 20 candles)
+    let pastHighIndex = -1;
+    const lookbackStart = recentHighIndex - 5;
+    const lookbackEnd = Math.max(0, recentHighIndex - 25);
+
+    for (let i = lookbackStart; i > lookbackEnd; i--) {
+        if (highs[i] > highs[i - 1] && highs[i] > highs[i + 1]) {
+            if (highs[i] < recentHighPrice) {
+                pastHighIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (pastHighIndex === -1) return false;
+
+    // 3. Compare RSI
+    const recentRSI = rsiSeries[recentHighIndex];
+    const pastRSI = rsiSeries[pastHighIndex];
+
+    // Bearish Div: Price made Higher High, RSI makes Lower High
+    if (recentRSI < pastRSI - 1) {
+        return true;
+    }
+
+    return false;
+}
+
 // Calculates just the lines (Tenkan/Kijun) for current cross check
 export function calculateIchimokuLines(highs: number[], lows: number[], offset: number = 0) {
     const end = highs.length - offset;
