@@ -31,7 +31,18 @@ export const fetchGlobalMarketData = async (): Promise<GlobalMarketData> => {
                 usdtD = cgData.data.market_cap_percentage.usdt || 0;
             }
         } catch (e) {
-            console.warn('[GlobalService] CoinGecko fetch failed (handled by SmartFetch):', e instanceof Error ? e.message : e);
+            console.warn('[GlobalService] CoinGecko failed, trying CoinPaprika fallback...');
+            try {
+                const cpData = await SmartFetch.get<any>('https://api.coinpaprika.com/v1/global');
+                if (cpData) {
+                    btcD = cpData.bitcoin_dominance_percentage || 0;
+                    // Note: CoinPaprika doesn't always have USDT dominance in the main global object, 
+                    // but we can at least get BTC dominance which is critical.
+                    usdtD = 5; // Safe default
+                }
+            } catch (cpError) {
+                console.warn('[GlobalService] CoinPaprika fallback also failed.');
+            }
         }
 
         // 2. Fetch Gold Price (PAXG/USDT) - Real Price or 0 (No fake default)
