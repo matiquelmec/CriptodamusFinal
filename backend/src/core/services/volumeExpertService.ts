@@ -336,6 +336,39 @@ export async function getInstantCVD(symbol: string): Promise<CVDData> {
             }
         });
 
+        // --- NEW: Bubble & Absorption Detection ---
+        const BUBBLE_THRESHOLD_USD = 50000; // $50k cluster in a bucket
+        const bubbles: { price: number; type: 'BULLISH' | 'BEARISH'; size: number }[] = [];
+        let absorptionDetected: 'BULLISH' | 'BEARISH' | null = null;
+
+        // Analyze buckets for Bubbles
+        cvdSeries.forEach((cumCvd, i) => {
+            const currentPrice = priceSeries[i];
+            const bucketDelta = i === 0 ? cumCvd : cumCvd - cvdSeries[i - 1];
+            const bucketVolumeUSD = Math.abs(bucketDelta) * currentPrice;
+
+            if (bucketVolumeUSD > BUBBLE_THRESHOLD_USD) {
+                bubbles.push({
+                    price: currentPrice,
+                    type: bucketDelta > 0 ? 'BULLISH' : 'BEARISH',
+                    size: bucketVolumeUSD
+                });
+            }
+        });
+
+        // Absorption logic: High CVD delta vs Low Price Delta
+        if (priceSeries.length > 2) {
+            const totalCvdDelta = Math.abs(cvdDelta);
+            const startPrice = priceSeries[0];
+            const endPrice = priceSeries[priceSeries.length - 1];
+            const priceMovePct = Math.abs((endPrice - startPrice) / startPrice) * 100;
+
+            // Definition: CVD is large but price barely moved (< 0.05%)
+            if (totalCvdDelta > (buyVol + sellVol) * 0.4 && priceMovePct < 0.05) {
+                absorptionDetected = cvdDelta > 0 ? 'BEARISH' : 'BULLISH'; // CVD buy but no move = passive sellers
+            }
+        }
+
         // Determine trend
         let trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
         if (buyVol > sellVol * 1.5) trend = 'BULLISH';
@@ -347,7 +380,9 @@ export async function getInstantCVD(symbol: string): Promise<CVDData> {
             divergence: null, // Calculated in CryptoService with price context
             candleDelta: cvdDelta,
             cvdSeries,
-            priceSeries
+            priceSeries,
+            bubbles,
+            absorption: absorptionDetected
         };
 
     } catch (error) {

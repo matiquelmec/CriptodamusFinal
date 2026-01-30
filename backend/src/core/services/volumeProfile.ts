@@ -5,6 +5,7 @@ export interface VolumeProfile {
     valueAreaHigh: number; // 70% del volumen (límite superior)
     valueAreaLow: number;  // 70% del volumen (límite inferior)
     totalVolume: number;
+    lowVolumeNodes?: number[]; // NEW: Valles de volumen (zonas de rechazo)
 }
 
 export interface VolumeBin {
@@ -95,11 +96,29 @@ export function calculateVolumeProfile(candles: Candle[], atr: number): VolumePr
     const valueAreaHigh = Math.max(...valueAreaPrices);
     const valueAreaLow = Math.min(...valueAreaPrices);
 
+    // 6. Detect Low Volume Nodes (LVNs)
+    // Un LVN es un valle local en bins con volumen sig. menor a sus vecinos
+    const lowVolumeNodes: number[] = [];
+    if (bins.length > 2) {
+        for (let i = 1; i < bins.length - 1; i++) {
+            const currentVol = bins[i].volume;
+            const prevVol = bins[i - 1].volume;
+            const nextVol = bins[i + 1].volume;
+
+            // Condición menos estricta: Valle local y significativamente menor al promedio de volumen
+            const avgVol = totalVolume / bins.length;
+            if (currentVol < prevVol && currentVol < nextVol && currentVol < avgVol * 0.5) {
+                lowVolumeNodes.push(bins[i].priceLevel);
+            }
+        }
+    }
+
     return {
         poc,
         valueAreaHigh,
         valueAreaLow,
-        totalVolume
+        totalVolume,
+        lowVolumeNodes
     };
 }
 

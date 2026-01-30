@@ -619,29 +619,38 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     return;
                 }
 
-                // FINAL GATEKEEPER
-                const history = await signalAuditService.getRecentSymbolHistory(coin.symbol);
-                const mlStats = await signalAuditService.getAdvancedMLMetrics();
+                // --- STAGE 5: FILTERING & OUTPUT ---
 
-                // Propagate Regime for Filters
-                if (!opportunity.metrics) opportunity.metrics = { rvol: indicators.rvol, rsi: indicators.rsi, vwapDist: 0, structure: '', specificTrigger: '' };
+                // Final Safety Checks
+                const symbolHistory = await signalAuditService.getRecentSymbolHistory(coin.symbol);
+                const globalMLStats = await signalAuditService.getAdvancedMLMetrics();
+
+                // Propagate metrics for filters
+                if (!opportunity.metrics) {
+                    opportunity.metrics = {
+                        rvol: indicators.rvol,
+                        rsi: indicators.rsi,
+                        vwapDist: 0,
+                        structure: indicators.trendStatus.emaAlignment,
+                        specificTrigger: ''
+                    };
+                }
                 opportunity.metrics.marketRegime = indicators.marketRegime;
 
-                const safetyGate = FilterEngine.checkApexSafety(opportunity, history, mlStats);
-                if (safetyGate.discarded) {
-                    console.log(`[Safety] Rejected ${coin.symbol}: ${safetyGate.reason}`);
+                const filterResult = FilterEngine.shouldDiscard(opportunity, risk, style);
+                if (filterResult.discarded) {
+                    console.log(`[Filter] Rejected ${coin.symbol}: ${filterResult.reason} (Score: ${opportunity.confidenceScore})`);
                     return;
                 }
 
-                const gate = FilterEngine.shouldDiscard(opportunity, risk, style);
-                if (!gate.discarded) {
-                    opportunities.push(opportunity);
-                } else {
-                    // Debug Log for Rejected Candidates (Top 5 only to reduce spam)
-                    if (opportunities.length < 5) {
-                        console.log(`[Filter] Rejected ${coin.symbol}: ${gate.reason} (Score: ${opportunity.confidenceScore}) | ${opportunity.debugLog}`);
-                    }
+                const apexResult = FilterEngine.checkApexSafety(opportunity, symbolHistory, globalMLStats);
+                if (apexResult.discarded) {
+                    console.log(`[Safety] Apex Rejected ${coin.symbol}: ${apexResult.reason}`);
+                    return;
                 }
+
+                opportunities.push(opportunity);
+                console.log(`[Scanner] [${coin.symbol}] ✅ ACCEPTED with Match Score ${opportunity.confidenceScore}`);
             } catch (err) {
                 // Individual coin failure is acceptable, but we log it clearly
                 // console.warn(`[Scanner] Skipped ${coin.symbol}:`, err); 

@@ -1,5 +1,6 @@
 
 import { calculateEMA, calculateATR } from './mathUtils';
+import { SmartFetch } from './SmartFetch';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -55,18 +56,7 @@ let macroCache: CachedMacroData | null = null;
 /**
  * Fetch with timeout (reutilizando patrón existente del proyecto)
  */
-const fetchWithTimeout = async (url: string, timeout = 4000): Promise<Response> => {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    try {
-        const response = await fetch(url, { signal: controller.signal });
-        clearTimeout(id);
-        return response;
-    } catch (error) {
-        clearTimeout(id);
-        throw error;
-    }
-};
+// fetchWithTimeout removed as we now use SmartFetch
 
 // ============================================================================
 // CORE ANALYSIS FUNCTIONS
@@ -80,14 +70,9 @@ const fetchWithTimeout = async (url: string, timeout = 4000): Promise<Response> 
 async function analyzeBTCRegime(interval: string = '1d'): Promise<BTCRegimeAnalysis> {
     try {
         // Parametrizamos el intervalo en la URL
-        const res = await fetchWithTimeout(
-            `https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=200`,
-            5000
+        const candles = await SmartFetch.get<any[]>(
+            `https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=200`
         );
-
-        if (!res.ok) throw new Error(`Binance API returned ${res.status}`);
-
-        const candles = await res.json();
         const closes = candles.map((c: any[]) => parseFloat(c[4]));
 
         const ema50 = calculateEMA(closes, 50);
@@ -171,12 +156,7 @@ async function analyzeBTCRegime(interval: string = '1d'): Promise<BTCRegimeAnaly
  * Fuente más confiable que CoinCap
  */
 async function fetchCoinGeckoGlobal(): Promise<any> {
-    const res = await fetchWithTimeout(
-        'https://api.coingecko.com/api/v3/global',
-        4000
-    );
-    if (!res.ok) throw new Error(`CoinGecko API returned ${res.status}`);
-    return res.json();
+    return SmartFetch.get<any>('https://api.coingecko.com/api/v3/global');
 }
 
 /**

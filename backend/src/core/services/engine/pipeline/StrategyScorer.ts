@@ -81,6 +81,19 @@ export class StrategyScorer {
             }
         }
 
+        // 5.1.1 Bubbles (Aggressive Flow)
+        if (indicators.volumeExpert?.cvd?.bubbles && indicators.volumeExpert.cvd.bubbles.length > 0) {
+            const bubbles = indicators.volumeExpert.cvd.bubbles;
+            const relevantBubble = bubbles.find(b =>
+                (b.type === 'BULLISH' && signalSide === 'LONG') ||
+                (b.type === 'BEARISH' && signalSide === 'SHORT')
+            );
+            if (relevantBubble) {
+                score += 15;
+                reasoning.push(`🫧 Institutional Bubble: Large aggressive ${relevantBubble.type} orders detected (+15)`);
+            }
+        }
+
         // 5.2 Liquidation Fuel
         if (indicators.volumeExpert?.liquidity?.liquidationClusters) {
             const liqs = indicators.volumeExpert.liquidity.liquidationClusters;
@@ -137,6 +150,17 @@ export class StrategyScorer {
             if (pocDist < 0.01 && indicators.price > indicators.volumeProfile.poc) {
                 score += 10;
                 reasoning.push(`📊 Volume Profile: Retesting POC as Support`);
+            }
+
+            // LVN Location Check
+            if (indicators.volumeProfile.lowVolumeNodes) {
+                const nearLVN = indicators.volumeProfile.lowVolumeNodes.find(lvn =>
+                    Math.abs(indicators.price - lvn) / lvn < 0.005
+                );
+                if (nearLVN) {
+                    score += 12;
+                    reasoning.push(`📉 AMT Location: Near LVN (Low Volume Node) - High Rejection Prob (+12)`);
+                }
             }
         }
 

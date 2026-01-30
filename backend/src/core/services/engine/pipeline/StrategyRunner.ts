@@ -18,6 +18,7 @@ import { analyzeSwingSignal } from '../../strategies/SwingStrategy';
 import { analyzeBreakoutSignal } from '../../strategies/BreakoutStrategy';
 import { analyzeScalpSignal } from '../../strategies/ScalpStrategy';
 import { analyzePinballSignal } from '../../strategies/PinballStrategy';
+import { analyzeFailedAuction } from '../../strategies/failedAuctionStrategy';
 
 export class StrategyRunner {
 
@@ -114,7 +115,23 @@ export class StrategyRunner {
                             lows,
                             indicators
                         );
-                        name = "Mean Reversion (Range)";
+                        // ENRICHMENT: Check for Failed Auction (AMT Style)
+                        const failedAuction = analyzeFailedAuction(indicators, marketRegime, prices[prices.length - 1]);
+                        if (failedAuction.side !== 'NEUTRAL') {
+                            // If Failed Auction matches Mean Reversion direction, boost confidence
+                            if (result && result.signalSide === failedAuction.side) {
+                                result.score = Math.min(100, result.score + 15);
+                                result.detectionNote += ` + Institutional Failed Auction Confirmation.`;
+                            } else if (!result || result.signalSide === 'NEUTRAL') {
+                                // Or use it as primary signal
+                                result = {
+                                    score: failedAuction.confidence,
+                                    signalSide: failedAuction.side,
+                                    detectionNote: failedAuction.reason
+                                };
+                            }
+                        }
+                        name = "Mean Reversion (Range/AMT)";
                         break;
                 }
 

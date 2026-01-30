@@ -13,6 +13,7 @@ export interface VolumeProfileData {
     poc: number;
     valueAreaHigh: number;
     valueAreaLow: number;
+    lowVolumeNodes?: number[]; // NEW: Zones of rejection
 }
 
 export interface OrderBlockData {
@@ -200,6 +201,8 @@ export interface CVDData {
     candleDelta: number;            // Delta de la vela actual
     cvdSeries?: number[];           // Array de deltas acumulados recientes
     priceSeries?: number[];         // Array de precios promedios recientes (para comparativa)
+    bubbles?: { price: number; type: 'BULLISH' | 'BEARISH'; size: number }[]; // NEW: Clusters de agresión
+    absorption?: 'BULLISH' | 'BEARISH' | null; // NEW: Absorción institucional detected
 }
 
 export interface VolumeExpertAnalysis {

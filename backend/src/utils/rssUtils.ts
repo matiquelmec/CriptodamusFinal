@@ -12,7 +12,7 @@ export const RSS_SOURCES = [
     { name: 'Google News', url: 'https://news.google.com/rss/search?q=cryptocurrency+when:1d&hl=en-US&gl=US&ceid=US:en' },
     { name: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/' },
     { name: 'Cointelegraph', url: 'https://cointelegraph.com/rss' },
-    { name: 'The Block', url: 'https://www.theblock.co/rss' },
+    { name: 'CryptoSlate', url: 'https://cryptoslate.com/feed/' },
     { name: 'Decrypt', url: 'https://decrypt.co/feed' }
 ];
 
