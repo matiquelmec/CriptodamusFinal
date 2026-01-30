@@ -105,14 +105,25 @@ export class SmartFetch {
 
             return response.data;
         } catch (error: any) {
-            // 3. Retry Logic
-            // Note: We removed the reactive 403 logic because the Proactive check above handles it better.
+            // 2.7 Handle Bot Challenges in Catch Block (403 Forbidden with HTML)
+            if (error.response?.status === 403) {
+                const data = error.response?.data;
+                const errorBody = typeof data === 'string' ? data : JSON.stringify(data || '');
+                const isChallenge = errorBody.includes('Just a moment...') || errorBody.includes('cf-challenge');
 
+                if (isChallenge && process.env.BIFROST_URL && !isBifrost && retriesLeft > 0) {
+                    console.log(`⚠️ [SmartFetch] 403 Bot Challenge detected at ${domain}. Rotating to Bifrost Proxy...`);
+                    const bifrostUrl = `${process.env.BIFROST_URL}/api?target=${encodeURIComponent(url)}`;
+                    return this.executeRequest<T>(bifrostUrl, config, retriesLeft - 1);
+                }
+            }
+
+            // 3. Retry Logic
             const shouldRetry = this.isRetryableError(error) && retriesLeft > 0;
 
             if (shouldRetry) {
                 const attempt = 3 - retriesLeft + 1;
-                const delay = 1000 * Math.pow(2, attempt); // 2s, 4s, 8s...
+                const delay = 1000 * Math.pow(2, attempt);
 
                 console.warn(`[SmartFetch] Fetch failed for ${domain} (${error.code || error.response?.status}). Retrying in ${delay}ms...`);
                 await new Promise(r => setTimeout(r, delay));
