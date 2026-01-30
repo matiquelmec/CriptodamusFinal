@@ -46,42 +46,61 @@ export class SmartFetch {
     private static async executeRequest<T>(url: string, config: AxiosRequestConfig, retriesLeft: number): Promise<T> {
         const domain = new URL(url).hostname;
         const isBinance = domain.includes('binance.com') || domain.includes('binance.vision');
+        const isBifrost = process.env.BIFROST_URL && url.includes(process.env.BIFROST_URL);
 
         // 2. Rate Limiting (Domain Level)
         await this.enforceRateLimit(domain);
 
-        // 2.5 PROACTIVE PROXY (Institutional Grade)
-        // If we have the Bifrost Key, we use the tunnel immediately.
-        // Why wait for a 403/Timeout? Real pros don't get blocked.
-        if (isBinance && process.env.BIFROST_URL && !url.includes(process.env.BIFROST_URL)) {
-            // console.log(`[SmartFetch] 🌈 Proactive Bifrost Routing: ${url}`);
+        // 2.5 PROACTIVE PROXY (Institutional Grade for Binance)
+        if (isBinance && process.env.BIFROST_URL && !isBifrost) {
             const bifrostUrl = `${process.env.BIFROST_URL}/api?target=${encodeURIComponent(url)}`;
-
-            // Recursively call with the new URL, but treating it as a standard request now
-            // We pass the SAME retries to the proxy request.
             return this.executeRequest<T>(bifrostUrl, config, retriesLeft);
         }
+
+        // --- STEALTH HEADERS (ENGAGE) ---
+        // Modern browsers send Client Hints to pass Cloudflare Challenges
+        const stealthHeaders = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': config.headers?.Accept || 'application/json, text/plain, */*',
+            'Sec-CH-UA': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'Sec-CH-UA-Mobile': '?0',
+            'Sec-CH-UA-Platform': '"Windows"',
+            'Sec-CH-UA-Full-Version': '120.0.6099.130',
+            'Sec-CH-UA-Bitness': '"64"',
+            'Sec-Fetch-Site': 'cross-site',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Dest': 'document',
+            'Accept-Language': 'en-US,en;q=0.9',
+            ...config.headers
+        };
 
         try {
             const response = await axios.get<T>(url, {
                 ...config,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Criptodamus/1.0)',
-                    'Accept': 'application/json',
-                    ...config.headers
-                },
+                headers: stealthHeaders,
                 httpsAgent: this.ipv4Agent,
-                timeout: config.timeout || 10000
+                timeout: config.timeout || 12000 // Increased for proxy/slow feeds
             });
 
-            // Update last request time for this domain
             this.lastRequestTime.set(domain, Date.now());
 
-            // Safety Check: Detect HTML (Geo-Block / Error Page) masquerading as JSON
-            const contentType = response.headers['content-type'];
-            if (contentType && (contentType.includes('text/html') || contentType.includes('application/xhtml+xml'))) {
-                console.warn(`⚠️ [SmartFetch] HTML/Geo-Block detected for ${domain}. Refusing to parse.`);
-                throw new Error(`Geo-Block: Received HTML from ${domain}`);
+            const contentType = response.headers['content-type']?.toString().toLowerCase();
+            const body = response.data?.toString() || '';
+
+            // Handle Cloudflare challenge detection
+            const isCloudflare = body.includes('Just a moment...') || body.includes('cf-challenge') || body.includes('_cf_chl_opt');
+
+            if (isCloudflare || (contentType && (contentType.includes('text/html') || contentType.includes('application/xhtml+xml')))) {
+
+                // If we are NOT already using Bifrost and it's available, ROTATE TO PROXY
+                if (process.env.BIFROST_URL && !isBifrost && retriesLeft > 0) {
+                    console.log(`⚠️ [SmartFetch] Bot Challenge/HTML detected at ${domain}. Rotating to Bifrost Proxy...`);
+                    const bifrostUrl = `${process.env.BIFROST_URL}/api?target=${encodeURIComponent(url)}`;
+                    return this.executeRequest<T>(bifrostUrl, config, retriesLeft - 1);
+                }
+
+                console.warn(`❌ [SmartFetch] Persistent HTML/Challenge detected for ${domain}. Refusing to parse.`);
+                throw new Error(`BotBlock: Challenge received from ${domain}`);
             }
 
             return response.data;

@@ -22,14 +22,12 @@ export async function fetchRSSFields(): Promise<FeedItem[]> {
     // Process all feeds in parallel
     const feedPromises = RSS_SOURCES.map(async (source) => {
         try {
-            // Fetch raw XML with browser headers to avoid 403/Cloudflare
-            const xml = await SmartFetch.get<string>(source.url, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8'
-                }
-            });
-            if (!xml) return [];
+            // Fetch raw XML - SmartFetch now handles stealth headers & proxies
+            const xml = await SmartFetch.get<string>(source.url);
+            if (!xml || xml.includes('<!DOCTYPE html>') || xml.includes('Just a moment...')) {
+                console.warn(`[RSS] Skipping ${source.name}: Bot Protection or Invalid XML detected.`);
+                return [];
+            }
 
             const items: FeedItem[] = [];
 
