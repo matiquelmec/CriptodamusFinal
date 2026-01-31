@@ -237,7 +237,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                             </div>
                                             <div className="text-left">
                                                 <h3 className="text-sm font-bold text-yellow-500">Gold & Silver Sniper</h3>
-                                                <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">XAU/USD • XAG/USD</p>
+                                                <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">PAXG • XAG</p>
                                             </div>
                                         </div>
                                         <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 uppercase animate-pulse">
@@ -290,7 +290,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                         </div>
                                         <div className="text-left">
                                             <h3 className="text-sm font-bold text-yellow-500">Gold & Silver Sniper</h3>
-                                            <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">XAU/USD • XAG/USD</p>
+                                            <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">PAXG • XAG</p>
                                         </div>
                                     </div>
                                     <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 uppercase animate-pulse">
