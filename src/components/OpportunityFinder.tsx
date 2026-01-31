@@ -239,6 +239,30 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                             </div>
                         ) : (
                             <div className="min-h-full flex flex-col items-center justify-center text-secondary gap-4 px-6 py-12 max-w-2xl mx-auto">
+                                {/* PERSISTENT GOLD MONITOR (Empty State version) */}
+                                <div className="w-full max-w-md mb-6 flex flex-col justify-between p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl hover:bg-yellow-500/10 transition-colors group animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-yellow-500/10 rounded-lg text-yellow-500 group-hover:scale-110 transition-transform">
+                                                <Target size={20} className="animate-pulse" />
+                                            </div>
+                                            <div className="text-left">
+                                                <h3 className="text-sm font-bold text-yellow-500">Gold Sniper</h3>
+                                                <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">XAU/USD • PAXG</p>
+                                            </div>
+                                        </div>
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 uppercase animate-pulse">
+                                            Scanning
+                                        </span>
+                                    </div>
+                                    <div className="mt-3 pt-3 border-t border-yellow-500/10">
+                                        <div className="flex items-center gap-2 text-[10px] text-secondary">
+                                            <Activity size={12} className="text-yellow-500/70" />
+                                            <span>Esperando setup perfecto (Fib + Div)...</span>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="p-4 bg-blue-500/10 rounded-full">
                                     <Target size={48} className="text-blue-400" />
                                 </div>
