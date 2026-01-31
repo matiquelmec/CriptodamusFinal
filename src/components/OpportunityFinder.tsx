@@ -57,10 +57,18 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     // Alias for backward compatibility
     const scan = handleRefresh;
 
-    // Filter Logic
-    const displayedOpportunities = activeFilter === 'ALL'
+    // Filter & Sort Logic
+    // 1. Filter based on active mode
+    let filtered = activeFilter === 'ALL'
         ? opportunities
         : opportunities.filter(o => o.strategy === 'pau_perdices_gold');
+
+    // 2. PINNED LOGIC: Always bubble "Gold Sniper" signals to the top
+    const displayedOpportunities = filtered.sort((a, b) => {
+        const isGoldA = a.strategy === 'pau_perdices_gold' ? 1 : 0;
+        const isGoldB = b.strategy === 'pau_perdices_gold' ? 1 : 0;
+        return isGoldB - isGoldA; // Descending (1 comes first)
+    });
 
     return (
         <div className="h-auto md:h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col md:overflow-hidden relative">
