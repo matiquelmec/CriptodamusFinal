@@ -97,18 +97,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                     </div>
 
                     <div className="flex gap-2">
-                        {/* PAU PERDICES FILTER BUTTON */}
-                        <button
-                            onClick={() => setActiveFilter(prev => prev === 'ALL' ? 'PAU' : 'ALL')}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded font-mono text-[10px] md:text-xs font-bold transition-all shadow-sm
-                                ${activeFilter === 'PAU'
-                                    ? 'bg-yellow-400/20 border-yellow-400/60 text-yellow-500 shadow-[0_0_10px_rgba(250,204,21,0.2)]'
-                                    : 'bg-surface hover:bg-background border-border text-secondary'
-                                }`}
-                        >
-                            <span>🏆</span>
-                            <span className="hidden xs:inline">Gold Sniper</span>
-                        </button>
+
 
                         <button
                             onClick={handleRefresh}
