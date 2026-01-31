@@ -267,6 +267,32 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         )
                     )) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {/* PERSISTENT GOLD MONITOR (When no signal exists) */}
+                        {activeFilter === 'ALL' && !displayedOpportunities.some(o => o.strategy === 'pau_perdices_gold') && (
+                            <div className="flex flex-col justify-between p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl hover:bg-yellow-500/10 transition-colors group">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-yellow-500/10 rounded-lg text-yellow-500 group-hover:scale-110 transition-transform">
+                                            <Target size={20} className="animate-pulse" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-yellow-500">Gold Sniper</h3>
+                                            <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">XAU/USD • PAXG</p>
+                                        </div>
+                                    </div>
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 uppercase animate-pulse">
+                                        Scanning
+                                    </span>
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-yellow-500/10">
+                                    <div className="flex items-center gap-2 text-[10px] text-secondary">
+                                        <Activity size={12} className="text-yellow-500/70" />
+                                        <span>Esperando setup perfecto (Fib + Div)...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {displayedOpportunities.map((opp) => (
                             <SignalCard
                                 key={opp.id}
