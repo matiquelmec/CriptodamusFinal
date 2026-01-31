@@ -11,7 +11,7 @@ export const TradingConfig = {
     // --- ASSET MANAGEMENT ---
     assets: {
         tiers: {
-            s_tier: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'],
+            s_tier: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XAGUSDT', 'XAUUSDT'],
             a_tier_bluechips: ['XRPUSDT', 'ADAUSDT', 'LINKUSDT', 'AVAXUSDT', 'DOTUSDT', 'TRXUSDT', 'TONUSDT', 'SUIUSDT', 'APTUSDT'],
             c_tier_patterns: ['PEPE', 'DOGE', 'SHIB', 'BONK', 'WIF', 'FLOKI', '1000SATS', 'ORDI', 'MEME', 'LUNA', 'LUNC'],
             ignored_symbols: ['USDCUSDT', 'FDUSDUSDT', 'USDPUSDT', 'TUSDUSDT', 'BUSDUSDT', 'DAIUSDT', 'EURUSDT']

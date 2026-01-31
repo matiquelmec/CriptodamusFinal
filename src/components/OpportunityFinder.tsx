@@ -236,8 +236,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                                 <Target size={20} className="animate-pulse" />
                                             </div>
                                             <div className="text-left">
-                                                <h3 className="text-sm font-bold text-yellow-500">Gold Sniper</h3>
-                                                <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">XAU/USD • PAXG</p>
+                                                <h3 className="text-sm font-bold text-yellow-500">Gold & Silver Sniper</h3>
+                                                <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">XAU/USD • XAG/USD</p>
                                             </div>
                                         </div>
                                         <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 uppercase animate-pulse">
@@ -288,9 +288,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                         <div className="p-2 bg-yellow-500/10 rounded-lg text-yellow-500 group-hover:scale-110 transition-transform">
                                             <Target size={20} className="animate-pulse" />
                                         </div>
-                                        <div>
-                                            <h3 className="text-sm font-bold text-yellow-500">Gold Sniper</h3>
-                                            <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">XAU/USD • PAXG</p>
+                                        <div className="text-left">
+                                            <h3 className="text-sm font-bold text-yellow-500">Gold & Silver Sniper</h3>
+                                            <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">XAU/USD • XAG/USD</p>
                                         </div>
                                     </div>
                                     <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 uppercase animate-pulse">

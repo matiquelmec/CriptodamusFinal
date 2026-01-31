@@ -98,9 +98,9 @@ export function analyzePauPerdicesStrategy(
     let score = 0;
 
     // --- 1. ASSET FILTER ---
-    const isGold = symbol.includes('XAU') || symbol.includes('GOLD') || symbol.includes('PAXG');
+    const isGold = symbol.includes('XAU') || symbol.includes('GOLD') || symbol.includes('PAXG') || symbol.includes('XAG') || symbol.includes('SILVER');
     if (!isGold) {
-        return createNeutralResult("Non-Gold Asset", { isGold: false });
+        return createNeutralResult("Non-Precious Metal Asset", { isGold: false });
     }
     score += 10;
 
