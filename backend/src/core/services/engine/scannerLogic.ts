@@ -77,6 +77,16 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     const opportunities: AIOpportunity[] = [];
 
     // 3. CHUNKED PROCESSING (Robustness Fix)
+    // Force Include Gold Asset for Pau Strategy even if low volume
+    const goldSym = TradingConfig.pauStrategy.asset.replace('/', '').toUpperCase(); // 'PAXGUSDT'
+    const goldTicker = market.find(m => m.id === goldSym || m.symbol.replace('/', '') === goldSym);
+
+    // Inject Gold if found and not present in topCandidates
+    if (goldTicker && !topCandidates.find(c => c.id === goldTicker.id)) {
+        console.log(`[Scanner] 🏆 Injecting ${goldTicker.symbol} for World Champ Strategy (Backend)`);
+        topCandidates.push(goldTicker);
+    }
+
     // Process in small batches to prevent API rate limiting / Geo-blocking timeouts
     const BATCH_SIZE = 5;
     for (let i = 0; i < topCandidates.length; i += BATCH_SIZE) {

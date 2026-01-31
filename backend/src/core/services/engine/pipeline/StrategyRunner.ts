@@ -19,6 +19,7 @@ import { analyzeBreakoutSignal } from '../../strategies/BreakoutStrategy';
 import { analyzeScalpSignal } from '../../strategies/ScalpStrategy';
 import { analyzePinballSignal } from '../../strategies/PinballStrategy';
 import { analyzeFailedAuction } from '../../strategies/failedAuctionStrategy';
+import { analyzePauPerdicesStrategy } from '../../strategies/PauPerdicesStrategy';
 
 export class StrategyRunner {
 
@@ -30,6 +31,27 @@ export class StrategyRunner {
         prices: number[],
         volumes: number[]
     ) {
+        // 0. SPECIAL OVERRIDE: PAU PERDICES (GOLD SNIPER) - Backend
+        const symbol = indicators.symbol || 'UNKNOWN';
+        if (symbol.includes('XAU') || symbol.includes('GOLD') || symbol.includes('PAXG')) {
+            const pauResult = analyzePauPerdicesStrategy(symbol, prices[prices.length - 1], prices, highs, lows, indicators);
+            if (pauResult.signal !== 'NEUTRAL') {
+                return {
+                    primaryStrategy: {
+                        id: 'pau_perdices_gold',
+                        score: pauResult.score,
+                        signal: pauResult.signal,
+                        reason: pauResult.reason.join(". "),
+                        isFresh: true,
+                        specificTrigger: pauResult.reason[0] || 'Sniper Setup'
+                    },
+                    details: pauResult.reason,
+                    scoreBoost: 50, // Massive priority boost
+                    marketRegime: detectMarketRegime(indicators) // Still return regime for context
+                };
+            }
+        }
+
         // 1. Detect Regime & Select Strategies
         const marketRegime = detectMarketRegime(indicators);
         const selection = selectStrategies(marketRegime);

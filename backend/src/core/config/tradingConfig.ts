@@ -26,6 +26,24 @@ export const TradingConfig = {
             safe_symbols: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT']
         }
     },
+    // PAU PERDICES STRATEGY CONFIG
+    pauStrategy: {
+        asset: 'PAXGUSDT', // Use PAXG as crypto-proxy for Gold (Binance Spot)
+        asset_backup: 'XAUUSDT', // Use XAUUSDT (Binance Futures) if available
+        timeframe: '15m', // Preferred timeframe
+        rsi: {
+            bull_support: 40,
+            bear_resistance: 60
+        },
+        dates: {
+            london_open: 8, // UTC Hour (approx)
+            ny_close: 17
+        },
+        risk: {
+            sl_atr_multiplier: 1.5,
+            risk_per_trade: 0.01 // 1%
+        }
+    },
 
     // --- RISK ENGINES ---
     risk: {
