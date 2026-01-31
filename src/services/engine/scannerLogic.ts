@@ -52,7 +52,17 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
         throw new Error("MACRO_CONTEXT_FAILURE"); // Fail Loud: Context is required for "God Mode"
     }
 
-    const topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 60);
+    // Force Include Gold Asset for Pau Strategy even if low volume
+    const goldSym = TradingConfig.pauStrategy.asset.replace('/', '').toUpperCase(); // 'XAUUSDT'
+    const goldTicker = market.find(m => m.id === goldSym || m.symbol.replace('/', '') === goldSym);
+
+    let topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 60);
+
+    // Inject Gold if found and not present
+    if (goldTicker && !topCandidates.find(c => c.id === goldTicker.id)) {
+        console.log(`[Scanner] 🏆 Injecting ${goldTicker.symbol} for World Champ Strategy`);
+        topCandidates.push(goldTicker);
+    }
     const opportunities: AIOpportunity[] = [];
 
     // 3. PARALLEL PROCESSING
@@ -94,7 +104,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             const prices = candles.map(c => c.close);
             const volumes = candles.map(c => c.volume);
 
-            const strategyResult = StrategyRunner.run(indicators, risk, highs, lows, prices, volumes);
+            const strategyResult = StrategyRunner.run(indicators, risk, highs, lows, prices, volumes, coin.symbol);
 
             // Skip if no valid signal found
             if (strategyResult.primaryStrategy && strategyResult.primaryStrategy.signal === 'NEUTRAL') {
@@ -171,7 +181,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     fractalAnalysis: macroCompass ? {
                         trend_4h: macroCompass.trend4h,
                         ema200_4h: macroCompass.ema200_4h,
-                        price_4h: macroCompass.price
+                        price_4h: macroCompass.price,
+                        aligned: macroCompass.aligned
                     } : undefined
                 },
                 chartPatterns: indicators.chartPatterns,

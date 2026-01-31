@@ -21,6 +21,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     const [currentRisk, setCurrentRisk] = useState<MarketRisk | null>(null);
     const [selectedSignal, setSelectedSignal] = useState<AIOpportunity | null>(null);
     const [scanProgress, setScanProgress] = useState({ step: 'Esperando señal...', progress: 0 });
+    const [activeFilter, setActiveFilter] = useState<'ALL' | 'PAU'>('ALL'); // NEW: Filter State
 
     // Cache visual states (Dummy for now to prevent crash, or derived)
     const [isFromCache, setIsFromCache] = useState(false);
@@ -56,6 +57,11 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     // Alias for backward compatibility
     const scan = handleRefresh;
 
+    // Filter Logic
+    const displayedOpportunities = activeFilter === 'ALL'
+        ? opportunities
+        : opportunities.filter(o => o.strategy === 'pau_perdices_gold');
+
     return (
         <div className="h-auto md:h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col md:overflow-hidden relative">
             {/* Real-time Ticker */}
@@ -82,13 +88,28 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         </div>
                     </div>
 
-                    <button
-                        onClick={handleRefresh}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-background border border-border rounded font-mono text-[10px] md:text-xs font-bold transition-colors shadow-sm opacity-80"
-                    >
-                        <RefreshCw size={12} />
-                        <span className="hidden xs:inline">Auto-Scan</span> (15m)
-                    </button>
+                    <div className="flex gap-2">
+                        {/* PAU PERDICES FILTER BUTTON */}
+                        <button
+                            onClick={() => setActiveFilter(prev => prev === 'ALL' ? 'PAU' : 'ALL')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded font-mono text-[10px] md:text-xs font-bold transition-all shadow-sm
+                                ${activeFilter === 'PAU'
+                                    ? 'bg-yellow-400/20 border-yellow-400/60 text-yellow-500 shadow-[0_0_10px_rgba(250,204,21,0.2)]'
+                                    : 'bg-surface hover:bg-background border-border text-secondary'
+                                }`}
+                        >
+                            <span>🏆</span>
+                            <span className="hidden xs:inline">Gold Sniper</span>
+                        </button>
+
+                        <button
+                            onClick={handleRefresh}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-background border border-border rounded font-mono text-[10px] md:text-xs font-bold transition-colors shadow-sm opacity-80"
+                        >
+                            <RefreshCw size={12} />
+                            <span className="hidden xs:inline">Auto-Scan</span> (15m)
+                        </button>
+                    </div>
                 </div>
 
                 {/* Risk Shield Banner - Optimized for mobile */}
@@ -166,65 +187,79 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                             Reintentar
                         </button>
                     </div>
-                ) : opportunities.length === 0 ? (
-                    // SMART EMPTY STATE
-                    (currentRisk?.level === 'HIGH' || currentRisk?.riskType === 'MANIPULATION') ? (
-                        <div className="h-full flex flex-col items-center justify-center text-secondary gap-4 px-6 max-w-2xl mx-auto animate-pulse">
-                            <div className="p-4 bg-danger/10 rounded-full border border-danger/20">
-                                <Shield size={48} className="text-danger" />
+                ) : displayedOpportunities.length === 0 ? (
+                    // SMART EMPTY STATE (If Filter Active or No Opps)
+                    activeFilter === 'PAU' ? (
+                        <div className="h-full flex flex-col items-center justify-center text-secondary gap-4 animate-pulse">
+                            <div className="p-4 bg-yellow-500/10 rounded-full border border-yellow-500/20">
+                                <Target size={32} className="text-yellow-500" />
                             </div>
-                            <div className="text-center space-y-3">
-                                <h3 className="text-lg font-bold text-danger">🛡️ MODO PROTECCIÓN ACTIVO</h3>
-                                <p className="text-sm text-secondary leading-relaxed">
-                                    El sistema ha <span className="text-danger font-bold">BLOQUEADO</span> temporalmente la búsqueda de señales debido a condiciones de alto riesgo.
+                            <div className="text-center">
+                                <h3 className="text-sm font-bold text-yellow-500 mb-1">Sniper Mode: Waiting...</h3>
+                                <p className="text-xs text-secondary max-w-[200px]">
+                                    Esperando la configuración perfecta en XAU/USD (Fib 0.50 + Divergencia).
                                 </p>
-                                <div className="bg-danger/5 border border-danger/10 rounded-lg p-4 text-left space-y-2">
-                                    <p className="text-xs text-secondary leading-relaxed">
-                                        <span className="text-danger font-bold">🚨 Motivo:</span> {currentRisk.note}
-                                    </p>
-                                    <p className="text-xs text-secondary/80 italic">
-                                        "A veces, el mejor trade es no operar." - Capital Preservation Protocol
-                                    </p>
-                                </div>
-                                <button
-                                    onClick={scan}
-                                    className="mt-4 px-6 py-2 bg-surface hover:bg-danger/10 border border-border text-danger font-bold text-xs uppercase rounded transition-colors"
-                                >
-                                    Monitorear Riesgo
-                                </button>
                             </div>
                         </div>
                     ) : (
-                        <div className="min-h-full flex flex-col items-center justify-center text-secondary gap-4 px-6 py-12 max-w-2xl mx-auto">
-                            <div className="p-4 bg-blue-500/10 rounded-full">
-                                <Target size={48} className="text-blue-400" />
-                            </div>
-                            <div className="text-center space-y-3">
-                                <h3 className="text-lg font-bold text-primary">🎯 Modo Cazador Activado</h3>
-                                <p className="text-sm text-secondary leading-relaxed">
-                                    No hay señales <span className="text-accent font-bold">PREMIUM</span> en este momento. Esto es <span className="text-success font-bold">BUENO</span>.
-                                </p>
-                                <div className="bg-surface border border-border rounded-lg p-4 text-left space-y-2">
-                                    <p className="text-xs text-secondary leading-relaxed">
-                                        <span className="text-blue-400 font-bold">💡 Filosofía Institucional:</span> Los mejores traders esperan setup perfectos en lugar de forzar operaciones. El sistema solo muestra señales con <span className="text-accent font-bold">60+ de confianza</span> (VALID o PREMIUM).
-                                    </p>
-                                    <div className="flex items-start gap-2 text-xs text-secondary/80 pt-2 border-t border-border/50">
-                                        <Shield size={14} className="text-success mt-0.5 shrink-0" />
-                                        <span className="leading-relaxed italic">"Trade less, win more. Patience is the ultimate edge." - Institutional Traders</span>
-                                    </div>
+                        // SMART EMPTY STATE
+                        (currentRisk?.level === 'HIGH' || currentRisk?.riskType === 'MANIPULATION') ? (
+                            <div className="h-full flex flex-col items-center justify-center text-secondary gap-4 px-6 max-w-2xl mx-auto animate-pulse">
+                                <div className="p-4 bg-danger/10 rounded-full border border-danger/20">
+                                    <Shield size={48} className="text-danger" />
                                 </div>
-                                <button
-                                    onClick={scan}
-                                    className="mt-4 px-6 py-2 bg-primary hover:bg-white text-background font-bold text-xs uppercase rounded transition-colors"
-                                >
-                                    Refrescar Análisis
-                                </button>
+                                <div className="text-center space-y-3">
+                                    <h3 className="text-lg font-bold text-danger">🛡️ MODO PROTECCIÓN ACTIVO</h3>
+                                    <p className="text-sm text-secondary leading-relaxed">
+                                        El sistema ha <span className="text-danger font-bold">BLOQUEADO</span> temporalmente la búsqueda de señales debido a condiciones de alto riesgo.
+                                    </p>
+                                    <div className="bg-danger/5 border border-danger/10 rounded-lg p-4 text-left space-y-2">
+                                        <p className="text-xs text-secondary leading-relaxed">
+                                            <span className="text-danger font-bold">🚨 Motivo:</span> {currentRisk.note}
+                                        </p>
+                                        <p className="text-xs text-secondary/80 italic">
+                                            "A veces, el mejor trade es no operar." - Capital Preservation Protocol
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={scan}
+                                        className="mt-4 px-6 py-2 bg-surface hover:bg-danger/10 border border-border text-danger font-bold text-xs uppercase rounded transition-colors"
+                                    >
+                                        Monitorear Riesgo
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    )
-                ) : (
+                        ) : (
+                            <div className="min-h-full flex flex-col items-center justify-center text-secondary gap-4 px-6 py-12 max-w-2xl mx-auto">
+                                <div className="p-4 bg-blue-500/10 rounded-full">
+                                    <Target size={48} className="text-blue-400" />
+                                </div>
+                                <div className="text-center space-y-3">
+                                    <h3 className="text-lg font-bold text-primary">🎯 Modo Cazador Activado</h3>
+                                    <p className="text-sm text-secondary leading-relaxed">
+                                        No hay señales <span className="text-accent font-bold">PREMIUM</span> en este momento. Esto es <span className="text-success font-bold">BUENO</span>.
+                                    </p>
+                                    <div className="bg-surface border border-border rounded-lg p-4 text-left space-y-2">
+                                        <p className="text-xs text-secondary leading-relaxed">
+                                            <span className="text-blue-400 font-bold">💡 Filosofía Institucional:</span> Los mejores traders esperan setup perfectos en lugar de forzar operaciones. El sistema solo muestra señales con <span className="text-accent font-bold">60+ de confianza</span> (VALID o PREMIUM).
+                                        </p>
+                                        <div className="flex items-start gap-2 text-xs text-secondary/80 pt-2 border-t border-border/50">
+                                            <Shield size={14} className="text-success mt-0.5 shrink-0" />
+                                            <span className="leading-relaxed italic">"Trade less, win more. Patience is the ultimate edge." - Institutional Traders</span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={scan}
+                                        className="mt-4 px-6 py-2 bg-primary hover:bg-white text-background font-bold text-xs uppercase rounded transition-colors"
+                                    >
+                                        Refrescar Análisis
+                                    </button>
+                                </div>
+                            </div>
+                        )
+                    )) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {opportunities.map((opp) => (
+                        {displayedOpportunities.map((opp) => (
                             <SignalCard
                                 key={opp.id}
                                 data={opp}

@@ -235,12 +235,42 @@ export function calculateDCAPlan(
         selectedPOIs = selectedPOIs.slice(0, 3);
     }
 
-    // 3.5 FORCE MARKET ENTRY - REMOVED FOR "NO FOMO" UPDATE
-    // We now respect the technical levels even if distant.
-    // If the price is far from the first POI, it becomes a "Limit Order" setup automatically.
+    // 3.5 ADAPTIVE MOMENTUM ENTRY (Professional Logic)
+    // If the best structural entry is too far (e.g. > 3% away) and Market is Trending/Volatile,
+    // we risk missing the trade. We create a "Dynamic Entry" closer to price.
+    // SHORT: Entry at Current + 1.5 ATR (Dynamic Supply)
+    // LONG: Entry at Current - 1.5 ATR (Dynamic Demand)
 
-    // const firstPOIDist = Math.abs((selectedPOIs[0].price - signalPrice) / signalPrice);
-    // if (firstPOIDist > 0.005) { ... }
+    // Calculate gap to the best structural entry we found so far
+    if (selectedPOIs.length > 0) {
+        const bestEntryPrice = selectedPOIs[0].price;
+        const gapPercent = Math.abs((bestEntryPrice - signalPrice) / signalPrice);
+
+        // Threshold: 3% gap is huge for a scanner signal
+        const GAP_THRESHOLD = 0.03;
+        const isMomentumRegime = marketRegime?.regime === 'TRENDING' || marketRegime?.regime === 'VOLATILE';
+
+        if (gapPercent > GAP_THRESHOLD && isMomentumRegime) {
+            const dynamicFactor = 1.2; // 1.2 ATR pullback
+            const dynamicPrice = side === 'LONG'
+                ? signalPrice - (atr * dynamicFactor)
+                : signalPrice + (atr * dynamicFactor);
+
+            // Ensure it's actually closer than the structural one
+            const dynamicGap = Math.abs((dynamicPrice - signalPrice) / signalPrice);
+            if (dynamicGap < gapPercent) {
+                // Inject Dynamic Entry at the top
+                selectedPOIs.unshift({
+                    price: dynamicPrice,
+                    score: 4, // Decent score for trend following
+                    factors: ["⚡ Dynamic Momentum (ATR)"],
+                    type: side === 'LONG' ? 'SUPPORT' : 'RESISTANCE'
+                });
+                // Keep max 3
+                selectedPOIs = selectedPOIs.slice(0, 3);
+            }
+        }
+    }
 
     // 4. Position sizing institucional
     const positionSizes = getRegimeAwarePositionSizing(marketRegime);

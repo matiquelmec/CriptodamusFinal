@@ -150,6 +150,38 @@ export const TradingConfig = {
         fractals: {
             period: 5
         }
+    },
+    // --- PAU PERDICES (GOLD MASTER) CONFIG ---
+    pauStrategy: {
+        asset: 'PAXGUSDT', // Use PAXG as crypto-proxy for Gold (Binance Spot)
+        timeframe: '15m', // Preferred timeframe
+        rsi: {
+            period: 14,
+            bull_support: 40, // Constance Brown Rule: Must hold 40
+            bear_resistance: 60,
+            divergence_lookback: 20
+        },
+        fibonacci: {
+            retracement_min: 0.382,
+            retracement_max: 0.50, // The Golden Zone
+            extension_tp1: 0, // Previous High
+            extension_tp2: -0.272,
+            extension_tp3: -0.618
+        },
+        risk: {
+            sl_atr_multiplier: 1.5, // Volatility buffer
+            risk_per_trade: 0.01, // 1%
+            max_daily_loss: 0.03 // 3%
+        },
+        sessions: {
+            london_start_hour: 8, // UTC (Adjust logic to use local/UTC properly)
+            london_end_hour: 16,
+            ny_start_hour: 13,
+            ny_end_hour: 21,
+            // Avoid hours (Asian Session dead zone)
+            avoid_start: 22,
+            avoid_end: 6
+        }
     }
 } as const;
 

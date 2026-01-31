@@ -94,10 +94,17 @@ const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
             // Sort memes by Volume too
             filteredData = filteredData.sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
         } else {
-            // Default: Top 50 by Volume
+            // Default: Top 50 by Volume, PLUS PAXGUSDT (Gold)
+            const goldTicker = filteredData.find((t: any) => t.symbol === 'PAXGUSDT');
+
             filteredData = filteredData
                 .sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
                 .slice(0, 50);
+
+            // Re-inject Gold if it was cutoff by volume slice
+            if (goldTicker && !filteredData.find((t: any) => t.symbol === 'PAXGUSDT')) {
+                filteredData.push(goldTicker);
+            }
         }
 
         return filteredData.map((ticker: any) => {

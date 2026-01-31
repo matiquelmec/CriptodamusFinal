@@ -77,6 +77,14 @@ const SignalCard: React.FC<SignalCardProps> = ({ data, onSelect, onShowDetails }
                         <span className="text-[9px] md:text-[10px] font-mono font-bold text-primary bg-background px-1.5 py-0.5 md:px-2 md:py-1 rounded border border-border">
                             {data.strategy.split('_')[0]}
                         </span>
+
+                        {/* PAU PERDICES BADGE */}
+                        {data.strategy === 'pau_perdices_gold' && (
+                            <div className="mt-1 px-1.5 py-0.5 rounded border bg-yellow-400/20 border-yellow-400/50 text-yellow-500 text-[9px] font-bold flex items-center gap-1 animate-pulse shadow-[0_0_10px_rgba(250,204,21,0.2)]">
+                                <span>🏆</span>
+                                <span>SNIPER</span>
+                            </div>
+                        )}
                     </div>
 
                     {/* TIER BADGE */}
