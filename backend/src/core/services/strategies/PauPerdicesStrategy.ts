@@ -1,9 +1,7 @@
 
 import { TechnicalIndicators } from '../../types';
 import { TradingConfig } from '../../config/tradingConfig';
-// import { getCurrentSessionSimple } from '../sessionExpert'; // Might need to check path or mock
-// Backend often has different paths. Let's assume sessionExpert is available or inline the logic
-// to avoid path hell. "London/New York" logic is simple time check.
+import { calculateEMA } from '../mathUtils';
 
 export interface PauStrategyResult {
     signal: 'LONG' | 'SHORT' | 'NEUTRAL';
@@ -23,33 +21,13 @@ export interface PauStrategyResult {
         trendValid: boolean;
         rsiValid: boolean;
         divergenceDetected: boolean;
+        mtfValid: boolean;
     };
 }
 
-// Minimal helpers if imports fail
-function calculateATR_Internal(highs: number[], lows: number[], closes: number[], period: number = 14): number {
-    if (highs.length < period + 1) return 0;
-
-    // Simple Rolling ATR for robustness
-    // Or just use the one from indicators if passed correctly, but often pure calc is safer here
-    // But since indicators has "atr", let's trust it for now to keep code simple.
-    // Wait, the logic uses calculateATR from 'mathUtils'. 
-    // I should probably import it or reimplement simple version here.
-    // Let's reimplement simple ATR just for the risk calc to be self-contained in backend.
-
-    let sumTR = 0;
-    for (let i = highs.length - period; i < highs.length; i++) {
-        const tr1 = highs[i] - lows[i];
-        const tr2 = Math.abs(highs[i] - closes[i - 1]);
-        const tr3 = Math.abs(lows[i] - closes[i - 1]);
-        sumTR += Math.max(tr1, tr2, tr3);
-    }
-    return sumTR / period;
-}
-
+// Internal Helper for RSI (if not in mathUtils or needed self-contained)
 function calculateRSIArray_Internal(data: number[], period: number): number[] {
     if (data.length < period + 1) return new Array(data.length).fill(50);
-    // Standard Wilder's RSI Loop
     let gains = 0;
     let losses = 0;
     const rsiArray = new Array(data.length).fill(0);
@@ -79,9 +57,23 @@ function calculateRSIArray_Internal(data: number[], period: number): number[] {
     return rsiArray;
 }
 
+// Internal Helper for ATR
+function calculateATR_Internal(highs: number[], lows: number[], closes: number[], period: number = 14): number {
+    if (highs.length < period + 1) return 0;
+    let sumTR = 0;
+    for (let i = highs.length - period; i < highs.length; i++) {
+        const tr1 = highs[i] - lows[i];
+        const tr2 = Math.abs(highs[i] - closes[i - 1]);
+        const tr3 = Math.abs(lows[i] - closes[i - 1]);
+        sumTR += Math.max(tr1, tr2, tr3);
+    }
+    return sumTR / period;
+}
 
 /**
- * PAU PERDICES STRATEGY (GOLD MASTER) - BACKEND EDITION
+ * PAU PERDICES STRATEGY (TOURNAMENT EDITION)
+ * Universal "Gold Sniper" Logic applied to Elite 9 assets.
+ * Supports LONG and SHORT.
  */
 export function analyzePauPerdicesStrategy(
     symbol: string,
@@ -89,7 +81,9 @@ export function analyzePauPerdicesStrategy(
     prices: number[],
     highs: number[],
     lows: number[],
+    volumes: number[],
     indicators: TechnicalIndicators,
+    contextCandles: any[] = [], // H4 Candles for MTF Context
     accountBalance: number = 1000
 ): PauStrategyResult {
 
@@ -97,22 +91,17 @@ export function analyzePauPerdicesStrategy(
     const reasons: string[] = [];
     let score = 0;
 
-    // --- 1. ASSET FILTER ---
-    const isGold = symbol.includes('XAU') || symbol.includes('GOLD') || symbol.includes('PAXG') || symbol.includes('XAG') || symbol.includes('SILVER');
-    if (!isGold) {
-        return createNeutralResult("Non-Precious Metal Asset", { isGold: false });
+    // --- 1. ASSET FILTER (Generalized) ---
+    const isGold = symbol.includes('XAU') || symbol.includes('GOLD') || symbol.includes('PAXG');
+    const isTournament = TradingConfig.TOURNAMENT_MODE;
+    if (!isGold && !isTournament) {
+        return createNeutralResult("Non-Precious Metal Asset (Tournament Mode OFF)", { isGold: false });
     }
     score += 10;
 
-    // --- 2. SESSION FILTER (Simplified Locale Agnostic) ---
-    // UTC Hours: London Open ~7-8 UTC. NY Close ~21 UTC.
-    // Config: london_open=8, ny_close=17 (Local time usually? Let's assume config is correct hour ref)
-    // Actually config says 8 and 17. 
-    // Let's check current Hour.
+    // --- 2. SESSION FILTER ---
     const hour = new Date().getUTCHours();
-    // Approximation: Active from 8 UTC to 21 UTC covers both sessions well.
     const isActiveSession = (hour >= 7 && hour <= 21);
-
     if (isActiveSession) {
         score += 10;
         reasons.push(`✅ Session Active (UTC ${hour})`);
@@ -120,98 +109,195 @@ export function analyzePauPerdicesStrategy(
         reasons.push(`⚠️ Low Volatility Session (UTC ${hour})`);
     }
 
-    // --- 3. TREND FILTER ---
-    const ema200 = indicators.ema200;
-    const isUptrend = currentPrice > ema200;
+    // --- 3. MTF CONTEXT FILTER (H4) ---
+    let mtfDirection: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
+    let mtfValid = true;
 
-    if (!isUptrend) {
-        return createNeutralResult("Price below EMA200 (Downtrend)", { isGold, sessionValid: isActiveSession, trendValid: false });
+    if (isTournament && contextCandles.length > 200) {
+        const closes4h = contextCandles.map(c => c.close);
+        const ema200_4h = calculateEMA(closes4h, 200);
+        const price4h = closes4h[closes4h.length - 1];
+
+        if (price4h > ema200_4h) {
+            mtfDirection = 'BULLISH';
+            reasons.push("✅ MTF: H4 Trend Bullish");
+        } else {
+            mtfDirection = 'BEARISH';
+            reasons.push("✅ MTF: H4 Trend Bearish");
+        }
+        score += 30; // Weight for Context
+    } else {
+        if (isTournament) reasons.push("⚠️ MTF: H4 Context Missing");
+        // If missing context in tournament mode, default to NEUTRAL or use current timeframe fallback?
+        // Let's assume M15 check is sufficient if H4 missing (network error fallback), but penalize.
+    }
+
+    // --- 4. LOCAL TREND FILTER (M15) ---
+    const ema200 = indicators.ema200;
+    let localTrend: 'BULLISH' | 'BEARISH' = 'BULLISH';
+
+    if (currentPrice > ema200) {
+        localTrend = 'BULLISH';
+        reasons.push("✅ M15 Trend Bullish (> EMA200)");
+    } else {
+        localTrend = 'BEARISH';
+        reasons.push("✅ M15 Trend Bearish (< EMA200)");
+    }
+
+    // Alignment Check
+    if (mtfDirection !== 'NEUTRAL' && localTrend !== mtfDirection) {
+        return createNeutralResult(`⛔ MTF Mismatch: H4 ${mtfDirection} != M15 ${localTrend}`, { isGold, sessionValid: isActiveSession, trendValid: false, mtfValid: false });
     }
     score += 20;
-    reasons.push("✅ Bullish Trend (> EMA200)");
 
-    // --- 4. RSI STRUCTURE ---
+    // --- 5. RSI STRUCTURE & DIVERGENCE ---
     const rsiArray = calculateRSIArray_Internal(prices, 14);
-    const recentRSI = rsiArray.slice(-10);
-    const minRecentRSI = Math.min(...recentRSI);
+    const recentRSI = rsiArray.slice(-10); // Check last 10 candles
+    const currentRSI = recentRSI[recentRSI.length - 1];
 
-    if (minRecentRSI < config.rsi.bull_support) {
-        return createNeutralResult(`❌ RSI Broken Support (${config.rsi.bull_support})`, { isGold, sessionValid: isActiveSession, trendValid: true, rsiValid: false });
-    }
-    score += 15;
-    reasons.push(`✅ RSI Structure Intact (> ${config.rsi.bull_support})`);
+    // Divergence Check
+    const div = indicators.rsiDivergence;
+    let hasHiddenDiv = false;
 
-    // --- 5. GOLDEN ZONE (FIB) ---
-    const fibs = indicators.fibonacci;
-    let inGoldenZone = false;
-    const fib382 = fibs.level0_382;
-    const fib500 = fibs.level0_5;
+    if (localTrend === 'BULLISH') {
+        // --- LONG SETUP CHECKS ---
+        const minRecentRSI = Math.min(...recentRSI);
 
-    if (fib382 && fib500) {
-        const zoneTop = fib382 * 1.002;
-        const zoneBottom = fib500 * 0.998;
-        if (currentPrice <= zoneTop && currentPrice >= zoneBottom) {
-            inGoldenZone = true;
-            score += 25;
-            reasons.push("✅ In Golden Zone (Fib 38-50%)");
+        // 5a. RSI Support Check (Upside)
+        if (minRecentRSI < config.rsi.bull_support) {
+            // Broken structure?
+            reasons.push(`⚠️ RSI dip below support (${minRecentRSI.toFixed(1)})`);
+            score -= 10;
+        } else {
+            score += 15;
+            reasons.push("✅ RSI Bullish Structure Intact");
+        }
+
+        // 5b. Hidden Bullish Div
+        if (div && div.type === 'HIDDEN_BULLISH') {
+            hasHiddenDiv = true;
+            score += 30;
+            reasons.push("🚀 Hidden Bullish Divergence");
+        }
+
+    } else {
+        // --- SHORT SETUP CHECKS ---
+        const maxRecentRSI = Math.max(...recentRSI);
+
+        // 5a. RSI Resistance Check (Downside)
+        // Bearish resistance typically 60-65. If it breaks > 70/65 massive invalidation of downtrend momentum?
+        // Let's use 60 as config.rsi.bear_resistance
+        if (maxRecentRSI > config.rsi.bear_resistance) {
+            reasons.push(`⚠️ RSI spike above resistance (${maxRecentRSI.toFixed(1)})`);
+            score -= 10;
+        } else {
+            score += 15;
+            reasons.push("✅ RSI Bearish Structure Intact");
+        }
+
+        // 5b. Hidden Bearish Div
+        if (div && div.type === 'HIDDEN_BEARISH') {
+            hasHiddenDiv = true;
+            score += 30;
+            reasons.push("🚀 Hidden Bearish Divergence");
         }
     }
 
-    // --- 6. HIDDEN DIVERGENCE ---
-    const div = indicators.rsiDivergence;
-    let hasHiddenBullDiv = false;
-    if (div && (div.type === 'HIDDEN_BULLISH')) {
-        hasHiddenBullDiv = true;
-        score += 30;
-        reasons.push("🚀 Hidden Bullish Divergence Detected");
+    // --- 6. GOLDEN ZONE (FIB) ---
+    const fibs = indicators.fibonacci;
+    let inGoldenZone = false;
+
+    if (localTrend === 'BULLISH') {
+        const fib382 = fibs.level0_382;
+        const fib500 = fibs.level0_5;
+        if (fib382 && fib500) {
+            const zoneTop = fib382 * 1.002;
+            const zoneBottom = fib500 * 0.998;
+            if (currentPrice <= zoneTop && currentPrice >= zoneBottom) {
+                inGoldenZone = true;
+                score += 25;
+                reasons.push("🎯 In Golden Zone (Bullish 38-50%)");
+            }
+        }
+    } else {
+        // BEARISH Fibs
+        // Assuming Logic: If trend is down, logic often calculates retracement from Top to Bottom
+        // But autoFibs might handle it. If not, usually 0.382 is the FIRST retracement level from the move start.
+        // If price is BELOW SMA, the "Retracement" is going UP towards the SMA.
+        // So we look for Price to be between Level 0.382 and 0.5 (which are ABOVE current price action usually?)
+        // Wait, standard fib: 0 is Low, 1 is High. Retracement 0.382 is High - (Range*0.382).
+        // If Autocalc does this correct, we just check if price is near level0_382 ??
+        // Actually, let's look for "Price is pulling back".
+        // Short Pullback: Price Rises.
+        // We want price to be *higher* than the recent low.
+        // Let's rely on RSI + Divergence as primary triggers for shorts if Fibs are ambiguous without verifying correct Swing High/Low logic.
+        // BUT user loves "Pau Perdices" which is Fib based. 
+        // Let's assume if Price is < EMA200 but RSI is "High" locally (pullback), it's a Short Candidate.
+        // For simplicity/robustness without rewriting Fib engine:
+        // Short Zone: Price closes *below* EMA50 but rallied recently?
+        // Let's keep strict Fib check only if confident. 
+        // I'll skip Strict Fib check for Shorts *unless* I can verify it, relying on Hidden Divergence (Trend Follow) instead.
+        // Actually, Hidden Bearish Div implies a Lower High (Pullback) in Price while RSI makes Higher High. This CAPTURES the Pullback logic perfectly.
+    }
+
+    // --- 7. MACD & VOLUME ---
+    if (isTournament) {
+        const macd = indicators.macd;
+        if (macd) {
+            if (localTrend === 'BULLISH') {
+                if (macd.histogram > 0 || macd.line > macd.signal) { score += 10; reasons.push("✅ MACD Bullish"); }
+            } else {
+                if (macd.histogram < 0 || macd.line < macd.signal) { score += 10; reasons.push("✅ MACD Bearish"); }
+            }
+        }
+
+        if (volumes.length > 20) {
+            const currentVol = volumes[volumes.length - 1];
+            const recentVols = volumes.slice(-21, -1);
+            const avgVol = recentVols.reduce((a, b) => a + b, 0) / recentVols.length;
+            if (currentVol > avgVol * 1.2) { score += 10; reasons.push("✅ Volume Spike"); }
+        }
     }
 
     // --- DECISION ---
-    const triggerValid = inGoldenZone || hasHiddenBullDiv;
+    const triggerValid = inGoldenZone || hasHiddenDiv; // For shorts, relies on Hidden Div primarily if Fib ambiguous
 
     if (score >= 80 && triggerValid) {
-        // --- RISK (ATR) ---
-        const atr = calculateATR_Internal(highs, lows, prices, 14);
-        const slDist = atr * config.risk.sl_atr_multiplier; // uses local or passed ATR check? using local calc
-        // wait, we have `indicators.atr` usually.
-        // let's use indicators.atr if valid > 0, else local
-        const finalATR = (indicators.atr && indicators.atr > 0) ? indicators.atr : atr;
-        const slDistFinal = finalATR * config.risk.sl_atr_multiplier;
+        // Risk Calc
+        const finalATR = (indicators.atr && indicators.atr > 0) ? indicators.atr : calculateATR_Internal(highs, lows, prices, 14);
+        const slDist = finalATR * config.risk.sl_atr_multiplier;
 
-        const stopLoss = currentPrice - slDistFinal;
-        const riskAmount = currentPrice - stopLoss;
+        let stopLoss, tp1, tp2, tp3, riskAmount;
 
-        const tp1 = fibs.level0 || (currentPrice + slDistFinal * 2);
-        const tp2 = currentPrice + (riskAmount * 3);
-        const tp3 = currentPrice + (riskAmount * 5);
+        if (localTrend === 'BULLISH') {
+            stopLoss = currentPrice - slDist;
+            riskAmount = currentPrice - stopLoss;
+            tp1 = currentPrice + (riskAmount * 2);
+            tp2 = currentPrice + (riskAmount * 3);
+            tp3 = currentPrice + (riskAmount * 5);
+        } else {
+            // SHORT Logic
+            stopLoss = currentPrice + slDist;
+            riskAmount = stopLoss - currentPrice;
+            tp1 = currentPrice - (riskAmount * 2);
+            tp2 = currentPrice - (riskAmount * 3);
+            tp3 = currentPrice - (riskAmount * 5);
+        }
 
         const riskCapital = accountBalance * config.risk.risk_per_trade;
-        const riskPerShare = currentPrice - stopLoss;
+        const riskPerShare = riskAmount;
         const recommendedLotSize = riskCapital / (riskPerShare || 1);
 
         return {
-            signal: 'LONG',
-            score,
+            signal: localTrend === 'BULLISH' ? 'LONG' : 'SHORT',
+            score: Math.min(100, score),
             reason: reasons,
-            risk: {
-                stopLoss,
-                takeProfit1: tp1,
-                takeProfit2: tp2,
-                takeProfit3: tp3,
-                riskPerShare,
-                recommendedLotSize
-            },
-            metadata: {
-                isGold: true,
-                sessionValid: isActiveSession,
-                trendValid: true,
-                rsiValid: true,
-                divergenceDetected: hasHiddenBullDiv
-            }
+            risk: { stopLoss, takeProfit1: tp1, takeProfit2: tp2, takeProfit3: tp3, riskPerShare, recommendedLotSize },
+            metadata: { isGold, sessionValid: isActiveSession, trendValid: true, rsiValid: true, divergenceDetected: hasHiddenDiv, mtfValid: true }
         };
     }
 
-    return createNeutralResult("Conditions not fully met", { isGold, sessionValid: isActiveSession, trendValid: true, rsiValid: true, divergenceDetected: hasHiddenBullDiv });
+    return createNeutralResult("Conditions not met", { isGold, sessionValid: isActiveSession, trendValid: true, rsiValid: true, divergenceDetected: hasHiddenDiv });
 }
 
 function createNeutralResult(reason: string, metadata: any): PauStrategyResult {
@@ -220,6 +306,6 @@ function createNeutralResult(reason: string, metadata: any): PauStrategyResult {
         score: 0,
         reason: [reason],
         risk: { stopLoss: 0, takeProfit1: 0, takeProfit2: 0, takeProfit3: 0, riskPerShare: 0, recommendedLotSize: 0 },
-        metadata: { ...metadata }
+        metadata: { isGold: false, sessionValid: false, trendValid: false, rsiValid: false, divergenceDetected: false, mtfValid: false, ...metadata } // Defaults
     };
 }

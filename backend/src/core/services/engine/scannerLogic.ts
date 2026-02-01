@@ -35,10 +35,29 @@ import { predictNextMove, savePrediction } from '../../../ml/inference'; // NEW:
 import { getExpertVolumeAnalysis, enrichWithDepthAndLiqs } from '../../../services/volumeExpert'; // NEW: Volume Expert Service
 import { VolumeExpertAnalysis } from '../../types/types-advanced'; // NEW: Correct Type Import
 import { CEXConnector } from '../api/CEXConnector'; // NEW: Professional Source
+import { EconomicService } from '../economicService'; // NEW: Nuclear Shield
 
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {
     // 0. INITIALIZATION
     console.log(`[Scanner] PIPELINE START: ${style} mode...`);
+
+    // 1. DATA INGESTION
+
+    // 0.5 NUCLEAR SHIELD (Tournament Defense)
+    if (TradingConfig.TOURNAMENT_MODE) {
+        try {
+            const shield = await EconomicService.checkNuclearStatus();
+            if (shield.isActive) {
+                console.warn(`[Scanner] ☢️ NUCLEAR WINTER PROTOCOL ACTIVE: ${shield.reason}`);
+                console.warn(`[Scanner] System is in capital preservation mode. No trades will be taken today.`);
+                throw new Error(`NUCLEAR_WINTER_PAUSE: ${shield.reason}`);
+            }
+        } catch (e: any) {
+            // If it's the pause error, rethrow it to stop the pipeline
+            if (e.message && e.message.includes('NUCLEAR_WINTER')) throw e;
+            console.warn("[Scanner] Shield check failed (Fail Open):", e);
+        }
+    }
 
     // 1. DATA INGESTION
     const mode = style === 'MEME_SCALP' ? 'memes' : 'volume'; // 'memes' uses MEME_SYMBOLS from API (legacy) or we filter later
@@ -73,7 +92,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
         console.warn("[Scanner] Global Market Data missing", e);
     }
 
-    const topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 60);
+    let topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 60);
     const opportunities: AIOpportunity[] = [];
 
     // 3. CHUNKED PROCESSING (Robustness Fix)
@@ -83,8 +102,23 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
     // Inject Gold if found and not present in topCandidates
     if (goldTicker && !topCandidates.find(c => c.id === goldTicker.id)) {
-        console.log(`[Scanner] 🏆 Injecting ${goldTicker.symbol} for World Champ Strategy (Backend)`);
+        // console.log(`[Scanner] 🏆 Injecting ${goldTicker.symbol} for World Champ Strategy (Backend)`);
         topCandidates.push(goldTicker);
+    }
+
+    // --- TOURNAMENT MODE OVERRIDE ---
+    if (TradingConfig.TOURNAMENT_MODE) {
+        console.log(`[Scanner] 🏆 TOURNAMENT MODE ACTIVE: Monitoring Elite 9 Only`);
+        const eliteSymbols = TradingConfig.assets.tournament_list; // e.g. ['BTCUSDT', ...]
+
+        // Filter market to only include Elite 9. Matching by ID (BTCUSDT) or Symbol (BTC/USDT)
+        topCandidates = market.filter(m => {
+            const cleanId = m.id.toUpperCase().replace('/', '');
+            const cleanSym = m.symbol.toUpperCase().replace('/', '');
+            return eliteSymbols.includes(cleanId) || eliteSymbols.includes(cleanSym);
+        });
+
+        console.log(`[Scanner] Elite Candidates: ${topCandidates.map(c => c.symbol).join(', ')}`);
     }
 
     // Process in small batches to prevent API rate limiting / Geo-blocking timeouts
@@ -95,8 +129,23 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
         await Promise.all(batch.map(async (coin: any) => {
             try {
-                const interval = style === 'SWING_INSTITUTIONAL' || style === 'ICHIMOKU_CLOUD' ? '4h' : '15m';
+                let interval = style === 'SWING_INSTITUTIONAL' || style === 'ICHIMOKU_CLOUD' ? '4h' : '15m';
+
+                // TOURNAMENT MODE FORCE: 15m for entry
+                if (TradingConfig.TOURNAMENT_MODE) interval = '15m';
+
                 const candles = await fetchCandles(coin.id, interval);
+
+                // TOURNAMENT MODE: Fetch Context (4h)
+                let contextCandles: any[] = [];
+                if (TradingConfig.TOURNAMENT_MODE) {
+                    try {
+                        contextCandles = await fetchCandles(coin.id, '4h');
+                    } catch (e) {
+                        console.warn(`[Scanner] Failed to fetch context candles (4h) for ${coin.symbol}`);
+                    }
+                }
+
                 if (candles.length < 200) return;
 
                 // --- STAGE 1: INDICATORS ---
@@ -174,7 +223,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const prices = candles.map(c => c.close);
                 const volumes = candles.map(c => c.volume);
 
-                const strategyResult = StrategyRunner.run(indicators, risk, highs, lows, prices, volumes);
+                const strategyResult = StrategyRunner.run(indicators, risk, highs, lows, prices, volumes, contextCandles);
 
                 // Skip if no valid signal found
                 if (strategyResult.primaryStrategy && strategyResult.primaryStrategy.signal === 'NEUTRAL') {

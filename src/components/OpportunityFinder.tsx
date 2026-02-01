@@ -61,14 +61,46 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     // 1. Filter based on active mode
     let filtered = activeFilter === 'ALL'
         ? opportunities
-        : opportunities.filter(o => o.strategy === 'pau_perdices_gold');
+        : opportunities.filter(o => o.strategy.includes('pau_perdices'));
 
-    // 2. PINNED LOGIC: Always bubble "Gold Sniper" signals to the top
+    // 2. PINNED LOGIC: Always bubble "Elite Sniper" signals to the top
     const displayedOpportunities = filtered.sort((a, b) => {
-        const isGoldA = a.strategy === 'pau_perdices_gold' ? 1 : 0;
-        const isGoldB = b.strategy === 'pau_perdices_gold' ? 1 : 0;
+        const isGoldA = a.strategy.includes('pau_perdices') ? 1 : 0;
+        const isGoldB = b.strategy.includes('pau_perdices') ? 1 : 0;
         return isGoldB - isGoldA; // Descending (1 comes first)
     });
+
+    // 3. NUCLEAR SHIELD UI (System Paused)
+    const { systemStatus } = useSocket();
+    const isNuclearPaused = systemStatus?.status === 'PAUSED';
+
+    // If Paused, we can either return a blocked view or just show a big banner.
+    // Blocked view is safer for tournament to prevent confusion.
+    if (isNuclearPaused) {
+        return (
+            <div className="h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col items-center justify-center p-6 relative overflow-hidden">
+                <div className="absolute inset-0 bg-red-500/5 animate-pulse pointer-events-none"></div>
+                <div className="z-10 bg-surface p-6 rounded-2xl border border-red-500/30 shadow-2xl flex flex-col items-center max-w-md text-center">
+                    <div className="p-4 bg-red-500/10 rounded-full mb-4 animate-bounce">
+                        <Shield size={48} className="text-red-500" />
+                    </div>
+                    <h2 className="text-xl font-bold text-red-500 uppercase tracking-widest mb-2">NUCLEAR SHIELD ACTIVE</h2>
+                    <h3 className="text-md font-mono font-bold text-primary mb-4">Trading Suspended</h3>
+
+                    <div className="bg-background/50 p-4 rounded-lg border border-red-500/20 w-full mb-4">
+                        <p className="text-sm text-secondary font-mono leading-relaxed">
+                            {systemStatus?.message || "High Impact Economic Event detected."}
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs text-secondary opacity-70">
+                        <AlertTriangle size={12} />
+                        <span>System will resume automatically after volatility stabilizes.</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-auto md:h-full bg-surface border border-border rounded-xl shadow-sm flex flex-col md:overflow-hidden relative">
@@ -192,9 +224,9 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                 <Target size={32} className="text-yellow-500" />
                             </div>
                             <div className="text-center">
-                                <h3 className="text-sm font-bold text-yellow-500 mb-1">Sniper Mode: Waiting...</h3>
+                                <h3 className="text-sm font-bold text-yellow-500 mb-1">Elite 9 Scanner Active</h3>
                                 <p className="text-xs text-secondary max-w-[200px]">
-                                    Esperando la configuración perfecta en XAU/USD (Fib 0.50 + Divergencia).
+                                    Analizando Elite 9 con Estrategia Pau Perdices (Pullback + Divergencia).
                                 </p>
                             </div>
                         </div>

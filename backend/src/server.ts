@@ -299,6 +299,21 @@ scannerService.on('scan_complete', (opportunities: AIOpportunity[]) => {
     });
 });
 
+// 3. System Status (Nuclear Shield / Maintenance)
+scannerService.on('system_status', (status: any) => {
+    const msg = JSON.stringify({
+        type: 'system_status',
+        data: status
+    });
+    console.log(`🛡️ [WS] Broadcasting System Status: ${status.status} (${status.reason})`);
+
+    clients.forEach((client) => {
+        if (client.ws.readyState === WebSocket.OPEN) {
+            client.ws.send(msg);
+        }
+    });
+});
+
 scannerService.on('golden_ticket', (opportunities: AIOpportunity[]) => {
     const msg = JSON.stringify({
         type: 'golden_ticket_alert',
@@ -334,6 +349,10 @@ wss.on('connection', (ws, req) => {
     if (latestOps.length > 0) {
         ws.send(JSON.stringify({ type: 'ai_opportunities', data: latestOps }));
     }
+
+    // 3. System Status Snapshot (Nuclear Shield)
+    const currentStatus = scannerService.getLastStatus();
+    ws.send(JSON.stringify({ type: 'system_status', data: currentStatus }));
 
     ws.on('message', (message) => {
         try {

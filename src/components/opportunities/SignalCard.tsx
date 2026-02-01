@@ -78,11 +78,11 @@ const SignalCard: React.FC<SignalCardProps> = ({ data, onSelect, onShowDetails }
                             {data.strategy.split('_')[0]}
                         </span>
 
-                        {/* PAU PERDICES BADGE */}
-                        {data.strategy === 'pau_perdices_gold' && (
+                        {/* PAU PERDICES (ELITE TOURNAMENT) BADGE */}
+                        {(data.strategy.includes('pau_perdices') || data.strategy.includes('pau_perdices_gold')) && (
                             <div className="mt-1 px-1.5 py-0.5 rounded border bg-yellow-400/20 border-yellow-400/50 text-yellow-500 text-[9px] font-bold flex items-center gap-1 animate-pulse shadow-[0_0_10px_rgba(250,204,21,0.2)]">
                                 <span>🏆</span>
-                                <span>SNIPER</span>
+                                <span>ELITE 9 SNIPER</span>
                             </div>
                         )}
                     </div>

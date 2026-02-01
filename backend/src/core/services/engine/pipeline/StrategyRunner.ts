@@ -29,12 +29,16 @@ export class StrategyRunner {
         highs: number[],
         lows: number[],
         prices: number[],
-        volumes: number[]
+        volumes: number[],
+        contextCandles: any[] = [] // Optional 4h candles
     ) {
-        // 0. SPECIAL OVERRIDE: PAU PERDICES (GOLD & SILVER SNIPER) - Backend
+        // 0. SPECIAL OVERRIDE: PAU PERDICES (TOURNAMENT MODE / GOLD SNIPER)
         const symbol = indicators.symbol || 'UNKNOWN';
-        if (symbol.includes('XAU') || symbol.includes('GOLD') || symbol.includes('PAXG') || symbol.includes('XAG') || symbol.includes('SILVER')) {
-            const pauResult = analyzePauPerdicesStrategy(symbol, prices[prices.length - 1], prices, highs, lows, indicators);
+        const isTarget = TradingConfig.TOURNAMENT_MODE || symbol.includes('XAU') || symbol.includes('GOLD') || symbol.includes('PAXG');
+
+        if (isTarget) {
+            // Pass contextCandles (4h) as the last argument
+            const pauResult = analyzePauPerdicesStrategy(symbol, prices[prices.length - 1], prices, highs, lows, volumes, indicators, contextCandles);
             if (pauResult.signal !== 'NEUTRAL') {
                 return {
                     primaryStrategy: {

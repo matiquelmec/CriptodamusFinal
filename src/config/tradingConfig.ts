@@ -8,8 +8,16 @@
  */
 
 export const TradingConfig = {
+    // --- SYSTEM MODE ---
+    TOURNAMENT_MODE: true, // Master Switch: 'Elite 9' + 'Nuclear Shield' + 'MTF Logic'
+
     // --- ASSET MANAGEMENT ---
     assets: {
+        // The Elite 9 for the Tournament
+        tournament_list: [
+            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT',
+            'XRPUSDT', 'DOGEUSDT', 'PAXGUSDT', 'NEARUSDT', 'SUIUSDT'
+        ],
         tiers: {
             s_tier: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'],
             a_tier_bluechips: ['XRPUSDT', 'ADAUSDT', 'LINKUSDT', 'AVAXUSDT', 'DOTUSDT', 'TRXUSDT', 'TONUSDT', 'SUIUSDT', 'APTUSDT'],

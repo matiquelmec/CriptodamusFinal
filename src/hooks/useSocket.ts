@@ -36,6 +36,7 @@ export const useSocket = () => {
     const [liquidations, setLiquidations] = useState<RealTimeLiquidation[]>([]);
     const [cvd, setCvd] = useState<Record<string, RealTimeCVD>>({});
     const [aiOpportunities, setAIOpportunities] = useState<AIOpportunity[]>([]);
+    const [systemStatus, setSystemStatus] = useState<any>(null); // New State
 
     const wsRef = useRef<WebSocket | null>(null);
     const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -109,15 +110,12 @@ export const useSocket = () => {
                             setAIOpportunities(msg.data);
                             break;
 
+                        case 'system_status': // NEW LISTENER
+                            console.log('[Frontend] System Status Update:', msg.data);
+                            setSystemStatus(msg.data);
+                            break;
+
                         case 'golden_ticket_alert':
-                            // For now, update list if these are included, or just handle alert
-                            // Assuming backend broadcasts full list on updates usually.
-                            // If this sends a subset, we might want to merge.
-                            // But usually scamner sends full result set on scan_complete.
-                            // Let's assume golden ticket is just an alert, not a state replacement, 
-                            // UNLESS backend logic sends opportunities.
-                            // Backend server.ts sends 'data: opportunities' for both.
-                            // So we can update state.
                             setAIOpportunities(msg.data);
                             break;
 
@@ -153,6 +151,7 @@ export const useSocket = () => {
         liquidations,
         cvd,
         aiOpportunities,
+        systemStatus, // EXPORTED
         subscribe
     };
 };

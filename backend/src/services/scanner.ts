@@ -16,9 +16,16 @@ class ScannerService extends EventEmitter {
     private mainScanInterval: NodeJS.Timeout | null = null;
     private memeScanInterval: NodeJS.Timeout | null = null;
 
+    // Status State
+    private currentStatus: any = { status: 'BOOTING', reason: 'INIT', message: 'System Initializing...' };
+
     constructor() {
         super();
         this.opportunities = [];
+    }
+
+    public getLastStatus() {
+        return this.currentStatus;
     }
 
 
@@ -130,9 +137,27 @@ class ScannerService extends EventEmitter {
         try {
             console.log(`🔍 [ScannerService] Executing DUAL-CORE Scan at ${new Date().toISOString()}...`);
 
-            // DUAL-CORE SCANNING: Parallel Execution
-            // 1. Core 1: Macro Swing (4H) - For Trends, Ichimoku, SMC
-            // 2. Core 2: Micro Scalp (15m) - For Volatility, Squeezes, Memes
+            // 0. NUCLEAR SHIELD CHECK (Hard Filter)
+            const { EconomicService } = await import('../core/services/economicService');
+            try {
+                await EconomicService.checkNuclearStatus();
+            } catch (e: any) {
+                console.warn(`🛡️ [ScannerService] Nuclear Shield Active: ${e.message}`);
+                const status = {
+                    status: 'PAUSED',
+                    reason: 'NUCLEAR_EVENT',
+                    message: e.message
+                };
+                this.currentStatus = status; // Update State
+                this.emit('system_status', status);
+                this.isScanning = false;
+                return; // SKIP SCAN
+            }
+
+            // If we pass, we assume status is ACTIVE
+            const activeStatus = { status: 'ACTIVE', reason: 'NORMAL_OP', message: 'Scanning Market...' };
+            this.currentStatus = activeStatus;
+            this.emit('system_status', activeStatus);
 
             const [swingResults, scalpResults] = await Promise.all([
                 scanMarketOpportunities('SWING_INSTITUTIONAL'),

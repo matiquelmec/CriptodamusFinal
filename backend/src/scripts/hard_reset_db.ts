@@ -35,6 +35,15 @@ async function hardReset() {
     if (err2) console.error("❌ Failed to clear signals_audit:", err2);
     else console.log("✅ signals_audit cleared.");
 
+    // 3. Clear orderbook_snapshots
+    const { error: err3 } = await supabase
+        .from('orderbook_snapshots')
+        .delete()
+        .gte('timestamp', 0); // Cleanup history walls
+
+    if (err3) console.error("❌ Failed to clear orderbook_snapshots:", err3);
+    else console.log("✅ orderbook_snapshots cleared.");
+
     console.log("✨ [DB-Reset] Database is now clean.");
 }
 
