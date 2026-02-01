@@ -200,6 +200,12 @@ class SignalAuditService extends EventEmitter {
                     const streamSymbol = opp.symbol.toLowerCase().replace('/', '') + '@aggTrade';
                     binanceStream.addStream(streamSymbol);
                     console.log(`✅ [SignalAudit] Registered: ${opp.symbol} ${opp.side} (PRO Strategy)`);
+
+                    // 🔔 TELEGRAM ALERT
+                    const { telegramService } = await import('./telegramService');
+                    // We send the single opportunity as an array
+                    // Check if it's worthy (score etc checked inside)
+                    telegramService.broadcastSignals([opp]);
                 }
             } finally {
                 this.processingSignatures.delete(sigKey);
