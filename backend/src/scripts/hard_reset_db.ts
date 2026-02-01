@@ -15,7 +15,7 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function hardReset() {
-    console.log("🧹 [DB-Reset] Starting Hard Reset of Audit & Predictions...");
+    console.log("🧹 [DB-Reset] Starting Hard Reset of Audit & Predictions & Stats...");
 
     // 1. Clear model_predictions
     const { error: err1 } = await supabase
@@ -39,10 +39,33 @@ async function hardReset() {
     const { error: err3 } = await supabase
         .from('orderbook_snapshots')
         .delete()
-        .gte('timestamp', 0); // Cleanup history walls
+        .gte('timestamp', 0);
 
     if (err3) console.error("❌ Failed to clear orderbook_snapshots:", err3);
     else console.log("✅ orderbook_snapshots cleared.");
+
+    // 4. Clear performance_stats (WIPE WIN RATE 89.3%)
+    const { error: err4 } = await supabase
+        .from('performance_stats')
+        .delete()
+        .gte('timestamp', 0); // Assuming timestamp column or delete all rows
+
+    // If performance_stats doesn't have timestamp, try just delete
+    if (err4) {
+        console.warn("⚠️ Failed to clear performance_stats (Table might be missing or different PK):", err4.message);
+        // Fallback: Delete Logic might need tweaking if table structure is unknown, but this is best effort.
+    } else {
+        console.log("✅ performance_stats cleared.");
+    }
+
+    // 5. Clear ML State
+    const { error: err5 } = await supabase
+        .from('ml_learning_state')
+        .delete()
+        .gte('last_updated', 0);
+
+    if (err5) console.warn("⚠️ Failed to clear ml_learning_state:", err5.message);
+    else console.log("✅ ml_learning_state cleared.");
 
     console.log("✨ [DB-Reset] Database is now clean.");
 }

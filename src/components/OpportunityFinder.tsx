@@ -268,8 +268,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                                 <Target size={20} className="animate-pulse" />
                                             </div>
                                             <div className="text-left">
-                                                <h3 className="text-sm font-bold text-yellow-500">Gold & Silver Sniper</h3>
-                                                <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">PAXG • XAG</p>
+                                                <h3 className="text-sm font-bold text-yellow-500">Elite 9 Tournament</h3>
+                                                <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">ELITE ASSETS</p>
                                             </div>
                                         </div>
                                         <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 uppercase animate-pulse">
@@ -279,7 +279,7 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                     <div className="mt-3 pt-3 border-t border-yellow-500/10">
                                         <div className="flex items-center gap-2 text-[10px] text-secondary">
                                             <Activity size={12} className="text-yellow-500/70" />
-                                            <span>Esperando setup perfecto (Fib + Div)...</span>
+                                            <span>Esperando setup TOURNAMENT (Elite 9)...</span>
                                         </div>
                                     </div>
                                 </div>
@@ -321,8 +321,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                                             <Target size={20} className="animate-pulse" />
                                         </div>
                                         <div className="text-left">
-                                            <h3 className="text-sm font-bold text-yellow-500">Gold & Silver Sniper</h3>
-                                            <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">PAXG • XAG</p>
+                                            <h3 className="text-sm font-bold text-yellow-500">Elite 9 Tournament</h3>
+                                            <p className="text-[10px] text-yellow-500/70 font-mono mt-0.5">ELITE ASSETS</p>
                                         </div>
                                     </div>
                                     <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 uppercase animate-pulse">
