@@ -73,7 +73,7 @@ const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
         // Ignored symbols (Stablecoins, Leverage tokens, Non-tradable)
         const ignoredPatterns = [
             'USDCUSDT', 'FDUSDUSDT', 'TUSDUSDT', 'USDPUSDT', 'EURUSDT', 'DAIUSDT', 'BUSDUSDT',
-            'UPUSDT', 'DOWNUSDT', 'BULLUSDT', 'BEARUSDT', 'USDT', 'PAXGUSDT',
+            'UPUSDT', 'DOWNUSDT', 'BULLUSDT', 'BEARUSDT', 'USDT',
             'USDEUSDT', 'USD1USDT', 'BFUSDUSDT', 'AEURUSDT' // Added problematic symbols causing 400
         ];
 
