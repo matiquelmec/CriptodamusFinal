@@ -432,164 +432,159 @@ class SignalAuditService extends EventEmitter {
                         }
                     }
                 }
-            }
             } catch (err: any) {
-            console.error(`🚨 [SignalAudit] CRITICAL ERROR on ${signal.symbol}:`, err.message);
+                console.error(`🚨 [SignalAudit] CRITICAL ERROR on ${signal.symbol}:`, err.message);
 
-            // PROTOCOLO DE SEGURIDAD: Si falla el cálculo, NO PODEMOS CONFIAR en la señal.
-            // 1. Marcar como que requiere intervención inmediata.
-            // 2. Idealmente, no cerrarla a ciegas, pero congelarla para que no ejecute SL/TP erróneos.
-            // 3. Forzamos un "sync" limpio en el siguiente tick o la marcamos inválida.
-
-            updates.status = 'ERROR_HALT';
-            updates.technical_reasoning = `${signal.technical_reasoning || ''} | [SYSTEM] Halted due to calculation error: ${err.message}`;
-            shouldClose = false; // No cerrar automáticamente por seguridad (podría ser precio 0)
-        }
-
-        if (Object.keys(updates).length > 0) {
-            if (shouldClose) {
-                updates.closed_at = Date.now();
-                updates.final_price = currentPrice;
-
-                // Final PnL Fallback (if stopped at BE or SL)
-                if (updates.status !== 'WIN' || !updates.pnl_percent) {
-                    const currentWAP = updates.activation_price || signal.activation_price || signal.entry_price;
-                    const weightLeft = (signal.stage === 0) ? 1.0 : (signal.stage === 1 ? 0.5 : (signal.stage === 2 ? 0.2 : 0));
-                    const finalChunk = this.calculateNetPnL(currentWAP, currentPrice, signal.side, currentPrice * this.FEE_RATE, weightLeft);
-                    updates.pnl_percent = (signal.realized_pnl_percent || 0) + finalChunk;
-                }
+                // PROTOCOLO DE SEGURIDAD: Si falla el cálculo, NO PODEMOS CONFIAR en la señal.
+                updates.status = 'ERROR_HALT';
+                updates.technical_reasoning = `${signal.technical_reasoning || ''} | [SYSTEM] Halted due to calculation error: ${err.message}`;
+                shouldClose = false;
             }
 
-            updates.id = signal.id;
-            signalsToUpdate.push(updates);
-            Object.assign(signal, updates); // Sync cache
-        }
-    }
+            if (Object.keys(updates).length > 0) {
+                if (shouldClose) {
+                    updates.closed_at = Date.now();
+                    updates.final_price = currentPrice;
 
-    if(signalsToUpdate.length > 0) {
-    await this.syncUpdates(signalsToUpdate);
-}
+                    // Final PnL Fallback (if stopped at BE or SL)
+                    if (updates.status !== 'WIN' || !updates.pnl_percent) {
+                        const currentWAP = updates.activation_price || signal.activation_price || signal.entry_price;
+                        const weightLeft = (signal.stage === 0) ? 1.0 : (signal.stage === 1 ? 0.5 : (signal.stage === 2 ? 0.2 : 0));
+                        const finalChunk = this.calculateNetPnL(currentWAP, currentPrice, signal.side, currentPrice * this.FEE_RATE, weightLeft);
+                        updates.pnl_percent = (signal.realized_pnl_percent || 0) + finalChunk;
+                    }
+                }
+
+                updates.id = signal.id;
+                signalsToUpdate.push(updates);
+                Object.assign(signal, updates); // Sync cache
+            }
+        }
+
+        if (signalsToUpdate.length > 0) {
+            await this.syncUpdates(signalsToUpdate);
+        }
     }
 
     private calculateNetPnL(entry: number, exit: number, side: string, fees: number, sizeRatio: number): number {
-    const raw = ((exit - entry) / entry) * 100 * (side === 'LONG' ? 1 : -1);
-    const feeRatio = 0.001; // 0.1% per trade
-    return (raw - (feeRatio * 100)) * sizeRatio;
-}
+        const raw = ((exit - entry) / entry) * 100 * (side === 'LONG' ? 1 : -1);
+        const feeRatio = 0.001; // 0.1% per trade
+        return (raw - (feeRatio * 100)) * sizeRatio;
+    }
 
     // ... (syncUpdates, checkExpirations, getRecentSignals, getPerformanceStats remain mostly same but updated headers)
 
     private async syncUpdates(updates: any[]) {
-    for (const upd of updates) {
-        // PRO INTEGRITY GATE: Force WIN to LOSS if net PnL is negative (prevents accounting errors in UI)
-        if (upd.status === 'WIN' && (upd.pnl_percent || 0) <= 0) {
-            console.warn(`🛡️ [SignalAudit] Integrity Guard: Converting WIN to LOSS for ${upd.id} due to non-positive PnL (${upd.pnl_percent?.toFixed(2)}%)`);
-            upd.status = 'LOSS';
-        }
+        for (const upd of updates) {
+            // PRO INTEGRITY GATE: Force WIN to LOSS if net PnL is negative (prevents accounting errors in UI)
+            if (upd.status === 'WIN' && (upd.pnl_percent || 0) <= 0) {
+                console.warn(`🛡️ [SignalAudit] Integrity Guard: Converting WIN to LOSS for ${upd.id} due to non-positive PnL (${upd.pnl_percent?.toFixed(2)}%)`);
+                upd.status = 'LOSS';
+            }
 
-        // Remove internal memory-only fields before sending to Supabase
-        // 'last_sync' is acceptable if we added column, otherwise we should check schema. 
-        // Assuming 'final_price' and 'pnl_percent' exist. 
-        // We strip 'last_sync' from supabase payload to be safe unless we added it. 
-        // Actually, we can just keep last_sync in memory `signal` object and not send to DB if it's not a column.
+            // Remove internal memory-only fields before sending to Supabase
+            // 'last_sync' is acceptable if we added column, otherwise we should check schema. 
+            // Assuming 'final_price' and 'pnl_percent' exist. 
+            // We strip 'last_sync' from supabase payload to be safe unless we added it. 
+            // Actually, we can just keep last_sync in memory `signal` object and not send to DB if it's not a column.
 
-        const { id, last_sync, ...data } = upd;
+            const { id, last_sync, ...data } = upd;
 
-        const { error } = await this.supabase
-            .from('signals_audit')
-            .update(data)
-            .eq('id', id);
+            const { error } = await this.supabase
+                .from('signals_audit')
+                .update(data)
+                .eq('id', id);
 
-        if (!error && (upd.status === 'WIN' || upd.status === 'LOSS')) {
-            const finalPnL = upd.pnl_percent || 0;
-            this.activeSignals = this.activeSignals.filter((s: any) => s.id !== upd.id);
-            console.log(`🎯 [SignalAudit] CERRADA (${upd.status}): ${upd.id} | Net PnL: ${finalPnL.toFixed(2)}%`);
+            if (!error && (upd.status === 'WIN' || upd.status === 'LOSS')) {
+                const finalPnL = upd.pnl_percent || 0;
+                this.activeSignals = this.activeSignals.filter((s: any) => s.id !== upd.id);
+                console.log(`🎯 [SignalAudit] CERRADA (${upd.status}): ${upd.id} | Net PnL: ${finalPnL.toFixed(2)}%`);
 
-            telegramService.sendUpdateAlert('TRADE_CLOSED', {
-                symbol: upd.symbol || 'UNKNOWN',
-                status: upd.status,
-                pnl: finalPnL.toFixed(2),
-                reason: upd.exit_reason || 'Target/SL Hit'
-            });
+                telegramService.sendUpdateAlert('TRADE_CLOSED', {
+                    symbol: upd.symbol || 'UNKNOWN',
+                    status: upd.status,
+                    pnl: finalPnL.toFixed(2),
+                    reason: upd.exit_reason || 'Target/SL Hit'
+                });
 
-            // ML FEEDBACK LOOP: Update model_predictions outcome
-            this.updateMLOutcome(upd.id, finalPnL, upd.status).catch(e =>
-                console.error(`⚠️ [ML-Audit] Failed to sync outcome:`, e)
-            );
+                // ML FEEDBACK LOOP: Update model_predictions outcome
+                this.updateMLOutcome(upd.id, finalPnL, upd.status).catch(e =>
+                    console.error(`⚠️ [ML-Audit] Failed to sync outcome:`, e)
+                );
+            }
         }
     }
-}
 
     /**
      * Finds the nearest ML prediction for this signal and updates its outcome
      */
     private async updateMLOutcome(signalId: string, pnl: number, status: string) {
-    // Find the signal in the DB to get symbol and timestamp
-    const { data: signal } = await this.supabase
-        .from('signals_audit')
-        .select('symbol, created_at, side')
-        .eq('id', signalId)
-        .single();
+        // Find the signal in the DB to get symbol and timestamp
+        const { data: signal } = await this.supabase
+            .from('signals_audit')
+            .select('symbol, created_at, side')
+            .eq('id', signalId)
+            .single();
 
-    if (!signal) return;
+        if (!signal) return;
 
-    // Find nearest prediction in a 5-minute window
-    const windowMs = 5 * 60 * 1000;
-    const startTime = signal.created_at - windowMs;
-    const endTime = signal.created_at + windowMs;
+        // Find nearest prediction in a 5-minute window
+        const windowMs = 5 * 60 * 1000;
+        const startTime = signal.created_at - windowMs;
+        const endTime = signal.created_at + windowMs;
 
-    const { data: predictions } = await this.supabase
-        .from('model_predictions')
-        .select('id, predicted_price')
-        .eq('symbol', signal.symbol)
-        .gte('prediction_time', startTime)
-        .lte('prediction_time', endTime)
-        .order('prediction_time', { ascending: false });
-
-    if (predictions && predictions.length > 0) {
-        // Update the most recent one in that window
-        const pred = predictions[0];
-
-        // Accuracy Logic: 
-        // If WIN -> Outcome = 1 (IA was right)
-        // If LOSS -> Outcome = 0 (IA was wrong)
-        // Or use PnL directly for regression models
-        const outcome = status === 'WIN' ? 1 : 0;
-
-        await this.supabase
+        const { data: predictions } = await this.supabase
             .from('model_predictions')
-            .update({ actual_outcome: outcome })
-            .eq('id', pred.id);
+            .select('id, predicted_price')
+            .eq('symbol', signal.symbol)
+            .gte('prediction_time', startTime)
+            .lte('prediction_time', endTime)
+            .order('prediction_time', { ascending: false });
 
-        console.log(`🧠 [ML-Audit] Loop Closed: Prediction ${pred.id} marked as ${outcome === 1 ? 'ACCURATE' : 'INACCURATE'} (PnL: ${pnl.toFixed(2)}%)`);
+        if (predictions && predictions.length > 0) {
+            // Update the most recent one in that window
+            const pred = predictions[0];
+
+            // Accuracy Logic: 
+            // If WIN -> Outcome = 1 (IA was right)
+            // If LOSS -> Outcome = 0 (IA was wrong)
+            // Or use PnL directly for regression models
+            const outcome = status === 'WIN' ? 1 : 0;
+
+            await this.supabase
+                .from('model_predictions')
+                .update({ actual_outcome: outcome })
+                .eq('id', pred.id);
+
+            console.log(`🧠 [ML-Audit] Loop Closed: Prediction ${pred.id} marked as ${outcome === 1 ? 'ACCURATE' : 'INACCURATE'} (PnL: ${pnl.toFixed(2)}%)`);
+        }
     }
-}
 
     // ...
 
     private async checkExpirations() {
-    if (this.activeSignals.length === 0) return;
-    const signalsToUpdate = [];
-    for (const signal of this.activeSignals) {
-        // Only expire PENDING signals. Once ACTIVE, they must hit SL or TP.
-        if (signal.status === 'PENDING' || signal.status === 'OPEN') {
-            const ageHours = (Date.now() - Number(signal.created_at)) / (1000 * 60 * 60);
-            const limit = signal.timeframe === '15m' ? 4 : 72; // Increased to 72h
-            if (ageHours > limit) {
-                console.log(`⌛ [SignalAudit] Expiring stale signal: ${signal.symbol}`);
-                signalsToUpdate.push({
-                    id: signal.id,
-                    status: 'EXPIRED',
-                    closed_at: Date.now(),
-                    final_price: signal.entry_price,
-                    pnl_percent: 0,
-                    fees_paid: 0
-                });
+        if (this.activeSignals.length === 0) return;
+        const signalsToUpdate = [];
+        for (const signal of this.activeSignals) {
+            // Only expire PENDING signals. Once ACTIVE, they must hit SL or TP.
+            if (signal.status === 'PENDING' || signal.status === 'OPEN') {
+                const ageHours = (Date.now() - Number(signal.created_at)) / (1000 * 60 * 60);
+                const limit = signal.timeframe === '15m' ? 4 : 72; // Increased to 72h
+                if (ageHours > limit) {
+                    console.log(`⌛ [SignalAudit] Expiring stale signal: ${signal.symbol}`);
+                    signalsToUpdate.push({
+                        id: signal.id,
+                        status: 'EXPIRED',
+                        closed_at: Date.now(),
+                        final_price: signal.entry_price,
+                        pnl_percent: 0,
+                        fees_paid: 0
+                    });
+                }
             }
         }
+        if (signalsToUpdate.length > 0) this.syncUpdates(signalsToUpdate);
     }
-    if (signalsToUpdate.length > 0) this.syncUpdates(signalsToUpdate);
-}
 
     /**
      * ═══════════════════════════════════════════════════════════
@@ -605,274 +600,274 @@ class SignalAuditService extends EventEmitter {
      * 7. Max Time (HARD) → Solo trades FLAT >12h
      */
     private async checkAdvancedExits() {
-    if (this.activeSignals.length === 0) return;
+        if (this.activeSignals.length === 0) return;
 
-    try {
-        const { TradingConfig } = await import('../core/config/tradingConfig');
-        const exit_strategy = TradingConfig.exit_strategy;
+        try {
+            const { TradingConfig } = await import('../core/config/tradingConfig');
+            const exit_strategy = TradingConfig.exit_strategy;
 
-        if (!exit_strategy) return; // Fallback to legacy
+            if (!exit_strategy) return; // Fallback to legacy
 
-        const signalsToUpdate = [];
+            const signalsToUpdate = [];
 
-        for (const signal of this.activeSignals) {
-            if (!['ACTIVE', 'PARTIAL_WIN'].includes(signal.status)) continue;
+            for (const signal of this.activeSignals) {
+                if (!['ACTIVE', 'PARTIAL_WIN'].includes(signal.status)) continue;
 
-            const ageMs = Date.now() - Number(signal.created_at);
-            const ageHours = ageMs / (1000 * 60 * 60);
+                const ageMs = Date.now() - Number(signal.created_at);
+                const ageHours = ageMs / (1000 * 60 * 60);
 
-            const isLong = signal.side === 'LONG';
-            const currentPrice = signal.final_price || signal.entry_price;
-            const currentWAP = signal.activation_price || signal.entry_price;
-            const currentStage = signal.stage || 0;
+                const isLong = signal.side === 'LONG';
+                const currentPrice = signal.final_price || signal.entry_price;
+                const currentWAP = signal.activation_price || signal.entry_price;
+                const currentStage = signal.stage || 0;
 
-            let shouldExit = false;
-            let exitReason = '';
-            let updates: any = {};
+                let shouldExit = false;
+                let exitReason = '';
+                let updates: any = {};
 
-            try {
-                // Fetch recent candles for advanced analysis
-                const candles = await this.fetchRecentCandles(signal.symbol, 20);
-                if (!candles || candles.length < 10) continue;
+                try {
+                    // Fetch recent candles for advanced analysis
+                    const candles = await this.fetchRecentCandles(signal.symbol, 20);
+                    if (!candles || candles.length < 10) continue;
 
-                const closes = candles.map(c => c.close);
-                const rsiArray = this.calculateRSI(closes, 14);
-                const currentRSI = rsiArray[rsiArray.length - 1];
-                const atr = this.calculateATR(candles, 14);
+                    const closes = candles.map(c => c.close);
+                    const rsiArray = this.calculateRSI(closes, 14);
+                    const currentRSI = rsiArray[rsiArray.length - 1];
+                    const atr = this.calculateATR(candles, 14);
 
-                // === EXIT CHECK 1: DIVERGENCIA REGULAR (Reversión) ===
-                if (exit_strategy.reversal?.enabled) {
-                    const { detectRegularBearishDivergence, detectRegularBullishDivergence } =
-                        await import('../core/services/divergenceDetector');
+                    // === EXIT CHECK 1: DIVERGENCIA REGULAR (Reversión) ===
+                    if (exit_strategy.reversal?.enabled) {
+                        const { detectRegularBearishDivergence, detectRegularBullishDivergence } =
+                            await import('../core/services/divergenceDetector');
 
-                    if (isLong && detectRegularBearishDivergence(candles, rsiArray, exit_strategy.reversal.lookback_candles)) {
-                        shouldExit = true;
-                        exitReason = 'REGULAR_BEARISH_DIV';
-                        console.log(`🔄 [AdvancedExit] ${signal.symbol}: Bearish Divergence (Reversal)`);
+                        if (isLong && detectRegularBearishDivergence(candles, rsiArray, exit_strategy.reversal.lookback_candles)) {
+                            shouldExit = true;
+                            exitReason = 'REGULAR_BEARISH_DIV';
+                            console.log(`🔄 [AdvancedExit] ${signal.symbol}: Bearish Divergence (Reversal)`);
+                        }
+
+                        if (!isLong && detectRegularBullishDivergence(candles, rsiArray, exit_strategy.reversal.lookback_candles)) {
+                            shouldExit = true;
+                            exitReason = 'REGULAR_BULLISH_DIV';
+                            console.log(`🔄 [AdvancedExit] ${signal.symbol}: Bullish Divergence (Reversal)`);
+                        }
                     }
 
-                    if (!isLong && detectRegularBullishDivergence(candles, rsiArray, exit_strategy.reversal.lookback_candles)) {
-                        shouldExit = true;
-                        exitReason = 'REGULAR_BULLISH_DIV';
-                        console.log(`🔄 [AdvancedExit] ${signal.symbol}: Bullish Divergence (Reversal)`);
+                    // === EXIT CHECK 2: MOMENTUM EXHAUSTION ===
+                    if (!shouldExit && exit_strategy.momentum?.enabled && ageHours >= exit_strategy.momentum.min_hours_check) {
+                        const rsiThreshold = exit_strategy.momentum.rsi_threshold;
+                        const maxFlat = exit_strategy.momentum.max_flat_percent;
+
+                        const priceChange = Math.abs(((currentPrice - currentWAP) / currentWAP) * 100);
+
+                        if (isLong && currentRSI > rsiThreshold && priceChange < maxFlat) {
+                            shouldExit = true;
+                            exitReason = 'MOMENTUM_EXHAUSTED';
+                            console.log(`⚡ [AdvancedExit] ${signal.symbol}: Momentum Dead (RSI ${currentRSI.toFixed(1)}, ${ageHours.toFixed(1)}h)`);
+                        }
+
+                        if (!isLong && currentRSI < (100 - rsiThreshold) && priceChange < maxFlat) {
+                            shouldExit = true;
+                            exitReason = 'MOMENTUM_EXHAUSTED';
+                            console.log(`⚡ [AdvancedExit] ${signal.symbol}: SHORT Momentum Dead (RSI ${currentRSI.toFixed(1)})`);
+                        }
                     }
-                }
 
-                // === EXIT CHECK 2: MOMENTUM EXHAUSTION ===
-                if (!shouldExit && exit_strategy.momentum?.enabled && ageHours >= exit_strategy.momentum.min_hours_check) {
-                    const rsiThreshold = exit_strategy.momentum.rsi_threshold;
-                    const maxFlat = exit_strategy.momentum.max_flat_percent;
+                    // === EXIT CHECK 3: TRAILING STOP (Solo después de TP1) ===
+                    if (!shouldExit && exit_strategy.trailing_stop?.enabled && currentStage >= 1) {
+                        const trailingDistance = atr * exit_strategy.trailing_stop.atr_distance;
+                        const maxReached = signal.max_price_reached || currentWAP;
 
-                    const priceChange = Math.abs(((currentPrice - currentWAP) / currentWAP) * 100);
+                        const trailingSL = isLong
+                            ? maxReached - trailingDistance
+                            : maxReached + trailingDistance;
 
-                    if (isLong && currentRSI > rsiThreshold && priceChange < maxFlat) {
-                        shouldExit = true;
-                        exitReason = 'MOMENTUM_EXHAUSTED';
-                        console.log(`⚡ [AdvancedExit] ${signal.symbol}: Momentum Dead (RSI ${currentRSI.toFixed(1)}, ${ageHours.toFixed(1)}h)`);
+                        const hitTrailing = isLong
+                            ? currentPrice <= trailingSL
+                            : currentPrice >= trailingSL;
+
+                        if (hitTrailing) {
+                            shouldExit = true;
+                            exitReason = 'TRAILING_STOP';
+                            console.log(`📉 [AdvancedExit] ${signal.symbol}: Trailing Stop (${trailingDistance.toFixed(2)} from max)`);
+                        } else {
+                            // NEW: Persist Trailing SL if it moved significantly
+                            const currentStoredSL = signal.stop_loss || 0;
+                            if (Math.abs(trailingSL - currentStoredSL) > (currentPrice * 0.005)) { // Only update if > 0.5% move to avoid spam
+                                const betterSL = isLong ? Math.max(currentStoredSL, trailingSL) : Math.min(currentStoredSL || Infinity, trailingSL);
+                                if (betterSL !== currentStoredSL) {
+                                    updates.stop_loss = Number(betterSL.toFixed(4));
+                                    telegramService.sendUpdateAlert('SL_MOVED', {
+                                        symbol: signal.symbol,
+                                        newSl: updates.stop_loss,
+                                        reason: 'Trailing Stop Follow-up'
+                                    });
+                                }
+                            }
+                        }
                     }
 
-                    if (!isLong && currentRSI < (100 - rsiThreshold) && priceChange < maxFlat) {
-                        shouldExit = true;
-                        exitReason = 'MOMENTUM_EXHAUSTED';
-                        console.log(`⚡ [AdvancedExit] ${signal.symbol}: SHORT Momentum Dead (RSI ${currentRSI.toFixed(1)})`);
+                    // === EXIT CHECK 4: TIME DECAY (SOFT - Estrecha SL) ===
+                    if (!shouldExit && exit_strategy.time_decay?.enabled && ageHours >= exit_strategy.time_decay.soft_start_hours) {
+                        const hoursSinceSoft = ageHours - exit_strategy.time_decay.soft_start_hours;
+                        const decayFactor = hoursSinceSoft * exit_strategy.time_decay.sl_tighten_rate;
+                        const tightenFactor = Math.max(0.3, 1 - decayFactor); // Min 30% of original
+
+                        const originalSLDistance = atr * 1.5;
+                        const tightenedDistance = originalSLDistance * tightenFactor;
+
+                        const tightenedSL = isLong
+                            ? currentWAP - tightenedDistance
+                            : currentWAP + tightenedDistance;
+
+                        // Solo actualizar SL si cambió significativamente
+                        const slChanged = Math.abs(tightenedSL - signal.stop_loss) > (currentPrice * 0.001);
+                        if (slChanged) {
+                            updates.stop_loss = Number(tightenedSL.toFixed(4));
+                            console.log(`⏱️ [TimeDecay] ${signal.symbol}: SL tightened to ${tightenedSL.toFixed(2)} (${ageHours.toFixed(1)}h, factor: ${tightenFactor.toFixed(2)})`);
+                            telegramService.sendUpdateAlert('SL_MOVED', {
+                                symbol: signal.symbol,
+                                newSl: updates.stop_loss,
+                                reason: `Time Decay (${ageHours.toFixed(1)}h)`
+                            });
+                        }
                     }
-                }
 
-                // === EXIT CHECK 3: TRAILING STOP (Solo después de TP1) ===
-                if (!shouldExit && exit_strategy.trailing_stop?.enabled && currentStage >= 1) {
-                    const trailingDistance = atr * exit_strategy.trailing_stop.atr_distance;
-                    const maxReached = signal.max_price_reached || currentWAP;
+                    // === EXIT CHECK 4.5: FORCED BREAKEVEN (12h sin TP1) ===
+                    if (!shouldExit && exit_strategy.time_decay?.forced_breakeven?.enabled) {
+                        const forcedBEConfig = exit_strategy.time_decay.forced_breakeven;
 
-                    const trailingSL = isLong
-                        ? maxReached - trailingDistance
-                        : maxReached + trailingDistance;
+                        // Solo aplica si trade es viejo (>12h) y NO ha tocado TP1 (stage 0)
+                        if (ageHours >= forcedBEConfig.hours && currentStage <= forcedBEConfig.stage_threshold) {
+                            const realEntry = signal.entry || signal.target;
 
-                    const hitTrailing = isLong
-                        ? currentPrice <= trailingSL
-                        : currentPrice >= trailingSL;
+                            // Mover SL a breakeven si aún no está ahí
+                            // (Permitimos pequeño margen de floating point error)
+                            // Smart Breakeven for Time Decay
+                            const buffer = signal.smart_be_buffer || (realEntry * 0.0015);
+                            const smartBE = isLong ? realEntry + buffer : realEntry - buffer;
 
-                    if (hitTrailing) {
-                        shouldExit = true;
-                        exitReason = 'TRAILING_STOP';
-                        console.log(`📉 [AdvancedExit] ${signal.symbol}: Trailing Stop (${trailingDistance.toFixed(2)} from max)`);
-                    } else {
-                        // NEW: Persist Trailing SL if it moved significantly
-                        const currentStoredSL = signal.stop_loss || 0;
-                        if (Math.abs(trailingSL - currentStoredSL) > (currentPrice * 0.005)) { // Only update if > 0.5% move to avoid spam
-                            const betterSL = isLong ? Math.max(currentStoredSL, trailingSL) : Math.min(currentStoredSL || Infinity, trailingSL);
-                            if (betterSL !== currentStoredSL) {
-                                updates.stop_loss = Number(betterSL.toFixed(4));
+                            const currentSL = signal.stop_loss || realEntry;
+                            // Only update if current SL is worse than Smart BE
+                            const isImprovement = isLong ? currentSL < smartBE : currentSL > smartBE;
+
+                            if (isImprovement) {
+                                updates.stop_loss = Number(smartBE.toFixed(4));
+                                console.log(`⏰ [ForcedBreakeven] ${signal.symbol}: SL → Smart BE ($${updates.stop_loss}) after ${ageHours.toFixed(1)}h`);
                                 telegramService.sendUpdateAlert('SL_MOVED', {
                                     symbol: signal.symbol,
                                     newSl: updates.stop_loss,
-                                    reason: 'Trailing Stop Follow-up'
+                                    reason: `Forced Breakeven (>12h)`
                                 });
                             }
                         }
                     }
-                }
 
-                // === EXIT CHECK 4: TIME DECAY (SOFT - Estrecha SL) ===
-                if (!shouldExit && exit_strategy.time_decay?.enabled && ageHours >= exit_strategy.time_decay.soft_start_hours) {
-                    const hoursSinceSoft = ageHours - exit_strategy.time_decay.soft_start_hours;
-                    const decayFactor = hoursSinceSoft * exit_strategy.time_decay.sl_tighten_rate;
-                    const tightenFactor = Math.max(0.3, 1 - decayFactor); // Min 30% of original
+                    // === EXIT CHECK 5: HARD TIME LIMIT (Solo FLAT trades) ===
+                    if (!shouldExit && exit_strategy.time_decay?.enabled && ageHours >= exit_strategy.time_decay.hard_limit_hours) {
+                        const pnlPercent = ((currentPrice - currentWAP) / currentWAP) * 100 * (isLong ? 1 : -1);
 
-                    const originalSLDistance = atr * 1.5;
-                    const tightenedDistance = originalSLDistance * tightenFactor;
-
-                    const tightenedSL = isLong
-                        ? currentWAP - tightenedDistance
-                        : currentWAP + tightenedDistance;
-
-                    // Solo actualizar SL si cambió significativamente
-                    const slChanged = Math.abs(tightenedSL - signal.stop_loss) > (currentPrice * 0.001);
-                    if (slChanged) {
-                        updates.stop_loss = Number(tightenedSL.toFixed(4));
-                        console.log(`⏱️ [TimeDecay] ${signal.symbol}: SL tightened to ${tightenedSL.toFixed(2)} (${ageHours.toFixed(1)}h, factor: ${tightenFactor.toFixed(2)})`);
-                        telegramService.sendUpdateAlert('SL_MOVED', {
-                            symbol: signal.symbol,
-                            newSl: updates.stop_loss,
-                            reason: `Time Decay (${ageHours.toFixed(1)}h)`
-                        });
-                    }
-                }
-
-                // === EXIT CHECK 4.5: FORCED BREAKEVEN (12h sin TP1) ===
-                if (!shouldExit && exit_strategy.time_decay?.forced_breakeven?.enabled) {
-                    const forcedBEConfig = exit_strategy.time_decay.forced_breakeven;
-
-                    // Solo aplica si trade es viejo (>12h) y NO ha tocado TP1 (stage 0)
-                    if (ageHours >= forcedBEConfig.hours && currentStage <= forcedBEConfig.stage_threshold) {
-                        const realEntry = signal.entry || signal.target;
-
-                        // Mover SL a breakeven si aún no está ahí
-                        // (Permitimos pequeño margen de floating point error)
-                        // Smart Breakeven for Time Decay
-                        const buffer = signal.smart_be_buffer || (realEntry * 0.0015);
-                        const smartBE = isLong ? realEntry + buffer : realEntry - buffer;
-
-                        const currentSL = signal.stop_loss || realEntry;
-                        // Only update if current SL is worse than Smart BE
-                        const isImprovement = isLong ? currentSL < smartBE : currentSL > smartBE;
-
-                        if (isImprovement) {
-                            updates.stop_loss = Number(smartBE.toFixed(4));
-                            console.log(`⏰ [ForcedBreakeven] ${signal.symbol}: SL → Smart BE ($${updates.stop_loss}) after ${ageHours.toFixed(1)}h`);
-                            telegramService.sendUpdateAlert('SL_MOVED', {
-                                symbol: signal.symbol,
-                                newSl: updates.stop_loss,
-                                reason: `Forced Breakeven (>12h)`
-                            });
+                        if (Math.abs(pnlPercent) < 0.5) {
+                            shouldExit = true;
+                            exitReason = 'MAX_TIME_FLAT';
+                            console.log(`⌛ [AdvancedExit] ${signal.symbol}: Closed by time (${ageHours.toFixed(1)}h, FLAT: ${pnlPercent.toFixed(2)}%)`);
                         }
                     }
-                }
 
-                // === EXIT CHECK 5: HARD TIME LIMIT (Solo FLAT trades) ===
-                if (!shouldExit && exit_strategy.time_decay?.enabled && ageHours >= exit_strategy.time_decay.hard_limit_hours) {
-                    const pnlPercent = ((currentPrice - currentWAP) / currentWAP) * 100 * (isLong ? 1 : -1);
+                    // === EJECUTAR SALIDA ===
+                    if (shouldExit) {
+                        const weightLeft = (currentStage === 0) ? 1.0 : (currentStage === 1 ? 0.5 : (currentStage === 2 ? 0.2 : 0));
+                        const closingFee = currentPrice * this.FEE_RATE * weightLeft;
+                        const finalPnL = this.calculateNetPnL(currentWAP, currentPrice, signal.side, closingFee, weightLeft);
+                        const totalPnL = (signal.realized_pnl_percent || 0) + finalPnL;
 
-                    if (Math.abs(pnlPercent) < 0.5) {
-                        shouldExit = true;
-                        exitReason = 'MAX_TIME_FLAT';
-                        console.log(`⌛ [AdvancedExit] ${signal.symbol}: Closed by time (${ageHours.toFixed(1)}h, FLAT: ${pnlPercent.toFixed(2)}%)`);
+                        updates = {
+                            ...updates,
+                            id: signal.id,
+                            status: totalPnL > 0.5 ? 'WIN' : (totalPnL < -0.5 ? 'LOSS' : 'BREAKEVEN'),
+                            closed_at: Date.now(),
+                            final_price: currentPrice,
+                            pnl_percent: totalPnL,
+                            fees_paid: (signal.fees_paid || 0) + closingFee,
+                            exit_reason: exitReason
+                        };
+
+                        signalsToUpdate.push(updates);
+                    } else if (Object.keys(updates).length > 0) {
+                        // Solo update SL (no cierre)
+                        updates.id = signal.id;
+                        signalsToUpdate.push(updates);
                     }
+
+                } catch (innerError: any) {
+                    console.error(`[AdvancedExit] Error analyzing ${signal.symbol}:`, innerError.message);
                 }
-
-                // === EJECUTAR SALIDA ===
-                if (shouldExit) {
-                    const weightLeft = (currentStage === 0) ? 1.0 : (currentStage === 1 ? 0.5 : (currentStage === 2 ? 0.2 : 0));
-                    const closingFee = currentPrice * this.FEE_RATE * weightLeft;
-                    const finalPnL = this.calculateNetPnL(currentWAP, currentPrice, signal.side, closingFee, weightLeft);
-                    const totalPnL = (signal.realized_pnl_percent || 0) + finalPnL;
-
-                    updates = {
-                        ...updates,
-                        id: signal.id,
-                        status: totalPnL > 0.5 ? 'WIN' : (totalPnL < -0.5 ? 'LOSS' : 'BREAKEVEN'),
-                        closed_at: Date.now(),
-                        final_price: currentPrice,
-                        pnl_percent: totalPnL,
-                        fees_paid: (signal.fees_paid || 0) + closingFee,
-                        exit_reason: exitReason
-                    };
-
-                    signalsToUpdate.push(updates);
-                } else if (Object.keys(updates).length > 0) {
-                    // Solo update SL (no cierre)
-                    updates.id = signal.id;
-                    signalsToUpdate.push(updates);
-                }
-
-            } catch (innerError: any) {
-                console.error(`[AdvancedExit] Error analyzing ${signal.symbol}:`, innerError.message);
             }
-        }
 
-        if (signalsToUpdate.length > 0) {
-            await this.syncUpdates(signalsToUpdate);
-        }
+            if (signalsToUpdate.length > 0) {
+                await this.syncUpdates(signalsToUpdate);
+            }
 
-        // GLOBAL EVENT EMIT (For WebSocket)
-        // We emit the full list of active signals after every audit cycle (1m) or major update
-        if (this.activeSignals.length > 0) {
-            this.emit('active_trades_update', this.activeSignals);
-        }
+            // GLOBAL EVENT EMIT (For WebSocket)
+            // We emit the full list of active signals after every audit cycle (1m) or major update
+            if (this.activeSignals.length > 0) {
+                this.emit('active_trades_update', this.activeSignals);
+            }
 
-    } catch (e: any) {
-        console.error('[AdvancedExit] Critical error:', e.message);
+        } catch (e: any) {
+            console.error('[AdvancedExit] Critical error:', e.message);
+        }
     }
-}
 
     // Helper: Fetch recent candles
     private async fetchRecentCandles(symbol: string, count: number = 20) {
-    try {
-        const { SmartFetch } = await import('../core/services/SmartFetch');
-        const symbolBinance = symbol.replace('/', '');
-        const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbolBinance}&interval=15m&limit=${count}`;
-        const data = await SmartFetch.get<any[]>(url);
+        try {
+            const { SmartFetch } = await import('../core/services/SmartFetch');
+            const symbolBinance = symbol.replace('/', '');
+            const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbolBinance}&interval=15m&limit=${count}`;
+            const data = await SmartFetch.get<any[]>(url);
 
-        if (!Array.isArray(data)) return null;
+            if (!Array.isArray(data)) return null;
 
-        return data.map((k: any) => ({
-            timestamp: k[0],
-            open: parseFloat(k[1]),
-            high: parseFloat(k[2]),
-            low: parseFloat(k[3]),
-            close: parseFloat(k[4]),
-            volume: parseFloat(k[5])
-        }));
-    } catch (e) {
-        return null;
+            return data.map((k: any) => ({
+                timestamp: k[0],
+                open: parseFloat(k[1]),
+                high: parseFloat(k[2]),
+                low: parseFloat(k[3]),
+                close: parseFloat(k[4]),
+                volume: parseFloat(k[5])
+            }));
+        } catch (e) {
+            return null;
+        }
     }
-}
 
     // Helper: Calculate RSI
     private calculateRSI(closes: number[], period: number = 14): number[] {
-    const { calculateRSIArray } = require('../core/services/mathUtils');
-    return calculateRSIArray(closes, period);
-}
+        const { calculateRSIArray } = require('../core/services/mathUtils');
+        return calculateRSIArray(closes, period);
+    }
 
     // Helper: Calculate ATR
     private calculateATR(candles: any[], period: number = 14): number {
-    if (candles.length < period + 1) return 0;
+        if (candles.length < period + 1) return 0;
 
-    let sum = 0;
-    for (let i = 1; i < Math.min(period + 1, candles.length); i++) {
-        const high = candles[i].high;
-        const low = candles[i].low;
-        const prevClose = candles[i - 1].close;
+        let sum = 0;
+        for (let i = 1; i < Math.min(period + 1, candles.length); i++) {
+            const high = candles[i].high;
+            const low = candles[i].low;
+            const prevClose = candles[i - 1].close;
 
-        const tr = Math.max(
-            high - low,
-            Math.abs(high - prevClose),
-            Math.abs(low - prevClose)
-        );
-        sum += tr;
+            const tr = Math.max(
+                high - low,
+                Math.abs(high - prevClose),
+                Math.abs(low - prevClose)
+            );
+            sum += tr;
+        }
+
+        return sum / period;
     }
-
-    return sum / period;
-}
 
     /**
      * ═══════════════════════════════════════════════════════════
@@ -883,47 +878,47 @@ class SignalAuditService extends EventEmitter {
      * Allows ScannerLogic (15m cycle) to update active trades with deep insights.
      */
     public async updateSignalContext(symbol: string, context: { new_tp?: number, reason?: string }) {
-    const signal = this.activeSignals.find(s => s.symbol === symbol || s.symbol.replace('/', '') === symbol.replace('/', ''));
+        const signal = this.activeSignals.find(s => s.symbol === symbol || s.symbol.replace('/', '') === symbol.replace('/', ''));
 
-    if (signal && context.new_tp) {
-        // Validate: Only Lower TP for LONGs (Front-run), Only Raise TP for SHORTs (Front-run) - Safety First
-        const isLong = signal.side === 'LONG';
-        const currentTP2 = signal.dcaPlan?.takeProfits?.tp2?.price || 0;
-        const currentTP3 = signal.dcaPlan?.takeProfits?.tp3?.price || 0;
+        if (signal && context.new_tp) {
+            // Validate: Only Lower TP for LONGs (Front-run), Only Raise TP for SHORTs (Front-run) - Safety First
+            const isLong = signal.side === 'LONG';
+            const currentTP2 = signal.dcaPlan?.takeProfits?.tp2?.price || 0;
+            const currentTP3 = signal.dcaPlan?.takeProfits?.tp3?.price || 0;
 
-        // Simple Logic: We target TP2 or TP3 adjustment. Let's assume we adjust the NEXT relevant TP.
-        let targetStage = signal.stage < 2 ? 2 : 3;
-        let currentTargetPrice = targetStage === 2 ? currentTP2 : currentTP3;
+            // Simple Logic: We target TP2 or TP3 adjustment. Let's assume we adjust the NEXT relevant TP.
+            let targetStage = signal.stage < 2 ? 2 : 3;
+            let currentTargetPrice = targetStage === 2 ? currentTP2 : currentTP3;
 
-        // Only update if improvement (safer/more likely to hit)
-        // For LONG: New TP < Old TP (Front-running)
-        // For SHORT: New TP > Old TP (Front-running)
-        const isSafer = isLong ? context.new_tp < currentTargetPrice : context.new_tp > currentTargetPrice;
+            // Only update if improvement (safer/more likely to hit)
+            // For LONG: New TP < Old TP (Front-running)
+            // For SHORT: New TP > Old TP (Front-running)
+            const isSafer = isLong ? context.new_tp < currentTargetPrice : context.new_tp > currentTargetPrice;
 
-        if (isSafer && Math.abs(context.new_tp - currentTargetPrice) > (currentTargetPrice * 0.002)) { // >0.2% change
+            if (isSafer && Math.abs(context.new_tp - currentTargetPrice) > (currentTargetPrice * 0.002)) { // >0.2% change
 
-            // Update Local Cache
-            if (targetStage === 2 && signal.dcaPlan?.takeProfits?.tp2) signal.dcaPlan.takeProfits.tp2.price = context.new_tp;
-            if (targetStage === 3 && signal.dcaPlan?.takeProfits?.tp3) signal.dcaPlan.takeProfits.tp3.price = context.new_tp;
+                // Update Local Cache
+                if (targetStage === 2 && signal.dcaPlan?.takeProfits?.tp2) signal.dcaPlan.takeProfits.tp2.price = context.new_tp;
+                if (targetStage === 3 && signal.dcaPlan?.takeProfits?.tp3) signal.dcaPlan.takeProfits.tp3.price = context.new_tp;
 
-            // Sync to DB (Update reasoning or context field)
-            if (this.supabase) {
-                await this.supabase.from('signals_audit').update({
-                    technical_reasoning: `${signal.technical_reasoning || ''} | [Updated] ${context.reason}`
-                }).eq('id', signal.id);
+                // Sync to DB (Update reasoning or context field)
+                if (this.supabase) {
+                    await this.supabase.from('signals_audit').update({
+                        technical_reasoning: `${signal.technical_reasoning || ''} | [Updated] ${context.reason}`
+                    }).eq('id', signal.id);
+                }
+
+                console.log(`📉 [SignalAudit] Dynamic TP Adapted for ${symbol}: ${currentTargetPrice} -> ${context.new_tp}`);
+
+                // Notify User
+                telegramService.sendUpdateAlert('TP_ADAPTED', {
+                    symbol: symbol,
+                    newTp: context.new_tp,
+                    reason: context.reason
+                });
             }
-
-            console.log(`📉 [SignalAudit] Dynamic TP Adapted for ${symbol}: ${currentTargetPrice} -> ${context.new_tp}`);
-
-            // Notify User
-            telegramService.sendUpdateAlert('TP_ADAPTED', {
-                symbol: symbol,
-                newTp: context.new_tp,
-                reason: context.reason
-            });
         }
     }
-}
 
     /**
      * ═══════════════════════════════════════════════════════════
@@ -935,353 +930,353 @@ class SignalAuditService extends EventEmitter {
      * Calcula el balance actual del portafolio basado en PnL realizado
      * Balance = Initial Balance + Σ(PnL de trades cerrados)
      */
-    private async calculatePortfolioBalance(): Promise < number > {
-    if(!this.supabase) return 1000; // Fallback
+    private async calculatePortfolioBalance(): Promise<number> {
+        if (!this.supabase) return 1000; // Fallback
 
-    const { TradingConfig } = await import('../core/config/tradingConfig');
-    const initialBalance = TradingConfig.pau_drawdown_scaling?.initial_balance || 1000;
+        const { TradingConfig } = await import('../core/config/tradingConfig');
+        const initialBalance = TradingConfig.pau_drawdown_scaling?.initial_balance || 1000;
 
-    // Fetch todos los trades cerrados
-    const { data, error } = await this.supabase
-        .from('signals_audit')
-        .select('pnl_percent')
-        .in('status', ['WIN', 'LOSS', 'BREAKEVEN', 'EXPIRED']);
+        // Fetch todos los trades cerrados
+        const { data, error } = await this.supabase
+            .from('signals_audit')
+            .select('pnl_percent')
+            .in('status', ['WIN', 'LOSS', 'BREAKEVEN', 'EXPIRED']);
 
-    if(error || !data) return initialBalance;
+        if (error || !data) return initialBalance;
 
-// Sumar PnL acumulado (en formato decimal)
-let totalPnLDecimal = 0;
-data.forEach((trade: any) => {
-    const pnl = (trade.pnl_percent || 0) / 100; // Convert % to decimal (5% → 0.05)
-    totalPnLDecimal += pnl;
-});
+        // Sumar PnL acumulado (en formato decimal)
+        let totalPnLDecimal = 0;
+        data.forEach((trade: any) => {
+            const pnl = (trade.pnl_percent || 0) / 100; // Convert % to decimal (5% → 0.05)
+            totalPnLDecimal += pnl;
+        });
 
-// Balance = Initial × (1 + Total PnL)
-const currentBalance = initialBalance * (1 + totalPnLDecimal);
+        // Balance = Initial × (1 + Total PnL)
+        const currentBalance = initialBalance * (1 + totalPnLDecimal);
 
-return Math.max(0, currentBalance); // No negative balance
+        return Math.max(0, currentBalance); // No negative balance
     }
 
     /**
      * Calcula el drawdown actual vs peak balance histórico
      * DD% = ((Peak - Current) / Peak) × 100
      */
-    private async calculateCurrentDrawdown(): Promise < {
-    currentBalance: number;
-    peakBalance: number;
-    drawdownPercent: number;
-} > {
-    const currentBalance = await this.calculatePortfolioBalance();
+    private async calculateCurrentDrawdown(): Promise<{
+        currentBalance: number;
+        peakBalance: number;
+        drawdownPercent: number;
+    }> {
+        const currentBalance = await this.calculatePortfolioBalance();
 
-    // Obtener peak balance de DB (o calcularlo si no existe)
-    let peakBalance = currentBalance;
+        // Obtener peak balance de DB (o calcularlo si no existe)
+        let peakBalance = currentBalance;
 
-    if(this.supabase) {
-    const { data } = await this.supabase
-        .from('portfolio_metrics')
-        .select('peak_balance')
-        .order('timestamp', { ascending: false })
-        .limit(1)
-        .single();
+        if (this.supabase) {
+            const { data } = await this.supabase
+                .from('portfolio_metrics')
+                .select('peak_balance')
+                .order('timestamp', { ascending: false })
+                .limit(1)
+                .single();
 
-    if (data?.peak_balance) {
-        peakBalance = Math.max(data.peak_balance, currentBalance);
-    }
-}
+            if (data?.peak_balance) {
+                peakBalance = Math.max(data.peak_balance, currentBalance);
+            }
+        }
 
-const drawdownPercent = peakBalance > 0
-    ? ((peakBalance - currentBalance) / peakBalance) * 100
-    : 0;
+        const drawdownPercent = peakBalance > 0
+            ? ((peakBalance - currentBalance) / peakBalance) * 100
+            : 0;
 
-return {
-    currentBalance,
-    peakBalance,
-    drawdownPercent: Math.max(0, drawdownPercent)
-};
+        return {
+            currentBalance,
+            peakBalance,
+            drawdownPercent: Math.max(0, drawdownPercent)
+        };
     }
 
     /**
      * Obtiene el multiplicador de riesgo según DD actual
      * Usa tabla de scaling de Pau Perdices
      */
-    public async getAdjustedRiskMultiplier(): Promise < {
-    balance: number;
-    drawdown: number;
-    multiplier: number;
-    shouldStopTrading: boolean;
-} > {
-    const { TradingConfig } = await import('../core/config/tradingConfig');
-    const config = TradingConfig.pau_drawdown_scaling;
+    public async getAdjustedRiskMultiplier(): Promise<{
+        balance: number;
+        drawdown: number;
+        multiplier: number;
+        shouldStopTrading: boolean;
+    }> {
+        const { TradingConfig } = await import('../core/config/tradingConfig');
+        const config = TradingConfig.pau_drawdown_scaling;
 
-    if(!config?.enabled) {
-        // Disabled: return full risk
-        return {
-            balance: config?.initial_balance || 1000,
-            drawdown: 0,
-            multiplier: 1.0,
-            shouldStopTrading: false
-        };
-    }
+        if (!config?.enabled) {
+            // Disabled: return full risk
+            return {
+                balance: config?.initial_balance || 1000,
+                drawdown: 0,
+                multiplier: 1.0,
+                shouldStopTrading: false
+            };
+        }
 
         const { currentBalance, peakBalance, drawdownPercent } = await this.calculateCurrentDrawdown();
 
-    // Find multiplier from thresholds
-    let multiplier = 0;
-    for(const threshold of config.scaling_thresholds) {
-    if (drawdownPercent <= threshold.max_dd) {
-        multiplier = threshold.multiplier;
-        break;
-    }
-}
+        // Find multiplier from thresholds
+        let multiplier = 0;
+        for (const threshold of config.scaling_thresholds) {
+            if (drawdownPercent <= threshold.max_dd) {
+                multiplier = threshold.multiplier;
+                break;
+            }
+        }
 
-// Hard stop check
-const shouldStopTrading = drawdownPercent >= config.max_allowed_drawdown;
+        // Hard stop check
+        const shouldStopTrading = drawdownPercent >= config.max_allowed_drawdown;
 
-// Log for monitoring (only if DD > 0 or multiplier changed)
-if (drawdownPercent > 0.1 || multiplier < 1.0) {
-    const emoji = shouldStopTrading ? '🛑' : (multiplier < 1.0 ? '⚠️' : '💰');
-    console.log(`${emoji} [PortfolioRisk] Balance: $${currentBalance.toFixed(2)} | Peak: $${peakBalance.toFixed(2)} | DD: ${drawdownPercent.toFixed(2)}% | Risk: ${(multiplier * 100).toFixed(0)}%`);
-}
+        // Log for monitoring (only if DD > 0 or multiplier changed)
+        if (drawdownPercent > 0.1 || multiplier < 1.0) {
+            const emoji = shouldStopTrading ? '🛑' : (multiplier < 1.0 ? '⚠️' : '💰');
+            console.log(`${emoji} [PortfolioRisk] Balance: $${currentBalance.toFixed(2)} | Peak: $${peakBalance.toFixed(2)} | DD: ${drawdownPercent.toFixed(2)}% | Risk: ${(multiplier * 100).toFixed(0)}%`);
+        }
 
-// Persist to DB for analytics
-if (this.supabase) {
-    try {
-        await this.supabase.from('portfolio_metrics').insert({
-            timestamp: Date.now(),
-            current_balance: currentBalance,
-            peak_balance: peakBalance,
-            current_drawdown_pct: drawdownPercent,
-            risk_multiplier: multiplier
-        });
-    } catch (e) {
-        // Silent fail (table might not exist yet)
-    }
-}
+        // Persist to DB for analytics
+        if (this.supabase) {
+            try {
+                await this.supabase.from('portfolio_metrics').insert({
+                    timestamp: Date.now(),
+                    current_balance: currentBalance,
+                    peak_balance: peakBalance,
+                    current_drawdown_pct: drawdownPercent,
+                    risk_multiplier: multiplier
+                });
+            } catch (e) {
+                // Silent fail (table might not exist yet)
+            }
+        }
 
-return {
-    balance: currentBalance,
-    drawdown: drawdownPercent,
-    multiplier,
-    shouldStopTrading
-};
+        return {
+            balance: currentBalance,
+            drawdown: drawdownPercent,
+            multiplier,
+            shouldStopTrading
+        };
     }
 
     // Legacy support methods (getRecentSignals, getPerformanceStats) - kept for UI compat
     public async getRecentSignals(limit: number = 10) {
-    if (!this.supabase) return [];
-    const { data, error } = await this.supabase
-        .from('signals_audit')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-    if (error || !data) return [];
+        if (!this.supabase) return [];
+        const { data, error } = await this.supabase
+            .from('signals_audit')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(limit);
+        if (error || !data) return [];
 
-    const combined = [...this.activeSignals, ...data];
+        const combined = [...this.activeSignals, ...data];
 
-    // Ensure numeric fields are non-null for UI safety (toFixed crash prevention)
-    const sanitized = combined.map(sig => ({
-        ...sig,
-        pnl_percent: sig.pnl_percent ?? 0,
-        realized_pnl_percent: sig.realized_pnl_percent ?? 0,
-        final_price: sig.final_price ?? sig.entry_price ?? 0,
-        fees_paid: sig.fees_paid ?? 0
-    }));
+        // Ensure numeric fields are non-null for UI safety (toFixed crash prevention)
+        const sanitized = combined.map(sig => ({
+            ...sig,
+            pnl_percent: sig.pnl_percent ?? 0,
+            realized_pnl_percent: sig.realized_pnl_percent ?? 0,
+            final_price: sig.final_price ?? sig.entry_price ?? 0,
+            fees_paid: sig.fees_paid ?? 0
+        }));
 
-    const unique = Array.from(new Map(sanitized.map(item => [item.id, item])).values());
+        const unique = Array.from(new Map(sanitized.map(item => [item.id, item])).values());
 
-    return unique.sort((a: any, b: any) => {
-        const scoreA = ['ACTIVE', 'PARTIAL_WIN'].includes(a.status) ? 1 : 0;
-        const scoreB = ['ACTIVE', 'PARTIAL_WIN'].includes(b.status) ? 1 : 0;
-        if (scoreA !== scoreB) return scoreB - scoreA;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-}
+        return unique.sort((a: any, b: any) => {
+            const scoreA = ['ACTIVE', 'PARTIAL_WIN'].includes(a.status) ? 1 : 0;
+            const scoreB = ['ACTIVE', 'PARTIAL_WIN'].includes(b.status) ? 1 : 0;
+            if (scoreA !== scoreB) return scoreB - scoreA;
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+    }
 
     public async getPerformanceStats() {
-    if (!this.supabase) return { winRate: 0, total: 0, wins: 0, closed: 0, open: 0, profitFactor: 0 };
-    const { data, error } = await this.supabase.from('signals_audit').select('status, pnl_percent');
-    if (error || !data) return { winRate: 0, total: 0, wins: 0, closed: 0, open: 0, profitFactor: 0 };
+        if (!this.supabase) return { winRate: 0, total: 0, wins: 0, closed: 0, open: 0, profitFactor: 0 };
+        const { data, error } = await this.supabase.from('signals_audit').select('status, pnl_percent');
+        if (error || !data) return { winRate: 0, total: 0, wins: 0, closed: 0, open: 0, profitFactor: 0 };
 
-    const closed = data.filter((s: any) => ['WIN', 'LOSS', 'PARTIAL_WIN'].includes(s.status));
-    const winsCount = closed.filter((s: any) => ['WIN', 'PARTIAL_WIN'].includes(s.status)).length;
+        const closed = data.filter((s: any) => ['WIN', 'LOSS', 'PARTIAL_WIN'].includes(s.status));
+        const winsCount = closed.filter((s: any) => ['WIN', 'PARTIAL_WIN'].includes(s.status)).length;
 
-    let grossProfit = 0, grossLoss = 0;
-    closed.forEach((s: any) => {
-        const pnl = s.pnl_percent || 0;
-        if (pnl > 0) grossProfit += pnl; else grossLoss += Math.abs(pnl);
-    });
-    const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : (grossProfit > 0 ? 99 : 0);
+        let grossProfit = 0, grossLoss = 0;
+        closed.forEach((s: any) => {
+            const pnl = s.pnl_percent || 0;
+            if (pnl > 0) grossProfit += pnl; else grossLoss += Math.abs(pnl);
+        });
+        const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : (grossProfit > 0 ? 99 : 0);
 
-    return {
-        total: data.length,
-        closed: closed.length,
-        wins: winsCount,
-        winRate: closed.length > 0 ? (winsCount / closed.length) * 100 : 0,
-        open: data.filter((s: any) => ['OPEN', 'ACTIVE', 'PENDING', 'PARTIAL_WIN'].includes(s.status)).length,
-        profitFactor: Number(profitFactor.toFixed(2)),
-        // Diagnostic Metadata
-        techInfo: {
-            lastWSTick: this.lastWSTick,
-            lastPollSuccess: this.lastPollSuccess,
-            lastError: this.lastAuditError,
-            isWSAlive: (Date.now() - this.lastWSTick) < 60000,
-            activeTrackingCount: this.activeSignals.length
-        }
-    };
-}
+        return {
+            total: data.length,
+            closed: closed.length,
+            wins: winsCount,
+            winRate: closed.length > 0 ? (winsCount / closed.length) * 100 : 0,
+            open: data.filter((s: any) => ['OPEN', 'ACTIVE', 'PENDING', 'PARTIAL_WIN'].includes(s.status)).length,
+            profitFactor: Number(profitFactor.toFixed(2)),
+            // Diagnostic Metadata
+            techInfo: {
+                lastWSTick: this.lastWSTick,
+                lastPollSuccess: this.lastPollSuccess,
+                lastError: this.lastAuditError,
+                isWSAlive: (Date.now() - this.lastWSTick) < 60000,
+                activeTrackingCount: this.activeSignals.length
+            }
+        };
+    }
 
     /**
      * MANUAL AUDIT PASS (Diagnostic/Recovery)
      * Allows forcing a poll cycle via API or Scheduler.
      */
     public async forceAuditPass() {
-    console.log("🚑 [SignalAudit] Manual Audit Pass Triggered...");
-    return await this.checkHealthAndPoll(true);
-}
+        console.log("🚑 [SignalAudit] Manual Audit Pass Triggered...");
+        return await this.checkHealthAndPoll(true);
+    }
 
     /**
      * GOD MODE: ADVANCED ML ANALYTICS
      * Calculates model accuracy, regime-specific affinity and drift.
      */
     public async getAdvancedMLMetrics() {
-    if (!this.supabase) return this.mlBrainStatus;
+        if (!this.supabase) return this.mlBrainStatus;
 
-    // Cache check (1m TTL) - Faster updates for Pro users
-    if (Date.now() - this.mlBrainStatus.lastUpdated < 60 * 1000 && this.mlBrainStatus.lastUpdated !== 0) {
-        return this.mlBrainStatus;
-    }
-
-    try {
-        const { data, error } = await this.supabase
-            .from('model_predictions')
-            .select('actual_outcome, market_regime, probability, signal')
-            .not('actual_outcome', 'is', null)
-            .order('prediction_time', { ascending: false })
-            .limit(200);
-
-        if (error || !data || data.length === 0) {
-            // RESET STATE if DB is empty (Factory Reset handling)
-            this.mlBrainStatus = {
-                globalWinRate: 0,
-                recentWinRate: 0,
-                regimeStats: {},
-                totalPredictions: 0,
-                isDriftDetected: false,
-                lastUpdated: Date.now()
-            };
+        // Cache check (1m TTL) - Faster updates for Pro users
+        if (Date.now() - this.mlBrainStatus.lastUpdated < 60 * 1000 && this.mlBrainStatus.lastUpdated !== 0) {
             return this.mlBrainStatus;
         }
 
-        const total = data.length;
-        const wins = data.filter((p: any) => p.actual_outcome === 1).length;
-        const winRate = (wins / total) * 100;
+        try {
+            const { data, error } = await this.supabase
+                .from('model_predictions')
+                .select('actual_outcome, market_regime, probability, signal')
+                .not('actual_outcome', 'is', null)
+                .order('prediction_time', { ascending: false })
+                .limit(200);
 
-        // Regime Analysis
-        const regimes: Record<string, { total: number, wins: number, rate: number }> = {};
-        data.forEach((p: any) => {
-            const r = p.market_regime || 'UNKNOWN';
-            if (!regimes[r]) regimes[r] = { total: 0, wins: 0, rate: 0 };
-            regimes[r].total++;
-            if (p.actual_outcome === 1) regimes[r].wins++;
-        });
+            if (error || !data || data.length === 0) {
+                // RESET STATE if DB is empty (Factory Reset handling)
+                this.mlBrainStatus = {
+                    globalWinRate: 0,
+                    recentWinRate: 0,
+                    regimeStats: {},
+                    totalPredictions: 0,
+                    isDriftDetected: false,
+                    lastUpdated: Date.now()
+                };
+                return this.mlBrainStatus;
+            }
 
-        Object.keys(regimes).forEach(k => {
-            regimes[k].rate = (regimes[k].wins / regimes[k].total) * 100;
-        });
+            const total = data.length;
+            const wins = data.filter((p: any) => p.actual_outcome === 1).length;
+            const winRate = (wins / total) * 100;
 
-        // Drift Detection (Last 20 vs Last 200)
-        const recent = data.slice(0, 20);
-        const recentWins = recent.filter((p: any) => p.actual_outcome === 1).length;
-        const recentRate = (recentWins / recent.length) * 100;
-        const isDriftDetected = total > 40 && (recentRate < winRate - 15);
+            // Regime Analysis
+            const regimes: Record<string, { total: number, wins: number, rate: number }> = {};
+            data.forEach((p: any) => {
+                const r = p.market_regime || 'UNKNOWN';
+                if (!regimes[r]) regimes[r] = { total: 0, wins: 0, rate: 0 };
+                regimes[r].total++;
+                if (p.actual_outcome === 1) regimes[r].wins++;
+            });
 
-        this.mlBrainStatus = {
-            globalWinRate: Number(winRate.toFixed(2)),
-            recentWinRate: Number(recentRate.toFixed(2)),
-            regimeStats: regimes,
-            totalPredictions: total,
-            isDriftDetected,
-            lastUpdated: Date.now()
-        };
+            Object.keys(regimes).forEach(k => {
+                regimes[k].rate = (regimes[k].wins / regimes[k].total) * 100;
+            });
 
-        console.log(`🧠 [ML-Audit] Advanced Stats Updated: ${winRate.toFixed(2)}% Accuracy | Drift: ${isDriftDetected ? '⚠️ YES' : '✅ NO'}`);
-        return this.mlBrainStatus;
+            // Drift Detection (Last 20 vs Last 200)
+            const recent = data.slice(0, 20);
+            const recentWins = recent.filter((p: any) => p.actual_outcome === 1).length;
+            const recentRate = (recentWins / recent.length) * 100;
+            const isDriftDetected = total > 40 && (recentRate < winRate - 15);
 
-    } catch (e) {
-        console.error("❌ [ML-Audit] Failed to calculate advanced metrics:", e);
-        return this.mlBrainStatus;
+            this.mlBrainStatus = {
+                globalWinRate: Number(winRate.toFixed(2)),
+                recentWinRate: Number(recentRate.toFixed(2)),
+                regimeStats: regimes,
+                totalPredictions: total,
+                isDriftDetected,
+                lastUpdated: Date.now()
+            };
+
+            console.log(`🧠 [ML-Audit] Advanced Stats Updated: ${winRate.toFixed(2)}% Accuracy | Drift: ${isDriftDetected ? '⚠️ YES' : '✅ NO'}`);
+            return this.mlBrainStatus;
+
+        } catch (e) {
+            console.error("❌ [ML-Audit] Failed to calculate advanced metrics:", e);
+            return this.mlBrainStatus;
+        }
     }
-}
 
     /**
      * Retrieves recent signal history for a specific symbol.
      * Used by FilterEngine for Apex Whipsaw protection.
      */
     public async getRecentSymbolHistory(symbol: string, hours: number = 4) {
-    if (!this.supabase) return [];
-    const since = Date.now() - (hours * 60 * 60 * 1000);
-
-    try {
-        const { data, error } = await this.supabase
-            .from('signals_audit')
-            .select('side, status, closed_at, pnl_percent')
-            .eq('symbol', symbol)
-            .gte('created_at', since)
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        return data || [];
-    } catch (e) {
-        console.error(`❌ [SignalAudit] Error fetching history for ${symbol}:`, e);
-        return [];
-    }
-}
-
-    private async checkHealthAndPoll(force: boolean = false) {
-    const timeSinceLastTick = Date.now() - this.lastWSTick;
-    const SILENCE_THRESHOLD = 45000; // 45 Seconds of silence = BROKEN
-
-    if (force || (timeSinceLastTick > SILENCE_THRESHOLD && this.activeSignals.length > 0)) {
-        if (!force) {
-            console.warn(`⚠️ [SignalAudit] WS Silence Detected (${(timeSinceLastTick / 1000).toFixed(0)}s). Engaging Proxy Polling...`);
-        }
+        if (!this.supabase) return [];
+        const since = Date.now() - (hours * 60 * 60 * 1000);
 
         try {
-            const allPrices = await SmartFetch.get<any[]>('https://fapi.binance.com/fapi/v1/ticker/price');
+            const { data, error } = await this.supabase
+                .from('signals_audit')
+                .select('side, status, closed_at, pnl_percent')
+                .eq('symbol', symbol)
+                .gte('created_at', since)
+                .order('created_at', { ascending: false });
 
-            if (Array.isArray(allPrices)) {
-                const priceMap = new Map(allPrices.map(p => [p.symbol, parseFloat(p.price)]));
-                let updatesCount = 0;
-
-                for (const signal of this.activeSignals) {
-                    try {
-                        const symbolRaw = signal.symbol.replace('/', '');
-                        const price = priceMap.get(symbolRaw);
-
-                        if (price) {
-                            await this.processPriceTick(signal.symbol, price);
-                            updatesCount++;
-                        }
-                    } catch (signalErr: any) {
-                        console.error(`❌ [SignalAudit] Error processing ${signal.symbol}:`, signalErr.message);
-                    }
-                }
-
-                this.lastPollSuccess = Date.now();
-                this.lastAuditError = null;
-                console.log(`🚑 [SignalAudit] Audit Pass Complete: Updated ${updatesCount} signals.`);
-
-                if (!force) this.lastWSTick = Date.now();
-                return { success: true, updated: updatesCount };
-            }
-        } catch (e: any) {
-            this.lastAuditError = e.message;
-            console.error(`❌ [SignalAudit] Audit Pass Failed: ${e.message}`);
-            return { success: false, error: e.message };
+            if (error) throw error;
+            return data || [];
+        } catch (e) {
+            console.error(`❌ [SignalAudit] Error fetching history for ${symbol}:`, e);
+            return [];
         }
     }
-    return { success: true, status: 'No pass needed' };
-}
+
+    private async checkHealthAndPoll(force: boolean = false) {
+        const timeSinceLastTick = Date.now() - this.lastWSTick;
+        const SILENCE_THRESHOLD = 45000; // 45 Seconds of silence = BROKEN
+
+        if (force || (timeSinceLastTick > SILENCE_THRESHOLD && this.activeSignals.length > 0)) {
+            if (!force) {
+                console.warn(`⚠️ [SignalAudit] WS Silence Detected (${(timeSinceLastTick / 1000).toFixed(0)}s). Engaging Proxy Polling...`);
+            }
+
+            try {
+                const allPrices = await SmartFetch.get<any[]>('https://fapi.binance.com/fapi/v1/ticker/price');
+
+                if (Array.isArray(allPrices)) {
+                    const priceMap = new Map(allPrices.map(p => [p.symbol, parseFloat(p.price)]));
+                    let updatesCount = 0;
+
+                    for (const signal of this.activeSignals) {
+                        try {
+                            const symbolRaw = signal.symbol.replace('/', '');
+                            const price = priceMap.get(symbolRaw);
+
+                            if (price) {
+                                await this.processPriceTick(signal.symbol, price);
+                                updatesCount++;
+                            }
+                        } catch (signalErr: any) {
+                            console.error(`❌ [SignalAudit] Error processing ${signal.symbol}:`, signalErr.message);
+                        }
+                    }
+
+                    this.lastPollSuccess = Date.now();
+                    this.lastAuditError = null;
+                    console.log(`🚑 [SignalAudit] Audit Pass Complete: Updated ${updatesCount} signals.`);
+
+                    if (!force) this.lastWSTick = Date.now();
+                    return { success: true, updated: updatesCount };
+                }
+            } catch (e: any) {
+                this.lastAuditError = e.message;
+                console.error(`❌ [SignalAudit] Audit Pass Failed: ${e.message}`);
+                return { success: false, error: e.message };
+            }
+        }
+        return { success: true, status: 'No pass needed' };
+    }
 }
 
 export const signalAuditService = new SignalAuditService();

@@ -159,11 +159,48 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 let dataIntegrity = 1.0;
                 const isRealBinance = coin.id.toUpperCase().endsWith('USDT');
 
-                // If using CoinCap fallback, integrity is compromise (0.1)
+                // 2.1.1 Freshness Sentinel (Ensure data is LIVE)
+                const lastCandle = candles[candles.length - 1];
+                const now = Date.now();
+                const msSinceLastCandle = now - lastCandle.timestamp;
+                const maxStaleMs = 45 * 60 * 1000; // 45m (3 candles)
+
+                if (msSinceLastCandle > maxStaleMs) {
+                    console.warn(`[Sentinel] ⚠️ STALE DATA: ${coin.symbol} is ${(msSinceLastCandle / 60000).toFixed(1)}m old. Skipping.`);
+                    return;
+                }
+
+                // 2.1.2 Source Integrity
                 if (!isRealBinance) {
                     dataIntegrity = 0.1;
                     console.warn(`[Sentinel] ${coin.symbol} using unreliable fallback. Rejecting signal.`);
                     return; // ABORT: Professional standard requires 100% real data
+                }
+
+                // 2.1.3 Indicator Math Integrity (NaN Checks) - Ensures Precio, RSI, MACD, EMAs are valid
+                const isInvalid = Number.isNaN(indicators.rsi) ||
+                    Number.isNaN(indicators.price) ||
+                    Number.isNaN(indicators.ema200) ||
+                    Number.isNaN(indicators.ema100) ||
+                    Number.isNaN(indicators.ema50) ||
+                    Number.isNaN(indicators.ema20) ||
+                    Number.isNaN(indicators.macd.histogram);
+
+                if (isInvalid) {
+                    console.error(`[Sentinel] ⛔ CRITICAL MATH FAILURE: ${coin.symbol} has corrupted indicators (NaN).`);
+                    return;
+                }
+
+                // 2.1.4 Fibonacci Integrity
+                if (!indicators.fibonacci || Number.isNaN(indicators.fibonacci.level0) || Number.isNaN(indicators.fibonacci.level1)) {
+                    console.error(`[Sentinel] ⛔ FIBONACCI FAILURE: ${coin.symbol} has invalid levels.`);
+                    return;
+                }
+
+                // 2.1.5 Volatility Integrity (Zero Volatility Check)
+                if (indicators.atr === 0) {
+                    console.warn(`[Sentinel] ⚠️ NO VOLATILITY: ${coin.symbol} is dead. ATR is 0.`);
+                    return;
                 }
 
                 // --- STAGE 2.2: EXPERT VOLUME & LIQUIDITY (God Tier) ---
@@ -502,8 +539,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         finalTier,
                         {
                             rsiReversal: (typeof rsiTarget === 'number' && rsiTarget > 0) ? rsiTarget : undefined,
-                            liquidationCluster: liquidationTarget,
-                            orderBookWall: wallTarget
+                            liquidationCluster: liquidationTarget || undefined,
+                            orderBookWall: wallTarget || undefined
                         }
                     );
 
