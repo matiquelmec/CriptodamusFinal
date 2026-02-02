@@ -149,12 +149,14 @@ class ScannerService extends EventEmitter {
                 };
                 this.currentStatus = status; // Update State
                 this.emit('system_status', status);
+                console.log("⏸️ [ScannerService] Status set to PAUSED (Nuclear Shield)");
                 this.isScanning = false;
                 return; // SKIP SCAN
             }
 
             // If we pass, we assume status is ACTIVE
-            const activeStatus = { status: 'ACTIVE', reason: 'NORMAL_OP', message: 'Scanning Market...' };
+            console.log("🟢 [ScannerService] Setting status to ACTIVE (Scanning in progress)...");
+            const activeStatus = { status: 'ACTIVE', reason: 'NORMAL_OP', message: 'Analizando mercado global...' };
             this.currentStatus = activeStatus;
             this.emit('system_status', activeStatus);
 
@@ -200,8 +202,10 @@ class ScannerService extends EventEmitter {
             }
 
             // SUCCESS STATUS RESET
-            this.currentStatus = { status: 'OPTIMAL', reason: 'OK', message: 'Engine Operation Nominal' };
+            console.log("✅ [ScannerService] Resetting status to OPTIMAL...");
+            this.currentStatus = { status: 'OPTIMAL', reason: 'OK', message: 'Sistemas operando normalmente.' };
             this.emit('system_status', this.currentStatus);
+            console.log("✅ [ScannerService] Status reset complete. Current status:", this.currentStatus.status);
 
         } catch (error: any) {
             console.error("❌ [ScannerService] Critical Error:", error);
