@@ -4,6 +4,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { LayoutDashboard, Zap, CalendarDays, BarChart, Newspaper } from 'lucide-react';
 import MacroIndicators from './MacroIndicators';
 import MacroStrip from './MacroStrip';
+import SystemStatus from './SystemStatus';
 
 const Layout: React.FC = () => {
     return (
@@ -29,6 +30,11 @@ const Layout: React.FC = () => {
                     {/* Macro Indicators - Desktop only */}
                     <div className="hidden lg:block">
                         <MacroIndicators />
+                    </div>
+
+                    {/* System Health Heartbeat - Desktop & Tablet */}
+                    <div className="hidden sm:block ml-auto mr-4">
+                        <SystemStatus />
                     </div>
 
                     {/* Desktop Nav */}

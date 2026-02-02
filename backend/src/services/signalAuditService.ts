@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { AIOpportunity } from '../core/types';
 import { MLPerformanceStats } from '../core/types/types-advanced';
 import { binanceStream } from './binanceStream';
+import { systemAlerts } from './systemAlertService';
 import { telegramService } from './telegramService';
 import { SmartFetch } from '../core/services/SmartFetch'; // Import SmartFetch for Proxy Polling
 import EventEmitter from 'events';
@@ -230,6 +231,17 @@ class SignalAuditService extends EventEmitter {
     private async processPriceTick(symbol: string, currentPrice: number) {
         this.lastWSTick = Date.now(); // Update Heartbeat
 
+        // --- STAGE 0: ATOMIC TICK INTEGRITY ---
+        if (!currentPrice || Number.isNaN(currentPrice) || currentPrice <= 0 || typeof currentPrice !== 'number') {
+            systemAlerts.logAlert({
+                symbol,
+                severity: 'HIGH',
+                category: 'DATA_INTEGRITY',
+                message: `CORRUPTED_TICK: Price=${currentPrice}`
+            });
+            return;
+        }
+
         if (this.activeSignals.length === 0) return;
 
         const signalsToUpdate = [];
@@ -433,7 +445,12 @@ class SignalAuditService extends EventEmitter {
                     }
                 }
             } catch (err: any) {
-                console.error(`🚨 [SignalAudit] CRITICAL ERROR on ${signal.symbol}:`, err.message);
+                systemAlerts.logAlert({
+                    symbol: signal.symbol,
+                    severity: 'CRITICAL',
+                    category: 'CALCULATION_ERROR',
+                    message: `CRITICAL_TRADE_UPDATE_ERROR: ${err.message}`
+                });
 
                 // PROTOCOLO DE SEGURIDAD: Si falla el cálculo, NO PODEMOS CONFIAR en la señal.
                 updates.status = 'ERROR_HALT';

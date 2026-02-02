@@ -20,6 +20,7 @@ import { StrategyScorer } from './pipeline/StrategyScorer';
 import { MarketSession } from './MarketSession'; // NEW: Dynamic Time Logic
 import { FilterEngine } from './pipeline/FilterEngine';
 import { signalAuditService } from '../../../services/signalAuditService'; // Fix: Import Singleton
+import { DataIntegrityGuard } from './pipeline/DataIntegrityGuard'; // NEW: Integrity Sentinel
 
 // --- SERVICES ---
 import { getMacroContext, type MacroContext } from '../macroService';
@@ -36,6 +37,7 @@ import { getExpertVolumeAnalysis, enrichWithDepthAndLiqs } from '../volumeExpert
 import { VolumeExpertAnalysis } from '../../types/types-advanced'; // NEW: Correct Type Import
 import { CEXConnector } from '../api/CEXConnector'; // NEW: Professional Source
 import { EconomicService } from '../economicService'; // NEW: Nuclear Shield
+import { systemAlerts } from '../../../services/systemAlertService';
 
 export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOpportunity[]> => {
     // 0. INITIALIZATION
@@ -85,11 +87,28 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     console.log(`[Scanner] Global Sentiment: ${globalSentiment.score} (${globalSentiment.sentiment}) | "${globalSentiment.summary}"`);
 
     // NEW: Global Market Data (DXY, Gold) - Hoisted for efficiency
-    let globalData: any = { dxyIndex: 0, goldPrice: 0, btcDominance: 0 };
+    let globalData: any = { dxyIndex: 0, goldPrice: 0, btcDominance: 0, isDataValid: false };
     try {
         globalData = await fetchGlobalMarketData();
     } catch (e) {
         console.warn("[Scanner] Global Market Data missing", e);
+    }
+
+    // --- STAGE 0.9: HOLISTIC INTEGRITY GUARD (Fail-Fast Logic) ---
+    const integrityReport = await DataIntegrityGuard.getSystemIntegrityReport({
+        candles: [], // Will be checked per coin in loop
+        globalData,
+        newsSentiment: globalSentiment,
+        economicShield: { reason: TradingConfig.TOURNAMENT_MODE ? 'TOURNEY_BYPASS' : 'OK' } // Simplified here
+    });
+
+    if (integrityReport.status === 'HALTED') {
+        console.error(`[Scanner] 🚨 SYSTEM HALTED: Data Integrity Compromised. sources: ${integrityReport.missingCritical.join(', ')}`);
+        throw new Error("DATA_INTEGRITY_SHIELD_TRIGGERED");
+    }
+
+    if (integrityReport.status !== 'OPTIMAL') {
+        console.warn(`[Scanner] ⚠️ SYSTEM DEGRADED: Integrity Score ${integrityReport.score.toFixed(2)}. Stale: ${integrityReport.staleSources.join(', ')}`);
     }
 
     let topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 60);
@@ -148,58 +167,36 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                 if (candles.length < 200) return;
 
-                // --- STAGE 1: INDICATORS ---
+                // --- STAGE 1: INDICATORS & ATOMIC INTEGRITY ---
                 const indicators = IndicatorCalculator.compute(coin.symbol, candles);
-
-                // Inject missing price/symbol data that calculator might not set fully
                 indicators.symbol = coin.symbol;
-                indicators.price = candles[candles.length - 1].close;
 
-                // --- STAGE 2.1: DATA INTEGRITY SENTINEL (Hard Sentinel) ---
-                let dataIntegrity = 1.0;
-                const isRealBinance = coin.id.toUpperCase().endsWith('USDT');
+                // 1.1 Atomic Integrity Check (The "Blind" Switch)
+                if (indicators.invalidated) {
+                    systemAlerts.logVeto(coin.symbol, `PIPELINE_INVALIDATED: ${indicators.technicalReasoning}`);
+                    return;
+                }
 
-                // 2.1.1 Freshness Sentinel (Ensure data is LIVE)
+                // 1. Freshness Sentinel (Ensure data is LIVE)
                 const lastCandle = candles[candles.length - 1];
                 const now = Date.now();
                 const msSinceLastCandle = now - lastCandle.timestamp;
                 const maxStaleMs = 45 * 60 * 1000; // 45m (3 candles)
 
                 if (msSinceLastCandle > maxStaleMs) {
-                    console.warn(`[Sentinel] ⚠️ STALE DATA: ${coin.symbol} is ${(msSinceLastCandle / 60000).toFixed(1)}m old. Skipping.`);
+                    systemAlerts.logAlert({
+                        symbol: coin.symbol,
+                        severity: 'MEDIUM',
+                        category: 'DATA_INTEGRITY',
+                        message: `STALE_DATA: ${(msSinceLastCandle / 60000).toFixed(1)}m old`
+                    });
                     return;
                 }
 
-                // 2.1.2 Source Integrity
+                // 2. Source Integrity
+                const isRealBinance = coin.id.toUpperCase().endsWith('USDT');
                 if (!isRealBinance) {
-                    dataIntegrity = 0.1;
                     console.warn(`[Sentinel] ${coin.symbol} using unreliable fallback. Rejecting signal.`);
-                    return; // ABORT: Professional standard requires 100% real data
-                }
-
-                // 2.1.3 Indicator Math Integrity (NaN Checks) - Ensures Precio, RSI, MACD, EMAs are valid
-                const isInvalid = Number.isNaN(indicators.rsi) ||
-                    Number.isNaN(indicators.price) ||
-                    Number.isNaN(indicators.ema200) ||
-                    Number.isNaN(indicators.ema100) ||
-                    Number.isNaN(indicators.ema50) ||
-                    Number.isNaN(indicators.ema20) ||
-                    Number.isNaN(indicators.macd.histogram);
-
-                if (isInvalid) {
-                    console.error(`[Sentinel] ⛔ CRITICAL MATH FAILURE: ${coin.symbol} has corrupted indicators (NaN).`);
-                    return;
-                }
-
-                // 2.1.4 Fibonacci Integrity
-                if (!indicators.fibonacci || Number.isNaN(indicators.fibonacci.level0) || Number.isNaN(indicators.fibonacci.level1)) {
-                    console.error(`[Sentinel] ⛔ FIBONACCI FAILURE: ${coin.symbol} has invalid levels.`);
-                    return;
-                }
-
-                // 2.1.5 Volatility Integrity (Zero Volatility Check)
-                if (indicators.atr === 0) {
-                    console.warn(`[Sentinel] ⚠️ NO VOLATILITY: ${coin.symbol} is dead. ATR is 0.`);
                     return;
                 }
 

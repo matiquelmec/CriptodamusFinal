@@ -21,6 +21,7 @@ import { signalAuditService } from './services/signalAuditService';
 import marketRoutes from './api/market';
 import donationRoutes from './api/donation';
 import proxyRoutes from './api/proxy';
+import systemRoutes from './api/system';
 
 // Import Services
 import { binanceStream } from './services/binanceStream';
@@ -49,6 +50,7 @@ app.use(express.json());
 app.use('/api/market', marketRoutes);
 app.use('/api/donation', donationRoutes);
 app.use('/api/proxy', proxyRoutes);
+app.use('/api/system', systemRoutes);
 
 // ... (Rate Limits)
 

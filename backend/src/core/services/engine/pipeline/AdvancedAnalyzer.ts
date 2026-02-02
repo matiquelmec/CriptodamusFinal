@@ -20,6 +20,7 @@ import { detectGenericDivergence } from '../../divergenceDetector';
 import { analyzeRSIExpert } from '../../rsiExpert';
 import { detectHarmonicPatterns } from '../../harmonicDetector';
 import { detectChartPatterns } from '../../chartPatterns';
+import { systemAlerts } from '../../../../services/systemAlertService';
 
 export class AdvancedAnalyzer {
 
@@ -36,10 +37,19 @@ export class AdvancedAnalyzer {
         orderBook?: OrderBookAnalysis,
         liquidationClusters: LiquidationCluster[] = []
     ) {
-        const highs = candles.map(c => c.high);
-        const lows = candles.map(c => c.low);
-        const closes = candles.map(c => c.close);
-        const volumes = candles.map(c => c.volume);
+        // --- STAGE 0: ATOMIC INTEGRITY CHECK ---
+        const isAtrInvalid = !atr || Number.isNaN(atr) || atr <= 0;
+        const isPriceInvalid = !currentPrice || Number.isNaN(currentPrice) || currentPrice <= 0;
+
+        if (isAtrInvalid || isPriceInvalid) {
+            systemAlerts.logVeto(symbol, `INSTITUTIONAL_INPUT_ERROR: ATR=${atr}, Price=${currentPrice}`);
+            return this.createPlaceholderResults();
+        }
+
+        const highs = candles.map(c => Number(c.high));
+        const lows = candles.map(c => Number(c.low));
+        const closes = candles.map(c => Number(c.close));
+        const volumes = candles.map(c => Number(c.volume));
 
         // 1. Institutional Structures (Safe Wrapped)
         let volumeProfile: any, bullishOB: any[] = [], bearishOB: any[] = [], bullishFVG: any[] = [], bearishFVG: any[] = [];
@@ -58,8 +68,13 @@ export class AdvancedAnalyzer {
             harmonics = detectHarmonicPatterns(highs, lows);
             structuralPatterns = detectChartPatterns(highs, lows, closes, volumes);
 
-        } catch (err) {
-            console.warn(`[AdvancedAnalyzer] Error calculating structures for ${symbol}`, err);
+        } catch (err: any) {
+            systemAlerts.logAlert({
+                symbol,
+                severity: 'MEDIUM',
+                category: 'CALCULATION_ERROR',
+                message: `ADVANCED_ANALYSIS_ERROR: ${err.message}`
+            });
             volumeProfile = { poc: 0, valueAreaHigh: 0, valueAreaLow: 0, totalVolume: 0 };
             bullishOB = []; bearishOB = []; bullishFVG = []; bearishFVG = [];
             harmonics = []; structuralPatterns = [];
@@ -111,6 +126,20 @@ export class AdvancedAnalyzer {
             cvdDivergence: cvdDivergence?.type, // string description
             chartPatterns: structuralPatterns,
             harmonics
+        };
+    }
+
+    private static createPlaceholderResults() {
+        return {
+            volumeProfile: { poc: 0, valueAreaHigh: 0, valueAreaLow: 0, totalVolume: 0 },
+            orderBlocks: { bullish: [], bearish: [] },
+            fairValueGaps: { bullish: [], bearish: [] },
+            volumeExpert: undefined,
+            confluence: { score: 0, pois: [], reasoning: ["Blocked: Invalid Base Data (ATR/Price)"] },
+            rsiExpert: { range: 'CHAOTIC', target: null, targetType: null },
+            cvdDivergence: undefined,
+            chartPatterns: [],
+            harmonics: []
         };
     }
 }

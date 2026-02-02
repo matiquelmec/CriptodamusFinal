@@ -49,11 +49,9 @@ export class EconomicService {
             return { isActive: false, reason: 'No Nuclear Events Today' };
 
         } catch (e) {
-            console.warn("[EconomicService] Failed to fetch calendar. Defaulting to OPEN (Risk of missing event).", e);
-            // Fail Open to avoid blocking trading if FF is down, but log warning.
-            // Or Fail Closed? User wants maximum safety. 
-            // Let's Fail Open but log heavily, because infinite blocks due to network error are annoying.
-            return { isActive: false, reason: 'Calendar Unreachable' };
+            console.error("[EconomicService] CRITICAL: Calendar Unreachable. Switching to SAFETY MODE (High Risk).", e);
+            // FAIL SAFE: If we can't see the news, we assume high risk until connectivity restores.
+            return { isActive: true, reason: 'SYSTEM_STUCK_OFFLINE: Calendar Unreachable' };
         }
     }
 

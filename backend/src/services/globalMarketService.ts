@@ -7,6 +7,7 @@ export interface GlobalMarketData {
     goldPrice: number; // PAXGUSDT proxy
     dxyIndex: number; // Synthetic or fetched
     timestamp: number;
+    isDataValid: boolean;
 }
 
 let cache: GlobalMarketData | null = null;
@@ -65,25 +66,29 @@ export const fetchGlobalMarketData = async (): Promise<GlobalMarketData> => {
         // Formula: 111.3 / Price (Inverse relationship)
         const dxyProxy = 111.3 / eurUsdt;
 
-        cache = {
+        const finalData: GlobalMarketData = {
             btcDominance: btcD,
             usdtDominance: usdtD,
             goldPrice,
             dxyIndex: dxyProxy,
-            timestamp: now
+            timestamp: now,
+            isDataValid: true
         };
+
+        cache = finalData;
         lastFetch = now;
-        return cache;
+        return finalData;
 
     } catch (error: any) {
         console.error('[GlobalService] Critical Error:', error.message || error);
-        if (cache) return cache;
+        if (cache) return { ...cache, isDataValid: false };
         return {
-            btcDominance: 55,
-            usdtDominance: 5,
-            goldPrice: 2000,
-            dxyIndex: 100,
-            timestamp: now
+            btcDominance: 0,
+            usdtDominance: 0,
+            goldPrice: 0,
+            dxyIndex: 0,
+            timestamp: now,
+            isDataValid: false
         };
     }
 };

@@ -1,0 +1,139 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Activity, AlertTriangle, CheckCircle, ShieldAlert, ChevronDown, ListRestart } from 'lucide-react';
+import { API_CONFIG } from '../services/config';
+
+interface SystemHealth {
+    status: 'OPTIMAL' | 'DEGRADED' | 'CRITICAL';
+    alertCount: number;
+    lastChecked: string;
+    uptime: number;
+}
+
+interface SystemAlert {
+    id: string;
+    created_at: string;
+    symbol: string;
+    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    message: string;
+}
+
+const SystemStatus: React.FC = () => {
+    const [health, setHealth] = useState<SystemHealth | null>(null);
+    const [alerts, setAlerts] = useState<SystemAlert[]>([]);
+    const [showDetails, setShowDetails] = useState(false);
+    const [loading, setLoading] = useState(true);
+
+    const fetchStatus = async () => {
+        if (!API_CONFIG.BASE_URL) return;
+        try {
+            const healthRes = await axios.get(`${API_CONFIG.BASE_URL}/api/system/health`);
+            setHealth(healthRes.data);
+
+            const alertsRes = await axios.get(`${API_CONFIG.BASE_URL}/api/system/alerts`);
+            setAlerts(alertsRes.data.slice(0, 5)); // Only show last 5
+        } catch (err) {
+            console.warn('[SystemStatus] Failed to poll system health');
+            setHealth({ status: 'CRITICAL', alertCount: 0, lastChecked: new Date().toISOString(), uptime: 0 });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchStatus();
+        const interval = setInterval(fetchStatus, 30000); // Poll every 30s
+        return () => clearInterval(interval);
+    }, []);
+
+    const getStatusColor = () => {
+        if (!health) return 'text-secondary opacity-50';
+        switch (health.status) {
+            case 'OPTIMAL': return 'text-success';
+            case 'DEGRADED': return 'text-warning';
+            case 'CRITICAL': return 'text-danger';
+            default: return 'text-secondary';
+        }
+    };
+
+    const getStatusGlow = () => {
+        if (!health) return '';
+        switch (health.status) {
+            case 'OPTIMAL': return 'shadow-[0_0_10px_rgba(34,197,94,0.3)]';
+            case 'DEGRADED': return 'shadow-[0_0_10px_rgba(234,179,8,0.3)]';
+            case 'CRITICAL': return 'shadow-[0_0_10px_rgba(239,68,68,0.3)] shadow-danger-pulse animate-pulse';
+            default: return '';
+        }
+    };
+
+    // If no backend configured, don't show
+    if (!API_CONFIG.BASE_URL) return null;
+
+    return (
+        <div className="relative">
+            <button
+                onClick={() => setShowDetails(!showDetails)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border transition-all hover:bg-border/20 ${getStatusGlow()}`}
+            >
+                <div className={`relative flex items-center justify-center`}>
+                    <Activity size={14} className={getStatusColor()} />
+                    {health?.status === 'OPTIMAL' ? (
+                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-success rounded-full animate-ping opacity-75" />
+                    ) : null}
+                </div>
+
+                <span className="text-[10px] font-mono font-bold tracking-tight uppercase hidden sm:block">
+                    Engine: {health?.status || 'OFFLINE'}
+                </span>
+
+                <ChevronDown size={12} className={`opacity-50 transition-transform ${showDetails ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Details */}
+            {showDetails && (
+                <div className="absolute top-full mt-2 right-0 w-72 bg-surface/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl z-[100] p-4 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex items-center justify-between border-b border-border pb-2">
+                        <span className="text-xs font-bold uppercase tracking-widest text-secondary flex items-center gap-2">
+                            <ListRestart size={12} /> Status Report
+                        </span>
+                        <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-black/50 ${getStatusColor()}`}>
+                            {health?.status}
+                        </span>
+                    </div>
+
+                    <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                        {alerts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-6 opacity-40">
+                                <CheckCircle size={32} className="text-success mb-2" />
+                                <p className="text-[10px] font-medium uppercase tracking-tighter">Sístema Óptimo</p>
+                                <p className="text-[8px] text-center mt-1 uppercase">No se detectan vetos de integridad</p>
+                            </div>
+                        ) : (
+                            alerts.map((alert) => (
+                                <div key={alert.id} className="p-2 border-l-2 border-border bg-black/20 rounded flex flex-col gap-1 transition-colors hover:bg-black/30" style={{ borderColor: alert.severity === 'CRITICAL' ? '#ef4444' : alert.severity === 'HIGH' ? '#f59e0b' : '#3b82f6' }}>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[9px] font-bold text-accent">{alert.symbol || 'SYSTEM'}</span>
+                                        <span className="text-[8px] opacity-40">{new Date(alert.created_at).toLocaleTimeString()}</span>
+                                    </div>
+                                    <p className="text-[10px] leading-snug">{alert.message}</p>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    <div className="pt-2 border-t border-border flex items-center justify-between opacity-50">
+                        <span className="text-[8px] uppercase font-mono">Uptime: {Math.floor((health?.uptime || 0) / 3600)}h {Math.floor(((health?.uptime || 0) % 3600) / 60)}m</span>
+                        <button
+                            onClick={() => { fetchStatus(); setLoading(true); }}
+                            className="text-[8px] hover:text-accent transition-colors uppercase font-bold"
+                        >
+                            Refrescar
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default SystemStatus;

@@ -26,6 +26,16 @@ export class StrategyScorer {
         const isLong = signalSide === 'LONG';
         const isShort = signalSide === 'SHORT';
 
+        // --- STAGE 0: INTEGRITY CHECKMATE ---
+        if (indicators.invalidated) {
+            console.error(`[Scorer] ⛔ SCORING ABORTED for ${symbol}: Technical Indicators reach Scorer in INVALIDated state.`);
+            return {
+                score: 0,
+                reasoning: [`🚨 SYSTEM_INTEGRITY_SHIELD: ${indicators.technicalReasoning || 'Unknown Corruption Detected'}`],
+                strategies: []
+            };
+        }
+
         // 1. Trend Alignment (Institutional EMA Hierarchy)
         const trend = indicators.trendStatus.emaAlignment;
         const trendSide = trend === 'BULLISH' ? 'LONG' : trend === 'BEARISH' ? 'SHORT' : 'NEUTRAL';
