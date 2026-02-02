@@ -194,7 +194,7 @@ app.get('/api/macro/global', async (req, res) => {
 
 
 // --- PERFORMANCE & AUDIT ENDPOINT ---
-import { signalAuditService } from './services/signalAuditService';
+// --- PERFORMANCE & AUDIT ENDPOINT ---
 app.get('/api/performance/stats', async (req, res) => {
     try {
         const stats = await signalAuditService.getPerformanceStats();
