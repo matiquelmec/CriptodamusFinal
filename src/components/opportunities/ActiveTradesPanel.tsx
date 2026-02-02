@@ -60,11 +60,12 @@ const ActiveTradesPanel: React.FC = () => {
                 </div>
 
                 {/* Table Header */}
-                <div className="grid grid-cols-6 gap-4 px-6 py-2 bg-white/2 text-[9px] uppercase tracking-widest font-bold text-slate-500 border-b border-white/5">
+                <div className="grid grid-cols-7 gap-4 px-6 py-2 bg-white/2 text-[9px] uppercase tracking-widest font-bold text-slate-500 border-b border-white/5">
                     <div className="col-span-1">Activo / Lado</div>
                     <div className="col-span-1 text-right">Entrada</div>
                     <div className="col-span-1 text-right">Precio Mark</div>
                     <div className="col-span-1 text-center">Riesgo (SL)</div>
+                    <div className="col-span-1 text-center">Objetivo (Dynamic)</div>
                     <div className="col-span-1 text-right">PnL (%)</div>
                     <div className="col-span-1 text-right">Estado</div>
                 </div>
@@ -81,7 +82,15 @@ const ActiveTradesPanel: React.FC = () => {
                         const entryPrice = trade.entry_price || trade.activation_price || 0;
                         const currentPrice = trade.last_price || trade.final_price || entryPrice;
 
-                        // Smart Status Label
+                        // Identify Active Target (TP1, TP2, TP3)
+                        const stage = trade.stage || 0;
+                        let nextTp = trade.tp1;
+                        let tpLabel = "TP1";
+                        if (stage === 1) { nextTp = trade.tp2; tpLabel = "TP2"; }
+                        if (stage === 2) { nextTp = trade.tp3; tpLabel = "TP3"; }
+                        if (stage >= 3) { nextTp = null; tpLabel = "MOON"; }
+
+                        const isAdapted = trade.technical_reasoning?.includes('Updated');
                         let statusLabel = 'OPEN';
                         let statusIcon = <Clock size={12} />;
                         let statusColor = 'text-slate-400';
@@ -91,7 +100,7 @@ const ActiveTradesPanel: React.FC = () => {
                         if (trade.stage === 3) { statusLabel = 'MOONBAG'; statusIcon = <Target size={12} />; statusColor = 'text-purple-400'; }
 
                         return (
-                            <div key={trade.id} className="grid grid-cols-6 gap-4 px-6 py-4 items-center hover:bg-white/2 transition-colors group">
+                            <div key={trade.id} className="grid grid-cols-7 gap-4 px-6 py-4 items-center hover:bg-white/2 transition-colors group">
 
                                 {/* 1. Symbol & Side */}
                                 <div className="col-span-1">
@@ -124,14 +133,29 @@ const ActiveTradesPanel: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* 5. PnL */}
+                                {/* 5. Dynamic Target  */}
+                                <div className="col-span-1 flex flex-col items-center justify-center">
+                                    <div className={`flex items-center gap-1.5 text-xs font-mono px-2 py-1 rounded border ${isAdapted ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30 animate-pulse' : 'bg-slate-800/30 text-slate-400 border-white/5'}`}>
+                                        <Target size={10} className={isAdapted ? "text-indigo-400" : "text-slate-500"} />
+                                        {nextTp ? (
+                                            <>
+                                                <span className="opacity-50 text-[9px]">{tpLabel}:</span>
+                                                ${Number(nextTp).toLocaleString()}
+                                            </>
+                                        ) : (
+                                            <span>🚀 RUN</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* 6. PnL */}
                                 <div className={`col-span-1 text-right font-mono font-black text-sm ${pnlColor}`}>
                                     <span className={`px-2 py-1 rounded ${pnlBg}`}>
                                         {pnl > 0 ? '+' : ''}{pnl.toFixed(2)}%
                                     </span>
                                 </div>
 
-                                {/* 6. Status */}
+                                {/* 7. Status */}
                                 <div className="col-span-1 flex justify-end">
                                     <div className={`flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full border border-white/5 bg-slate-900 ${statusColor}`}>
                                         {statusIcon}
