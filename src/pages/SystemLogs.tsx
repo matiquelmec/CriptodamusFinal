@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { ShieldCheck, AlertOctagon, AlertTriangle, Info, Clock, RefreshCw, Database } from 'lucide-react';
 import { API_CONFIG } from '../services/config';
+import { useSocket } from '../hooks/useSocket';
 
 interface SystemAlert {
     id: string;
@@ -21,6 +22,9 @@ const SystemLogs: React.FC = () => {
 
     const effectiveBaseUrl = API_CONFIG.BASE_URL || 'http://localhost:3001';
 
+    // Subscribe to WebSocket for real-time updates
+    const { systemStatus } = useSocket();
+
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -39,9 +43,21 @@ const SystemLogs: React.FC = () => {
 
     useEffect(() => {
         fetchData();
-        const interval = setInterval(fetchData, 60000);
+        const interval = setInterval(fetchData, 120000); // Reduced frequency since WS provides updates
         return () => clearInterval(interval);
     }, []);
+
+    // Update health when WebSocket status changes
+    useEffect(() => {
+        if (systemStatus && health) {
+            setHealth((prev: any) => ({
+                ...prev,
+                status: systemStatus.status || prev?.status || 'BOOTING',
+                reason: systemStatus.message || systemStatus.reason || prev?.reason,
+                engineStatus: systemStatus.status
+            }));
+        }
+    }, [systemStatus]);
 
     const getSeverityIcon = (severity: string) => {
         switch (severity) {
