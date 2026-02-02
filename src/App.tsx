@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Opportunities from './pages/Opportunities';
 import News from './pages/News';
 import Calendar from './pages/Calendar';
+import SystemLogs from './pages/SystemLogs';
 
 const App: React.FC = () => {
   return (
@@ -16,6 +17,7 @@ const App: React.FC = () => {
           <Route path="oportunidades" element={<Opportunities />} />
           <Route path="noticias" element={<News />} />
           <Route path="eventos" element={<Calendar />} />
+          <Route path="sistema" element={<SystemLogs />} />
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

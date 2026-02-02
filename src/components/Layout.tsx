@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Zap, CalendarDays, BarChart, Newspaper } from 'lucide-react';
+import { LayoutDashboard, Zap, CalendarDays, BarChart, Newspaper, ShieldAlert } from 'lucide-react';
 import MacroIndicators from './MacroIndicators';
 import MacroStrip from './MacroStrip';
 import SystemStatus from './SystemStatus';
@@ -74,6 +74,15 @@ const Layout: React.FC = () => {
                             }
                         >
                             <Newspaper size={14} /> Noticias
+                        </NavLink>
+                        <NavLink
+                            to="/sistema"
+                            className={({ isActive }) =>
+                                `flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-all ${isActive ? 'bg-border text-white shadow-sm' : 'text-secondary hover:text-primary'
+                                }`
+                            }
+                        >
+                            <ShieldAlert size={14} /> Sistema
                         </NavLink>
                     </nav>
                 </div>
