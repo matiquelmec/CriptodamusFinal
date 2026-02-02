@@ -238,10 +238,10 @@ class SignalAuditService extends EventEmitter {
         for (const signal of this.activeSignals) {
             if (signal.symbol.toUpperCase().replace('/', '') !== sym) continue;
 
-            try {
-                let updates: any = {};
-                let shouldClose = false;
+            let updates: any = {};
+            let shouldClose = false;
 
+            try {
                 // TRACKING: Always update current price & floating PnL for UI visibility
                 // We use a throttle or significant change check to avoid DB spam, 
                 // but for "Pro" feel we want fairly frequent updates (e.g. every 1% move or every 10 mins)
