@@ -107,21 +107,19 @@ const ActiveTradesPanel: React.FC = () => {
                                 </div>
 
                                 {/* 2. Entry */}
-                                <div className="col-span-1 text-right font-mono text-xs text-slate-300">
-                                    ${entryPrice.toLocaleString()}
-                                </div>
+                                ${Number(entryPrice || 0).toLocaleString()}
 
                                 {/* 3. Mark Price */}
                                 <div className="col-span-1 text-right font-mono text-xs text-white font-bold group-hover:text-blue-200 transition-colors">
                                     {/* Using last_price directly from stream context if available */}
-                                    ${Number(currentPrice).toLocaleString()}
+                                    ${Number(currentPrice || 0).toLocaleString()}
                                 </div>
 
                                 {/* 4. Risk / Stop Loss */}
                                 <div className="col-span-1 flex flex-col items-center justify-center">
                                     <div className="flex items-center gap-1.5 text-xs font-mono text-slate-400 bg-slate-800/50 px-2 py-1 rounded border border-white/5">
                                         <Shield size={10} className={isWin ? "text-blue-400" : "text-rose-400"} />
-                                        {trade.stop_loss ? `$${Number(trade.stop_loss).toLocaleString()}` : '---'}
+                                        {trade.stop_loss ? `$${Number(trade.stop_loss || 0).toLocaleString()}` : '---'}
                                     </div>
                                 </div>
 
