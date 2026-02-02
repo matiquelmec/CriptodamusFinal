@@ -15,6 +15,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import crypto from 'crypto';
 import { predictNextMove } from './ml/inference';
+import { signalAuditService } from './services/signalAuditService';
 
 // Import Routes (TypeScript)
 import marketRoutes from './api/market';
@@ -370,10 +371,7 @@ wss.on('connection', (ws, req) => {
     ws.send(JSON.stringify({ type: 'system_status', data: currentStatus }));
 
     // 4. Active Trades Snapshot (Live Panel)
-    const { signalAuditService } = require('./services/signalAuditService');
-    // Note: dynamic require because it's imported in startServices, 
-    // but we can access the singleton if it's exported.
-    // Ideally we'd import it at top level if it's singleton.
+    // Note: signalAuditService is imported at top level now.
     if (signalAuditService?.getActiveSignalsSnapshot) {
         const activeTrades = signalAuditService.getActiveSignalsSnapshot();
         if (activeTrades.length > 0) {
