@@ -32,10 +32,14 @@ const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost'
 // Robust WS URL Detection
 const getWsUrl = () => {
     if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
-    if (import.meta.env.VITE_BACKEND_URL) return `${import.meta.env.VITE_BACKEND_URL.replace('http', 'ws')}/ws`;
 
-    const base = API_CONFIG.BASE_URL.replace('http', 'ws');
-    return `${base}/ws`;
+    let base = (import.meta.env.VITE_BACKEND_URL || API_CONFIG.BASE_URL).replace('http', 'ws');
+
+    // Ensure it doesn't end in /ws before adding it
+    if (base.endsWith('/ws')) return base;
+    if (base.endsWith('/ws/')) return base.slice(0, -1);
+
+    return `${base.endsWith('/') ? base.slice(0, -1) : base}/ws`;
 };
 
 const WS_URL = getWsUrl();
@@ -117,11 +121,11 @@ export const useSocket = () => {
                             break;
 
                         case 'ai_opportunities':
-                            setAIOpportunities(msg.data);
+                            if (Array.isArray(msg.data)) setAIOpportunities(msg.data);
                             break;
 
                         case 'active_trades': // NEW LISTENER
-                            setActiveTrades(msg.data);
+                            if (Array.isArray(msg.data)) setActiveTrades(msg.data);
                             break;
 
                         case 'system_status': // NEW LISTENER

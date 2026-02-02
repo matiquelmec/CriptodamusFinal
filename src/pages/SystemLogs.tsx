@@ -29,7 +29,7 @@ const SystemLogs: React.FC = () => {
                 axios.get(`${effectiveBaseUrl}/api/system/alerts`)
             ]);
             setHealth(healthRes.data);
-            setAlerts(alertsRes.data);
+            setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : []);
         } catch (error) {
             console.error('Failed to fetch system data:', error);
         } finally {

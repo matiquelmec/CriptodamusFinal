@@ -32,7 +32,8 @@ const SystemStatus: React.FC = () => {
             setHealth(healthRes.data);
 
             const alertsRes = await axios.get(`${effectiveBaseUrl}/api/system/alerts`);
-            setAlerts(alertsRes.data.slice(0, 5)); // Only show last 5
+            const alertsData = Array.isArray(alertsRes.data) ? alertsRes.data : [];
+            setAlerts(alertsData.slice(0, 5)); // Only show last 5
         } catch (err) {
             console.warn('[SystemStatus] Failed to poll system health');
             setHealth({ status: 'CRITICAL', alertCount: 0, lastChecked: new Date().toISOString(), uptime: 0 });
