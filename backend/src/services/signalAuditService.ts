@@ -390,6 +390,7 @@ class SignalAuditService extends EventEmitter {
                             console.log(`🛡️ [SignalAudit] Smart Breakeven Hit: ${signal.symbol} (Secured Profit)`);
                             telegramService.sendUpdateAlert('SL_MOVED', {
                                 symbol: signal.symbol,
+                                oldSl: signal.stop_loss,
                                 newSl: updates.final_price,
                                 reason: 'Smart Breakeven (Profit Secured)'
                             });
@@ -716,6 +717,7 @@ class SignalAuditService extends EventEmitter {
                                     updates.stop_loss = Number(betterSL.toFixed(4));
                                     telegramService.sendUpdateAlert('SL_MOVED', {
                                         symbol: signal.symbol,
+                                        oldSl: signal.stop_loss,
                                         newSl: updates.stop_loss,
                                         reason: 'Trailing Stop Follow-up'
                                     });
@@ -744,6 +746,7 @@ class SignalAuditService extends EventEmitter {
                             console.log(`⏱️ [TimeDecay] ${signal.symbol}: SL tightened to ${tightenedSL.toFixed(2)} (${ageHours.toFixed(1)}h, factor: ${tightenFactor.toFixed(2)})`);
                             telegramService.sendUpdateAlert('SL_MOVED', {
                                 symbol: signal.symbol,
+                                oldSl: signal.stop_loss,
                                 newSl: updates.stop_loss,
                                 reason: `Time Decay (${ageHours.toFixed(1)}h)`
                             });
@@ -773,6 +776,7 @@ class SignalAuditService extends EventEmitter {
                                 console.log(`⏰ [ForcedBreakeven] ${signal.symbol}: SL → Smart BE ($${updates.stop_loss}) after ${ageHours.toFixed(1)}h`);
                                 telegramService.sendUpdateAlert('SL_MOVED', {
                                     symbol: signal.symbol,
+                                    oldSl: signal.stop_loss,
                                     newSl: updates.stop_loss,
                                     reason: `Forced Breakeven (>12h)`
                                 });

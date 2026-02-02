@@ -182,9 +182,29 @@ export class TelegramService {
     }
     /**
      * Alert for Live Updates (SL Move, TP Hit, Context Change)
+     * NOW WITH INTELLIGENT FILTERING
      */
     public async sendUpdateAlert(type: 'SL_MOVED' | 'TP_HIT' | 'TP_ADAPTED' | 'TRADE_CLOSED', data: any) {
         if (!this.bot || !TradingConfig.telegram.chatId) return;
+
+        // PROFESSIONAL FILTER: Check if this update warrants notification
+        const { NotificationFilter } = await import('./NotificationFilter');
+        const filterResult = NotificationFilter.shouldNotifyUpdate(data.symbol, type, {
+            oldValue: data.oldSl,
+            newValue: data.newSl || data.newTp,
+            stage: data.stage,
+            reason: data.reason,
+            pnl: data.pnl
+        });
+
+        if (!filterResult.shouldNotify) {
+            const priority = NotificationFilter.getPriority(type, data);
+            console.log(`[Telegram] [${priority}] Notification suppressed for ${data.symbol} (${type}): ${filterResult.suppressionReason}`);
+            return; // SUPPRESS SPAM
+        }
+
+        // Log notification decision
+        console.log(`[Telegram] ✅ Sending ${type} for ${data.symbol}: ${filterResult.reason}`);
 
         let icon = 'ℹ️';
         let title = 'ACTUALIZACIÓN';
@@ -220,6 +240,9 @@ export class TelegramService {
                 message += `Estado Final: ${data.status}\n`;
                 message += `PnL Total: <b>${data.pnl >= 0 ? '+' : ''}${data.pnl}%</b>\n`;
                 message += `<i>${data.reason}</i>`;
+
+                // Clear cache on trade closure
+                NotificationFilter.clearCache(data.symbol);
                 break;
         }
 
