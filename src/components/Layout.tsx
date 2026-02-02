@@ -143,6 +143,15 @@ const Layout: React.FC = () => {
                     <Newspaper size={20} />
                     <span className="text-[10px] font-medium">Noticias</span>
                 </NavLink>
+                <NavLink
+                    to="/sistema"
+                    className={({ isActive }) =>
+                        `flex flex-col items-center gap-1 ${isActive ? 'text-accent' : 'text-secondary'}`
+                    }
+                >
+                    <ShieldAlert size={20} />
+                    <span className="text-[10px] font-medium">Sistema</span>
+                </NavLink>
             </nav>
         </div>
     );
