@@ -112,8 +112,8 @@ const SystemStatus: React.FC = () => {
 
             {/* Dropdown Details - FIXED to prevent cutoff */}
             {showDetails && (
-                <div className="fixed mt-2 right-4 w-72 bg-surface/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl z-[9999] p-4 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-200"
-                    style={{ top: 'calc(3.5rem + 0.5rem)' }}>
+                <div className="fixed mt-2 right-4 w-72 bg-surface/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl p-4 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-200"
+                    style={{ top: '5rem', zIndex: 99999 }}>
                     <div className="flex items-center justify-between border-b border-border pb-2">
                         <span className="text-xs font-bold uppercase tracking-widest text-secondary flex items-center gap-2">
                             <ListRestart size={12} /> Status Report
