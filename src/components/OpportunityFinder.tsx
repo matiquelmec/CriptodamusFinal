@@ -6,7 +6,6 @@ import { LiquidationFeed } from './LiquidationFeed';
 import ProgressIndicator from './ProgressIndicator';
 import SignalCard from './opportunities/SignalCard';
 import EducationalModal from './opportunities/EducationalModal';
-import PerformanceStats from './opportunities/PerformanceStats';
 import SystemStatus from './SystemStatus';
 
 interface OpportunityFinderProps {
@@ -198,9 +197,6 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                     </p>
                 </div>
             </div>
-
-            {/* Dashboard de Rendimiento */}
-            <PerformanceStats />
 
             {/* Main Content Area */}
             <div className="opportunities-grid md:overflow-y-auto p-4 custom-scrollbar bg-background/50">
