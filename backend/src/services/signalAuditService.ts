@@ -52,8 +52,11 @@ class SignalAuditService extends EventEmitter {
             }
         });
 
-        // 3. Proceso de expiración (cada 5m)
-        this.auditInterval = setInterval(() => this.checkExpirations(), 5 * 60 * 1000);
+        // 3. Proceso de expiración + Advanced Exits (cada 2 min)
+        this.auditInterval = setInterval(() => {
+            this.checkExpirations(); // Legacy: solo PENDING signals
+            this.checkAdvancedExits(); // NEW: Hybrid exit system (reversal, momentum, trailing, time decay)
+        }, 2 * 60 * 1000); // Increased frequency for time-sensitive exits
 
         // 4. HYBRID WATCHDOG (Cada 30s)
         // Detects partial connection failure (Ghost WS) and switches to Polling
@@ -518,6 +521,393 @@ class SignalAuditService extends EventEmitter {
             }
         }
         if (signalsToUpdate.length > 0) this.syncUpdates(signalsToUpdate);
+    }
+
+    /**
+     * ═══════════════════════════════════════════════════════════
+     * PAU PERDICES: ADVANCED EXIT SYSTEM (Hybrid Multi-Factor)
+     * ═══════════════════════════════════════════════════════════
+     * Prioridades de Salida:
+     * 1. Stop Loss Técnico (siempre en processPriceTick)
+     * 2. Take Profit Targets (siempre en processPriceTick)
+     * 3. Divergencia Regular → Reversión detectada
+     * 4. Momentum Exhaustion → RSI >70 sin movimiento
+     * 5. Trailing Stop → Después de TP1 (ATR-based)
+     * 6. Time Decay (SOFT) → Estrecha SL 6-12h
+     * 7. Max Time (HARD) → Solo trades FLAT >12h
+     */
+    private async checkAdvancedExits() {
+        if (this.activeSignals.length === 0) return;
+
+        try {
+            const { TradingConfig } = await import('../core/config/tradingConfig');
+            const exit_strategy = TradingConfig.exit_strategy;
+
+            if (!exit_strategy) return; // Fallback to legacy
+
+            const signalsToUpdate = [];
+
+            for (const signal of this.activeSignals) {
+                if (!['ACTIVE', 'PARTIAL_WIN'].includes(signal.status)) continue;
+
+                const ageMs = Date.now() - Number(signal.created_at);
+                const ageHours = ageMs / (1000 * 60 * 60);
+
+                const isLong = signal.side === 'LONG';
+                const currentPrice = signal.final_price || signal.entry_price;
+                const currentWAP = signal.activation_price || signal.entry_price;
+                const currentStage = signal.stage || 0;
+
+                let shouldExit = false;
+                let exitReason = '';
+                let updates: any = {};
+
+                try {
+                    // Fetch recent candles for advanced analysis
+                    const candles = await this.fetchRecentCandles(signal.symbol, 20);
+                    if (!candles || candles.length < 10) continue;
+
+                    const closes = candles.map(c => c.close);
+                    const rsiArray = this.calculateRSI(closes, 14);
+                    const currentRSI = rsiArray[rsiArray.length - 1];
+                    const atr = this.calculateATR(candles, 14);
+
+                    // === EXIT CHECK 1: DIVERGENCIA REGULAR (Reversión) ===
+                    if (exit_strategy.reversal?.enabled) {
+                        const { detectRegularBearishDivergence, detectRegularBullishDivergence } =
+                            await import('../core/services/divergenceDetector');
+
+                        if (isLong && detectRegularBearishDivergence(candles, rsiArray, exit_strategy.reversal.lookback_candles)) {
+                            shouldExit = true;
+                            exitReason = 'REGULAR_BEARISH_DIV';
+                            console.log(`🔄 [AdvancedExit] ${signal.symbol}: Bearish Divergence (Reversal)`);
+                        }
+
+                        if (!isLong && detectRegularBullishDivergence(candles, rsiArray, exit_strategy.reversal.lookback_candles)) {
+                            shouldExit = true;
+                            exitReason = 'REGULAR_BULLISH_DIV';
+                            console.log(`🔄 [AdvancedExit] ${signal.symbol}: Bullish Divergence (Reversal)`);
+                        }
+                    }
+
+                    // === EXIT CHECK 2: MOMENTUM EXHAUSTION ===
+                    if (!shouldExit && exit_strategy.momentum?.enabled && ageHours >= exit_strategy.momentum.min_hours_check) {
+                        const rsiThreshold = exit_strategy.momentum.rsi_threshold;
+                        const maxFlat = exit_strategy.momentum.max_flat_percent;
+
+                        const priceChange = Math.abs(((currentPrice - currentWAP) / currentWAP) * 100);
+
+                        if (isLong && currentRSI > rsiThreshold && priceChange < maxFlat) {
+                            shouldExit = true;
+                            exitReason = 'MOMENTUM_EXHAUSTED';
+                            console.log(`⚡ [AdvancedExit] ${signal.symbol}: Momentum Dead (RSI ${currentRSI.toFixed(1)}, ${ageHours.toFixed(1)}h)`);
+                        }
+
+                        if (!isLong && currentRSI < (100 - rsiThreshold) && priceChange < maxFlat) {
+                            shouldExit = true;
+                            exitReason = 'MOMENTUM_EXHAUSTED';
+                            console.log(`⚡ [AdvancedExit] ${signal.symbol}: SHORT Momentum Dead (RSI ${currentRSI.toFixed(1)})`);
+                        }
+                    }
+
+                    // === EXIT CHECK 3: TRAILING STOP (Solo después de TP1) ===
+                    if (!shouldExit && exit_strategy.trailing_stop?.enabled && currentStage >= 1) {
+                        const trailingDistance = atr * exit_strategy.trailing_stop.atr_distance;
+                        const maxReached = signal.max_price_reached || currentWAP;
+
+                        const trailingSL = isLong
+                            ? maxReached - trailingDistance
+                            : maxReached + trailingDistance;
+
+                        const hitTrailing = isLong
+                            ? currentPrice <= trailingSL
+                            : currentPrice >= trailingSL;
+
+                        if (hitTrailing) {
+                            shouldExit = true;
+                            exitReason = 'TRAILING_STOP';
+                            console.log(`📉 [AdvancedExit] ${signal.symbol}: Trailing Stop (${trailingDistance.toFixed(2)} from max)`);
+                        }
+                    }
+
+                    // === EXIT CHECK 4: TIME DECAY (SOFT - Estrecha SL) ===
+                    if (!shouldExit && exit_strategy.time_decay?.enabled && ageHours >= exit_strategy.time_decay.soft_start_hours) {
+                        const hoursSinceSoft = ageHours - exit_strategy.time_decay.soft_start_hours;
+                        const decayFactor = hoursSinceSoft * exit_strategy.time_decay.sl_tighten_rate;
+                        const tightenFactor = Math.max(0.3, 1 - decayFactor); // Min 30% of original
+
+                        const originalSLDistance = atr * 1.5;
+                        const tightenedDistance = originalSLDistance * tightenFactor;
+
+                        const tightenedSL = isLong
+                            ? currentWAP - tightenedDistance
+                            : currentWAP + tightenedDistance;
+
+                        // Solo actualizar SL si cambió significativamente
+                        const slChanged = Math.abs(tightenedSL - signal.stop_loss) > (currentPrice * 0.001);
+                        if (slChanged) {
+                            updates.stop_loss = tightenedSL;
+                            console.log(`⏱️ [TimeDecay] ${signal.symbol}: SL tightened to ${tightenedSL.toFixed(2)} (${ageHours.toFixed(1)}h, factor: ${tightenFactor.toFixed(2)})`);
+                        }
+                    }
+
+                    // === EXIT CHECK 4.5: FORCED BREAKEVEN (12h sin TP1) ===
+                    if (!shouldExit && exit_strategy.time_decay?.forced_breakeven?.enabled) {
+                        const forcedBEConfig = exit_strategy.time_decay.forced_breakeven;
+
+                        // Solo aplica si trade es viejo (>12h) y NO ha tocado TP1 (stage 0)
+                        if (ageHours >= forcedBEConfig.hours && currentStage <= forcedBEConfig.stage_threshold) {
+                            const realEntry = signal.entry || signal.target;
+
+                            // Mover SL a breakeven si aún no está ahí
+                            // (Permitimos pequeño margen de floating point error)
+                            const currentSL = signal.stop_loss || realEntry; // FIX: local var
+                            if (Math.abs(currentSL - realEntry) > (realEntry * 0.0001)) {
+                                updates.stop_loss = realEntry;
+                                console.log(`⏰ [ForcedBreakeven] ${signal.symbol}: SL → Breakeven after ${ageHours.toFixed(1)}h (Stage: ${currentStage})`);
+                            }
+                        }
+                    }
+
+                    // === EXIT CHECK 5: HARD TIME LIMIT (Solo FLAT trades) ===
+                    if (!shouldExit && exit_strategy.time_decay?.enabled && ageHours >= exit_strategy.time_decay.hard_limit_hours) {
+                        const pnlPercent = ((currentPrice - currentWAP) / currentWAP) * 100 * (isLong ? 1 : -1);
+
+                        if (Math.abs(pnlPercent) < 0.5) {
+                            shouldExit = true;
+                            exitReason = 'MAX_TIME_FLAT';
+                            console.log(`⌛ [AdvancedExit] ${signal.symbol}: Closed by time (${ageHours.toFixed(1)}h, FLAT: ${pnlPercent.toFixed(2)}%)`);
+                        }
+                    }
+
+                    // === EJECUTAR SALIDA ===
+                    if (shouldExit) {
+                        const weightLeft = (currentStage === 0) ? 1.0 : (currentStage === 1 ? 0.6 : (currentStage === 2 ? 0.3 : 0));
+                        const closingFee = currentPrice * this.FEE_RATE * weightLeft;
+                        const finalPnL = this.calculateNetPnL(currentWAP, currentPrice, signal.side, closingFee, weightLeft);
+                        const totalPnL = (signal.realized_pnl_percent || 0) + finalPnL;
+
+                        updates = {
+                            ...updates,
+                            id: signal.id,
+                            status: totalPnL > 0.5 ? 'WIN' : (totalPnL < -0.5 ? 'LOSS' : 'BREAKEVEN'),
+                            closed_at: Date.now(),
+                            final_price: currentPrice,
+                            pnl_percent: totalPnL,
+                            fees_paid: (signal.fees_paid || 0) + closingFee,
+                            exit_reason: exitReason
+                        };
+
+                        signalsToUpdate.push(updates);
+                    } else if (Object.keys(updates).length > 0) {
+                        // Solo update SL (no cierre)
+                        updates.id = signal.id;
+                        signalsToUpdate.push(updates);
+                    }
+
+                } catch (innerError: any) {
+                    console.error(`[AdvancedExit] Error analyzing ${signal.symbol}:`, innerError.message);
+                }
+            }
+
+            if (signalsToUpdate.length > 0) {
+                await this.syncUpdates(signalsToUpdate);
+            }
+
+        } catch (e: any) {
+            console.error('[AdvancedExit] Critical error:', e.message);
+        }
+    }
+
+    // Helper: Fetch recent candles
+    private async fetchRecentCandles(symbol: string, count: number = 20) {
+        try {
+            const { SmartFetch } = await import('../core/services/SmartFetch');
+            const symbolBinance = symbol.replace('/', '');
+            const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbolBinance}&interval=15m&limit=${count}`;
+            const data = await SmartFetch.get<any[]>(url);
+
+            if (!Array.isArray(data)) return null;
+
+            return data.map((k: any) => ({
+                timestamp: k[0],
+                open: parseFloat(k[1]),
+                high: parseFloat(k[2]),
+                low: parseFloat(k[3]),
+                close: parseFloat(k[4]),
+                volume: parseFloat(k[5])
+            }));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Helper: Calculate RSI
+    private calculateRSI(closes: number[], period: number = 14): number[] {
+        const { calculateRSIArray } = require('../core/services/mathUtils');
+        return calculateRSIArray(closes, period);
+    }
+
+    // Helper: Calculate ATR
+    private calculateATR(candles: any[], period: number = 14): number {
+        if (candles.length < period + 1) return 0;
+
+        let sum = 0;
+        for (let i = 1; i < Math.min(period + 1, candles.length); i++) {
+            const high = candles[i].high;
+            const low = candles[i].low;
+            const prevClose = candles[i - 1].close;
+
+            const tr = Math.max(
+                high - low,
+                Math.abs(high - prevClose),
+                Math.abs(low - prevClose)
+            );
+            sum += tr;
+        }
+
+        return sum / period;
+    }
+
+    /**
+     * ═══════════════════════════════════════════════════════════
+     * PAU PERDICES: PORTFOLIO BALANCE & DRAWDOWN TRACKING
+     * ═══════════════════════════════════════════════════════════
+     */
+
+    /**
+     * Calcula el balance actual del portafolio basado en PnL realizado
+     * Balance = Initial Balance + Σ(PnL de trades cerrados)
+     */
+    private async calculatePortfolioBalance(): Promise<number> {
+        if (!this.supabase) return 1000; // Fallback
+
+        const { TradingConfig } = await import('../core/config/tradingConfig');
+        const initialBalance = TradingConfig.pau_drawdown_scaling?.initial_balance || 1000;
+
+        // Fetch todos los trades cerrados
+        const { data, error } = await this.supabase
+            .from('signals_audit')
+            .select('pnl_percent')
+            .in('status', ['WIN', 'LOSS', 'BREAKEVEN', 'EXPIRED']);
+
+        if (error || !data) return initialBalance;
+
+        // Sumar PnL acumulado (en formato decimal)
+        let totalPnLDecimal = 0;
+        data.forEach((trade: any) => {
+            const pnl = (trade.pnl_percent || 0) / 100; // Convert % to decimal (5% → 0.05)
+            totalPnLDecimal += pnl;
+        });
+
+        // Balance = Initial × (1 + Total PnL)
+        const currentBalance = initialBalance * (1 + totalPnLDecimal);
+
+        return Math.max(0, currentBalance); // No negative balance
+    }
+
+    /**
+     * Calcula el drawdown actual vs peak balance histórico
+     * DD% = ((Peak - Current) / Peak) × 100
+     */
+    private async calculateCurrentDrawdown(): Promise<{
+        currentBalance: number;
+        peakBalance: number;
+        drawdownPercent: number;
+    }> {
+        const currentBalance = await this.calculatePortfolioBalance();
+
+        // Obtener peak balance de DB (o calcularlo si no existe)
+        let peakBalance = currentBalance;
+
+        if (this.supabase) {
+            const { data } = await this.supabase
+                .from('portfolio_metrics')
+                .select('peak_balance')
+                .order('timestamp', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (data?.peak_balance) {
+                peakBalance = Math.max(data.peak_balance, currentBalance);
+            }
+        }
+
+        const drawdownPercent = peakBalance > 0
+            ? ((peakBalance - currentBalance) / peakBalance) * 100
+            : 0;
+
+        return {
+            currentBalance,
+            peakBalance,
+            drawdownPercent: Math.max(0, drawdownPercent)
+        };
+    }
+
+    /**
+     * Obtiene el multiplicador de riesgo según DD actual
+     * Usa tabla de scaling de Pau Perdices
+     */
+    public async getAdjustedRiskMultiplier(): Promise<{
+        balance: number;
+        drawdown: number;
+        multiplier: number;
+        shouldStopTrading: boolean;
+    }> {
+        const { TradingConfig } = await import('../core/config/tradingConfig');
+        const config = TradingConfig.pau_drawdown_scaling;
+
+        if (!config?.enabled) {
+            // Disabled: return full risk
+            return {
+                balance: config?.initial_balance || 1000,
+                drawdown: 0,
+                multiplier: 1.0,
+                shouldStopTrading: false
+            };
+        }
+
+        const { currentBalance, peakBalance, drawdownPercent } = await this.calculateCurrentDrawdown();
+
+        // Find multiplier from thresholds
+        let multiplier = 0;
+        for (const threshold of config.scaling_thresholds) {
+            if (drawdownPercent <= threshold.max_dd) {
+                multiplier = threshold.multiplier;
+                break;
+            }
+        }
+
+        // Hard stop check
+        const shouldStopTrading = drawdownPercent >= config.max_allowed_drawdown;
+
+        // Log for monitoring (only if DD > 0 or multiplier changed)
+        if (drawdownPercent > 0.1 || multiplier < 1.0) {
+            const emoji = shouldStopTrading ? '🛑' : (multiplier < 1.0 ? '⚠️' : '💰');
+            console.log(`${emoji} [PortfolioRisk] Balance: $${currentBalance.toFixed(2)} | Peak: $${peakBalance.toFixed(2)} | DD: ${drawdownPercent.toFixed(2)}% | Risk: ${(multiplier * 100).toFixed(0)}%`);
+        }
+
+        // Persist to DB for analytics
+        if (this.supabase) {
+            try {
+                await this.supabase.from('portfolio_metrics').insert({
+                    timestamp: Date.now(),
+                    current_balance: currentBalance,
+                    peak_balance: peakBalance,
+                    current_drawdown_pct: drawdownPercent,
+                    risk_multiplier: multiplier
+                });
+            } catch (e) {
+                // Silent fail (table might not exist yet)
+            }
+        }
+
+        return {
+            balance: currentBalance,
+            drawdown: drawdownPercent,
+            multiplier,
+            shouldStopTrading
+        };
     }
 
     // Legacy support methods (getRecentSignals, getPerformanceStats) - kept for UI compat

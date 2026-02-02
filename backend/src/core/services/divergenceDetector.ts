@@ -128,6 +128,108 @@ export function detectGenericDivergence(
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════
+ * PAU PERDICES: REGULAR DIVERGENCE DETECTION (Exit Signals)
+ * ═══════════════════════════════════════════════════════════
+ * Regular Divergences = REVERSIÓN (no continuación)
+ * - Bearish: Precio HH, RSI LH → Vender (sale de LONG)
+ * - Bullish: Precio LL, RSI HL → Comprar (sale de SHORT)
+ */
+
+/**
+ * Detecta divergencia REGULAR BEARISH (reversión bajista)
+ * Precio: Higher High
+ * RSI: Lower High → Momentum débil, probable reversión DOWN
+ */
+export function detectRegularBearishDivergence(
+    candles: any[],
+    rsiValues: number[],
+    lookback: number = 10
+): boolean {
+    if (candles.length < lookback || rsiValues.length < lookback) return false;
+
+    const recent = candles.slice(-lookback);
+    const recentRSI = rsiValues.slice(-lookback);
+
+    // Encontrar picos de precio (highs)
+    let firstPeak = -1, secondPeak = -1;
+    let firstPeakRSI = 0, secondPeakRSI = 0;
+
+    for (let i = 2; i < recent.length - 2; i++) {
+        const isLocalHigh = recent[i].high > recent[i - 1].high &&
+            recent[i].high > recent[i - 2].high &&
+            recent[i].high > recent[i + 1].high &&
+            recent[i].high > recent[i + 2].high;
+
+        if (isLocalHigh) {
+            if (firstPeak === -1) {
+                firstPeak = i;
+                firstPeakRSI = recentRSI[i];
+            } else {
+                secondPeak = i;
+                secondPeakRSI = recentRSI[i];
+                break;
+            }
+        }
+    }
+
+    if (firstPeak === -1 || secondPeak === -1) return false;
+
+    // REGULAR BEARISH: Price Higher High, RSI Lower High
+    const priceHH = recent[secondPeak].high > recent[firstPeak].high;
+    const rsiLH = secondPeakRSI < firstPeakRSI - 3; // -3 buffer
+
+    return priceHH && rsiLH;
+}
+
+/**
+ * Detecta divergencia REGULAR BULLISH (reversión alcista)
+ * Precio: Lower Low
+ * RSI: Higher Low → Momentum recuperándose, probable reversión UP
+ * Usado para salir de posiciones SHORT
+ */
+export function detectRegularBullishDivergence(
+    candles: any[],
+    rsiValues: number[],
+    lookback: number = 10
+): boolean {
+    if (candles.length < lookback || rsiValues.length < lookback) return false;
+
+    const recent = candles.slice(-lookback);
+    const recentRSI = rsiValues.slice(-lookback);
+
+    // Encontrar valles de precio (lows)
+    let firstTrough = -1, secondTrough = -1;
+    let firstTroughRSI = 0, secondTroughRSI = 0;
+
+    for (let i = 2; i < recent.length - 2; i++) {
+        const isLocalLow = recent[i].low < recent[i - 1].low &&
+            recent[i].low < recent[i - 2].low &&
+            recent[i].low < recent[i + 1].low &&
+            recent[i].low < recent[i + 2].low;
+
+        if (isLocalLow) {
+            if (firstTrough === -1) {
+                firstTrough = i;
+                firstTroughRSI = recentRSI[i];
+            } else {
+                secondTrough = i;
+                secondTroughRSI = recentRSI[i];
+                break;
+            }
+        }
+    }
+
+    if (firstTrough === -1 || secondTrough === -1) return false;
+
+    // REGULAR BULLISH: Price Lower Low, RSI Higher Low
+    const priceLL = recent[secondTrough].low < recent[firstTrough].low;
+    const rsiHL = secondTroughRSI > firstTroughRSI + 3; // +3 buffer
+
+    return priceLL && rsiHL;
+}
+
+/**
  * Detecta divergencias (Legacy Wrapper)
  */
 export function detectDivergences(

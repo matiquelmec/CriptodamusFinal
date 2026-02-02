@@ -50,6 +50,12 @@ export const TradingConfig = {
         risk: {
             sl_atr_multiplier: 1.5,
             risk_per_trade: 0.01 // 1%
+        },
+        // NEW: Fibonacci Deep Retracement Penalty
+        fibonacci_penalties: {
+            enabled: true,
+            deep_retracement_penalty: -10,  // Penalizar entradas en 61.8-78.6%
+            penalize_above_618: true  // Activar penalización para >61.8%
         }
     },
 
@@ -76,6 +82,69 @@ export const TradingConfig = {
             min_sl_distance_percent: 1.2,
             smart_breakeven_buffer_percent: 0.1 // Fee coverage
         }
+    },
+
+    // --- PAU PERDICES: ADVANCED EXIT SYSTEM (Hybrid Multi-Factor) ---
+    exit_strategy: {
+        // Trailing Stop (después de TP1)
+        trailing_stop: {
+            enabled: true,
+            atr_distance: 1.0,  // 1× ATR detrás del máximo
+            min_profit_to_activate: 1.5  // Activar tras mover 1.5% a favor
+        },
+
+        // Momentum Exhaustion
+        momentum: {
+            enabled: true,
+            rsi_threshold: 70,  // RSI >70 para LONG
+            min_hours_check: 2,  // Revisar después de 2h
+            max_flat_percent: 1.0  // Si movió <1% en 2h con RSI alto
+        },
+
+        // Divergencia Regular (Reversión)
+        reversal: {
+            enabled: true,
+            lookback_candles: 10,  // Buscar divergencia en últimas 10 velas
+            min_rsi_delta: 5  // RSI debe bajar >5 puntos con precio subiendo
+        },
+
+        // Time Decay (Soft Pressure)
+        time_decay: {
+            enabled: true,
+            soft_start_hours: 6,  // Empezar a estrechar SL a las 6h
+            hard_limit_hours: 12,  // Cierre forzoso solo si FLAT
+            sl_tighten_rate: 0.1,  // Reducir SL distance 10% por hora
+
+            // NEW: Forced Breakeven (12h sin TP1)
+            forced_breakeven: {
+                enabled: true,
+                hours: 12,  // Mover SL a breakeven después de 12h
+                stage_threshold: 0  // Solo si no ha tocado TP1 (stage 0)
+            }
+        }
+    },
+
+    // --- PAU PERDICES: DYNAMIC POSITION SIZING (Drawdown Protection) ---
+    pau_drawdown_scaling: {
+        enabled: true,
+        initial_balance: 1000, // Starting capital (USD)
+        base_risk_percent: 0.01, // 1% base risk per trade
+
+        // Drawdown Scaling Table (Pau Method)
+        // Reduces position size automatically during losing streaks
+        scaling_thresholds: [
+            { max_dd: 3, multiplier: 1.00 },    // 0-3% DD → Full risk (100%)
+            { max_dd: 5, multiplier: 0.75 },    // 3-5% DD → Reduced (75%)
+            { max_dd: 8, multiplier: 0.50 },    // 5-8% DD → Half risk (50%)
+            { max_dd: 10, multiplier: 0.25 },   // 8-10% DD → Minimal (25%)
+            { max_dd: Infinity, multiplier: 0 } // >10% DD → STOP trading
+        ],
+
+        // Safety: Force stop trading if DD exceeds this
+        max_allowed_drawdown: 10, // 10% hard stop
+
+        // Recovery: Resume normal risk when DD reduces below this
+        recovery_threshold: 2 // <2% DD → back to 100% risk
     },
 
     // --- SCORING MATRIX ---

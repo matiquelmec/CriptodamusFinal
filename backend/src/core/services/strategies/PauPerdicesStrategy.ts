@@ -84,7 +84,8 @@ export function analyzePauPerdicesStrategy(
     volumes: number[],
     indicators: TechnicalIndicators,
     contextCandles: any[] = [], // H4 Candles for MTF Context
-    accountBalance: number = 1000
+    accountBalance: number = 1000,
+    riskMultiplier: number = 1.0 // NEW: Dynamic multiplier based on drawdown
 ): PauStrategyResult {
 
     const config = TradingConfig.pauStrategy;
@@ -240,6 +241,58 @@ export function analyzePauPerdicesStrategy(
         // Actually, Hidden Bearish Div implies a Lower High (Pullback) in Price while RSI makes Higher High. This CAPTURES the Pullback logic perfectly.
     }
 
+    // --- PENALIZACIÓN POR RETROCESO PROFUNDO (NEW) ---
+    // Pau Perdices: Evitar entradas en retrocesos >61.8% (mayor riesgo de falsa señal)
+    if (config.fibonacci_penalties?.enabled) {
+        if (localTrend === 'BULLISH') {
+            const fib618 = fibs.level0_618;
+            const fib786 = fibs.level0_786;
+
+            if (fib618 && fib786) {
+                const deepZoneTop = fib618 * 1.002;  // 0.2% buffer
+                const deepZoneBottom = fib786 * 0.998;
+
+                if (currentPrice <= deepZoneTop && currentPrice >= deepZoneBottom) {
+                    const penalty = config.fibonacci_penalties.deep_retracement_penalty || -10;
+                    score += penalty;
+                    reasons.push(`⚠️ Deep Retracement (61.8-78.6%): ${penalty} score`);
+                }
+            }
+        } else {
+            // BEARISH: Precio retrocede hacia ARRIBA (fib higher)
+            // Para SHORT, retroceso es precio subiendo hacia resistencia
+            const fib618 = fibs.level0_618;
+            const fib786 = fibs.level0_786;
+
+            if (fib618 && fib786) {
+                // En BEARISH, 0.618 está ARRIBA de 0.786? Depende del cálculo mathUtils.
+                // Standard: 0 (Low) -> 1 (High). Retracement 0.618 es (High - Range*0.618).
+                // Pero en mathUtils para BEAR trend se invierte? 
+                // Asumimos mathUtils devuelve los niveles de PRECIO absolutos.
+                // BEARISH trend: Retracement va hacia arriba. 0.382 es más bajo que 0.618?
+                // Si High=100, Low=0. Drop=100.
+                // Retracement 0.382 = 0 + 38.2 = 38.2
+                // Retracement 0.618 = 0 + 61.8 = 61.8
+                // Entonces 0.618 > 0.382 en precio absoluto si es retracement de bajada.
+                // check mathUtils logic if inverted or not. 
+                // Assuming standard levels returned are price values.
+                // Deep zone is betwen 61.8 level and 78.6 level.
+
+                // Safety check: sort levels
+                const levelA = fib618;
+                const levelB = fib786;
+                const top = Math.max(levelA, levelB) * 1.002;
+                const bottom = Math.min(levelA, levelB) * 0.998;
+
+                if (currentPrice >= bottom && currentPrice <= top) {
+                    const penalty = config.fibonacci_penalties.deep_retracement_penalty || -10;
+                    score += penalty;
+                    reasons.push(`⚠️ Deep Retracement (61.8-78.6%): ${penalty} score`);
+                }
+            }
+        }
+    }
+
     // --- 7. MACD & VOLUME ---
     if (isTournament) {
         const macd = indicators.macd;
@@ -284,9 +337,16 @@ export function analyzePauPerdicesStrategy(
             tp3 = currentPrice - (riskAmount * 5);
         }
 
-        const riskCapital = accountBalance * config.risk.risk_per_trade;
+        const baseRisk = config.risk.risk_per_trade; // 1% base
+        const adjustedRisk = baseRisk * riskMultiplier; // Scale by DD
+        const riskCapital = accountBalance * adjustedRisk;
         const riskPerShare = riskAmount;
         const recommendedLotSize = riskCapital / (riskPerShare || 1);
+
+        // Log risk adjustment (only if scaled)
+        if (riskMultiplier < 1.0) {
+            console.log(`📊 [PauRisk] ${symbol} | $${accountBalance.toFixed(2)} | ${(adjustedRisk * 100).toFixed(2)}% (${(riskMultiplier * 100).toFixed(0)}%) → $${riskCapital.toFixed(2)}`);
+        }
 
         return {
             signal: localTrend === 'BULLISH' ? 'LONG' : 'SHORT',
