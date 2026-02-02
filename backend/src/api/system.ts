@@ -46,21 +46,22 @@ router.get('/health', async (req, res) => {
 
         if (error) throw error;
 
-        // 2. Check live scanner status
+        // 2. Determine final status
         const liveStatus = scannerService.getLastStatus();
 
-        const hasCritical = dbAlerts.some(a => a.severity === 'CRITICAL') || liveStatus.status === 'CRITICAL';
-        const hasHigh = dbAlerts.some(a => a.severity === 'HIGH') || liveStatus.status === 'DEGRADED';
+        let status = liveStatus.status || 'OPTIMAL';
+        let reason = liveStatus.message || liveStatus.reason || 'Sistemas operando normalmente.';
 
-        let status = 'OPTIMAL';
-        if (hasCritical) status = 'CRITICAL';
-        else if (hasHigh) status = 'DEGRADED';
+        // Critical DB alerts always take precedence
+        const dbCritical = dbAlerts.some(a => a.severity === 'CRITICAL');
+        const dbHigh = dbAlerts.some(a => a.severity === 'HIGH');
 
-        // 3. Technical explanation
-        let reason = 'Todos los sistemas operativos.';
-        if (status !== 'OPTIMAL') {
-            const firstAlert = dbAlerts.find(a => a.severity === status);
-            reason = liveStatus.message || (firstAlert ? firstAlert.message : 'Detección de irregularidades en el flujo de datos.');
+        if (dbCritical) {
+            status = 'CRITICAL';
+            reason = dbAlerts.find(a => a.severity === 'CRITICAL')?.message || reason;
+        } else if (dbHigh && (status === 'OPTIMAL' || status === 'BOOTING' || status === 'SCANNING' || status === 'ACTIVE')) {
+            status = 'DEGRADED';
+            reason = dbAlerts.find(a => a.severity === 'HIGH')?.message || reason;
         }
 
         res.json({
@@ -69,7 +70,7 @@ router.get('/health', async (req, res) => {
             alertCount: dbAlerts.length,
             engineStatus: liveStatus.status,
             lastChecked: new Date().toISOString(),
-            uptime: process.uptime()
+            uptime: Math.floor(process.uptime())
         });
     } catch (err: any) {
         res.status(500).json({ error: err.message });

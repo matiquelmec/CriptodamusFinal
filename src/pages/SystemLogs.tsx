@@ -54,11 +54,11 @@ const SystemLogs: React.FC = () => {
 
     const getStatusCard = () => {
         if (!health) return null;
-        const isOptimal = health.status === 'OPTIMAL';
+        const isNominal = ['OPTIMAL', 'BOOTING', 'SCANNING', 'ACTIVE'].includes(health.status);
         return (
-            <div className={`p-6 rounded-2xl border ${isOptimal ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20'} flex flex-col md:flex-row items-center justify-between gap-6 mb-8`}>
+            <div className={`p-6 rounded-2xl border ${isNominal ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20'} flex flex-col md:flex-row items-center justify-between gap-6 mb-8`}>
                 <div className="flex items-center gap-4 text-center md:text-left">
-                    <div className={`p-4 rounded-full ${isOptimal ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                    <div className={`p-4 rounded-full ${isNominal ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
                         <ShieldCheck size={48} />
                     </div>
                     <div>

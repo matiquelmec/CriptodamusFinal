@@ -31,7 +31,7 @@ const SystemAlertsBanner: React.FC = () => {
         return () => clearInterval(timer);
     }, [effectiveBaseUrl]);
 
-    if (!health || health.status === 'OPTIMAL') return null;
+    if (!health || ['OPTIMAL', 'BOOTING', 'SCANNING', 'ACTIVE'].includes(health.status)) return null;
 
     const isCritical = health.status === 'CRITICAL' || health.status === 'OFFLINE';
 
