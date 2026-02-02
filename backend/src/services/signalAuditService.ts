@@ -355,6 +355,11 @@ class SignalAuditService extends EventEmitter {
                 // LIVE MEMORY UPDATE (For WebSocket)
                 signal.pnl_percent = totalPnL;
 
+                // CRITICAL: Update visible SL in UI to reflect Smart Breakeven
+                if (effectiveSL !== sl) {
+                    signal.stop_loss = effectiveSL;
+                }
+
                 const lastSync = signal.last_sync || 0;
                 if (Date.now() - lastSync > 30000) { // Sync every 30s
                     updates.last_sync = Date.now();

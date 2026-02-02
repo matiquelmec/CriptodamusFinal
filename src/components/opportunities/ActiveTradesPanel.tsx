@@ -64,7 +64,7 @@ const ActiveTradesPanel: React.FC = () => {
                     <div className="col-span-1">Activo / Lado</div>
                     <div className="col-span-1 text-right">Entrada</div>
                     <div className="col-span-1 text-right">Precio Mark</div>
-                    <div className="col-span-1 text-center">Riesgo (SL)</div>
+                    <div className="col-span-1 text-center">Riesgo (Dynamic)</div>
                     <div className="col-span-1 text-center">Objetivo (Dynamic)</div>
                     <div className="col-span-1 text-right">PnL (%)</div>
                     <div className="col-span-1 text-right">Estado</div>
@@ -127,9 +127,10 @@ const ActiveTradesPanel: React.FC = () => {
 
                                 {/* 4. Risk / Stop Loss */}
                                 <div className="col-span-1 flex flex-col items-center justify-center">
-                                    <div className="flex items-center gap-1.5 text-xs font-mono text-slate-400 bg-slate-800/50 px-2 py-1 rounded border border-white/5">
-                                        <Shield size={10} className={isWin ? "text-blue-400" : "text-rose-400"} />
+                                    <div className={`flex items-center gap-1.5 text-xs font-mono px-2 py-1 rounded border ${stage >= 1 ? 'bg-blue-500/10 text-blue-300 border-blue-500/30' : 'bg-slate-800/50 text-slate-400 border-white/5'}`}>
+                                        <Shield size={10} className={stage >= 1 ? "text-blue-400" : (isWin ? "text-blue-400" : "text-rose-400")} />
                                         {trade.stop_loss ? `$${Number(trade.stop_loss || 0).toLocaleString()}` : '---'}
+                                        {stage >= 1 && <span className="text-[8px] opacity-70 ml-1">🔒</span>}
                                     </div>
                                 </div>
 
