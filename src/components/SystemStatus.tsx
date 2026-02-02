@@ -24,13 +24,14 @@ const SystemStatus: React.FC = () => {
     const [showDetails, setShowDetails] = useState(false);
     const [loading, setLoading] = useState(true);
 
+    const effectiveBaseUrl = API_CONFIG.BASE_URL || 'http://localhost:3001';
+
     const fetchStatus = async () => {
-        if (!API_CONFIG.BASE_URL) return;
         try {
-            const healthRes = await axios.get(`${API_CONFIG.BASE_URL}/api/system/health`);
+            const healthRes = await axios.get(`${effectiveBaseUrl}/api/system/health`);
             setHealth(healthRes.data);
 
-            const alertsRes = await axios.get(`${API_CONFIG.BASE_URL}/api/system/alerts`);
+            const alertsRes = await axios.get(`${effectiveBaseUrl}/api/system/alerts`);
             setAlerts(alertsRes.data.slice(0, 5)); // Only show last 5
         } catch (err) {
             console.warn('[SystemStatus] Failed to poll system health');
@@ -65,9 +66,6 @@ const SystemStatus: React.FC = () => {
             default: return '';
         }
     };
-
-    // If no backend configured, don't show
-    if (!API_CONFIG.BASE_URL) return null;
 
     return (
         <div className="relative">

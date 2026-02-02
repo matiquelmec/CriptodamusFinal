@@ -32,8 +32,8 @@ const Layout: React.FC = () => {
                         <MacroIndicators />
                     </div>
 
-                    {/* System Health Heartbeat - Desktop & Tablet */}
-                    <div className="hidden sm:block ml-auto mr-4">
+                    {/* System Health Heartbeat - All Devices */}
+                    <div className="ml-auto mr-4">
                         <SystemStatus />
                     </div>
 
