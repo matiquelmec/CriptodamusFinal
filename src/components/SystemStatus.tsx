@@ -110,9 +110,10 @@ const SystemStatus: React.FC = () => {
                 <ChevronDown size={12} className={`opacity-50 transition-transform ${showDetails ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Dropdown Details */}
+            {/* Dropdown Details - FIXED to prevent cutoff */}
             {showDetails && (
-                <div className="absolute top-full mt-2 right-0 w-72 bg-surface/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl z-[100] p-4 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="fixed mt-2 right-4 w-72 bg-surface/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl z-[9999] p-4 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-200"
+                    style={{ top: 'calc(3.5rem + 0.5rem)' }}>
                     <div className="flex items-center justify-between border-b border-border pb-2">
                         <span className="text-xs font-bold uppercase tracking-widest text-secondary flex items-center gap-2">
                             <ListRestart size={12} /> Status Report
@@ -126,7 +127,7 @@ const SystemStatus: React.FC = () => {
                         {alerts.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-6 opacity-40">
                                 <CheckCircle size={32} className="text-success mb-2" />
-                                <p className="text-[10px] font-medium uppercase tracking-tighter">Sístema Óptimo</p>
+                                <p className="text-[10px] font-medium uppercase tracking-tighter">Sistema Óptimo</p>
                                 <p className="text-[8px] text-center mt-1 uppercase">No se detectan vetos de integridad</p>
                             </div>
                         ) : (
