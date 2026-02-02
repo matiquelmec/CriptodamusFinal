@@ -12,7 +12,7 @@ const Opportunities: React.FC = () => {
     };
 
     return (
-        <div className="h-auto md:h-full min-h-[600px] mb-24 lg:mb-0">
+        <div className="h-full overflow-y-auto pb-24 custom-scrollbar">
             {/* NEW: Live Control Room Panel */}
             <ActiveTradesPanel />
             <OpportunityFinder onSelectOpportunity={handleSelectOpportunity} />
