@@ -4,7 +4,7 @@ import { TrendingUp, TrendingDown, Clock, Shield, Target, DollarSign, Activity, 
 
 const ActiveTradesPanel: React.FC = () => {
     const { activeTrades, isConnected } = useSocket();
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true); // Start collapsed
 
     if (!activeTrades || activeTrades.length === 0) {
         // STANDBY MODE: Show that the system is ready and listening
