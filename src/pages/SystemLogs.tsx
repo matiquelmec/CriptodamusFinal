@@ -64,9 +64,15 @@ const SystemLogs: React.FC = () => {
                     <div>
                         <h2 className="text-2xl font-bold uppercase tracking-tighter">Estado: {health.status}</h2>
                         <p className="text-secondary text-sm mt-1 max-w-md">
-                            {isOptimal
-                                ? "El motor de blindaje atómico está operando sin restricciones. Todos los datos de mercado son íntegros."
-                                : "Se han detectado irregularidades. El sistema está aplicando vetos preventivos para proteger el capital."}
+                            {health.status === 'OPTIMAL' ? (
+                                "El motor de blindaje atómico está operando sin restricciones. Todos los datos de mercado son íntegros."
+                            ) : health.status === 'BOOTING' ? (
+                                "El sistema se está iniciando y sincronizando con las fuentes de datos globales. Espere un momento..."
+                            ) : health.status === 'SCANNING' ? (
+                                "El motor está analizando activamente oportunidades en el mercado global. Integridad: 100%."
+                            ) : (
+                                health.reason || "Se han detectado irregularidades. El sistema está aplicando vetos preventivos para proteger el capital."
+                            )}
                         </p>
                     </div>
                 </div>
@@ -80,7 +86,7 @@ const SystemLogs: React.FC = () => {
                         <span className="text-[10px] text-secondary uppercase font-bold mt-1">Uptime Motor</span>
                     </div>
                 </div>
-            </div>
+            </div >
         );
     };
 

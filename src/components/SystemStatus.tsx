@@ -4,10 +4,11 @@ import { Activity, AlertTriangle, CheckCircle, ShieldAlert, ChevronDown, ListRes
 import { API_CONFIG } from '../services/config';
 
 interface SystemHealth {
-    status: 'OPTIMAL' | 'DEGRADED' | 'CRITICAL';
+    status: 'OPTIMAL' | 'DEGRADED' | 'CRITICAL' | 'BOOTING';
     alertCount: number;
     lastChecked: string;
     uptime: number;
+    reason?: string;
 }
 
 interface SystemAlert {
@@ -52,6 +53,7 @@ const SystemStatus: React.FC = () => {
         if (!health) return 'text-secondary opacity-50';
         switch (health.status) {
             case 'OPTIMAL': return 'text-success';
+            case 'BOOTING': return 'text-accent';
             case 'DEGRADED': return 'text-warning';
             case 'CRITICAL': return 'text-danger';
             default: return 'text-secondary';
@@ -62,6 +64,7 @@ const SystemStatus: React.FC = () => {
         if (!health) return '';
         switch (health.status) {
             case 'OPTIMAL': return 'shadow-[0_0_10px_rgba(34,197,94,0.3)]';
+            case 'BOOTING': return 'shadow-[0_0_10px_rgba(59,130,246,0.3)] animate-pulse';
             case 'DEGRADED': return 'shadow-[0_0_10px_rgba(234,179,8,0.3)]';
             case 'CRITICAL': return 'shadow-[0_0_10px_rgba(239,68,68,0.3)] shadow-danger-pulse animate-pulse';
             default: return '';

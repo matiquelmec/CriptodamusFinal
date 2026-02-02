@@ -125,13 +125,12 @@ class ScannerService extends EventEmitter {
     /**
      * Run the comprehensive market scan
      */
-    public async runFullScan() {
-        if (this.isScanning) {
-            console.log("⚠️ [ScannerService] Skip: Previous scan still running.");
-            return;
-        }
-
+    public async runFullScan(style: 'SWING_INSTITUTIONAL' | 'SCALP_AGRESSIVE' | 'MEME_SCALP' = 'SCALP_AGRESSIVE') {
+        if (this.isScanning) return;
         this.isScanning = true;
+        this.currentStatus = { status: 'SCANNING', reason: 'ANALYZING', message: `Analizando mercado global (${style})...` };
+        this.emit('system_status', this.currentStatus);
+
         const startTime = Date.now();
 
         try {
@@ -199,6 +198,10 @@ class ScannerService extends EventEmitter {
             } else {
                 console.log("ℹ️ [ScannerService] Scan complete. Market is quiet (0 signals found).");
             }
+
+            // SUCCESS STATUS RESET
+            this.currentStatus = { status: 'OPTIMAL', reason: 'OK', message: 'Engine Operation Nominal' };
+            this.emit('system_status', this.currentStatus);
 
         } catch (error: any) {
             console.error("❌ [ScannerService] Critical Error:", error);
