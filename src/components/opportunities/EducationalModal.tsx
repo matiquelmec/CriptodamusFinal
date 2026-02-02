@@ -162,6 +162,39 @@ const EducationalModal: React.FC<EducationalModalProps> = ({ selectedSignal, onC
                                         <span className="text-pink-400 font-bold">{selectedSignal.chartPatterns[0].type}</span>
                                     </div>
                                 )}
+                                {/* NEW: Harmonic Patterns */}
+                                {selectedSignal.harmonicPatterns && selectedSignal.harmonicPatterns.length > 0 && (
+                                    <div className="flex justify-between border-b border-border/50 pb-1 bg-purple-500/10 p-1 rounded">
+                                        <span className="text-secondary">Patrón Armónico:</span>
+                                        <span className="text-purple-400 font-bold">
+                                            {selectedSignal.harmonicPatterns[0].type} ({selectedSignal.harmonicPatterns[0].direction === 'BULLISH' ? 'Bullish' : 'Bearish'})
+                                        </span>
+                                    </div>
+                                )}
+                                {/* NEW: Fair Value Gaps (SMC) */}
+                                {selectedSignal.fairValueGaps && (
+                                    (selectedSignal.fairValueGaps.bullish.length > 0 || selectedSignal.fairValueGaps.bearish.length > 0) && (
+                                        <div className="flex justify-between border-b border-border/50 pb-1 bg-blue-500/10 p-1 rounded">
+                                            <span className="text-secondary">Fair Value Gap:</span>
+                                            <span className="text-blue-400 font-bold text-[10px]">
+                                                {selectedSignal.fairValueGaps.bullish[0] && `Support $${selectedSignal.fairValueGaps.bullish[0].bottom.toFixed(2)}`}
+                                                {selectedSignal.fairValueGaps.bearish[0] && `Resistance $${selectedSignal.fairValueGaps.bearish[0].top.toFixed(2)}`}
+                                            </span>
+                                        </div>
+                                    )
+                                )}
+                                {/* NEW: Order Blocks (SMC) */}
+                                {selectedSignal.orderBlocks && (
+                                    (selectedSignal.orderBlocks.bullish.length > 0 || selectedSignal.orderBlocks.bearish.length > 0) && (
+                                        <div className="flex justify-between border-b border-border/50 pb-1 bg-green-500/10 p-1 rounded">
+                                            <span className="text-secondary">Order Block:</span>
+                                            <span className="text-green-400 font-bold text-[10px]">
+                                                {selectedSignal.orderBlocks.bullish[0] && `Bullish OB $${selectedSignal.orderBlocks.bullish[0].price.toFixed(2)}`}
+                                                {selectedSignal.orderBlocks.bearish[0] && `Bearish OB $${selectedSignal.orderBlocks.bearish[0].price.toFixed(2)}`}
+                                            </span>
+                                        </div>
+                                    )
+                                )}
                                 {selectedSignal.metrics.fractalAnalysis && (
                                     <div className="flex justify-between border-b border-border/50 pb-1 bg-yellow-500/10 p-1 rounded">
                                         <span className="text-secondary">Estructura (15m vs 4H):</span>

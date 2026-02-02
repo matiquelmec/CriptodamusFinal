@@ -17,14 +17,20 @@ export interface VolumeProfileData {
 
 export interface OrderBlockData {
     price: number;
+    high: number;       // Top of Order Block
+    low: number;        // Bottom of Order Block
     strength: number;
     mitigated: boolean;
 }
 
 export interface FairValueGapData {
+    top: number;        // Top of FVG zone
+    bottom: number;     // Bottom of FVG zone
     midpoint: number;
+    type: 'BULLISH' | 'BEARISH';
     size: number;
     filled: boolean;
+    timestamp?: number;
 }
 
 export interface POIData {

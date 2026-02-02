@@ -85,11 +85,22 @@ export const fetchCryptoData = async (mode: 'volume' | 'memes' = 'volume'): Prom
     }
 };
 
+// --- HELPER TO IMPORT CONFIG (Lazy Import to avoid cycle if config uses api) ---
+// Actually, config is safe.
+import { TradingConfig } from '../../config/tradingConfig';
+
 // --- BINANCE FETCH STRATEGY ---
 const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData[]> => {
     try {
         const { data, integrity } = await CEXConnector.getTickers();
         if (!data || !Array.isArray(data)) throw new Error("Binance Authenticated Ticker failed");
+
+        // [STRICT] TOURNAMENT MODE ASSET FILTER (Source Level)
+        let allowedSymbols: string[] = [];
+        if (TradingConfig.TOURNAMENT_MODE) {
+            allowedSymbols = [...TradingConfig.assets.tournament_list]; // Copy readonly to mutable
+            // console.log(`[BinanceAPI] 🏆 Tournament Mode: Filtering for ${allowedSymbols.length} Elite Assets only.`);
+        }
 
         // Ignored symbols (Stablecoins, Leverage tokens, Non-tradable)
         const ignoredPatterns = [
@@ -100,6 +111,13 @@ const fetchBinanceMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
 
         let filteredData = data.filter((ticker: any) => {
             const symbol = ticker.symbol;
+
+            // 0. TOURNAMENT WHITELIST CHECK
+            if (TradingConfig.TOURNAMENT_MODE) {
+                // Exact match check (symbol usually comes as 'BTCUSDT' from binance)
+                if (!allowedSymbols.includes(symbol)) return false;
+            }
+
             return symbol.endsWith('USDT') &&
                 !ignoredPatterns.includes(symbol) &&
                 !symbol.includes('DOWN') &&

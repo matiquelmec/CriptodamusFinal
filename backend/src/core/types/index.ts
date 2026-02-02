@@ -405,6 +405,14 @@ export interface AIOpportunity {
     chartPatterns?: ChartPattern[]; // NEW: Smart Geometric Patterns
     dcaPlan?: DCAPlan; // NEW: Plan completo de DCA para UI
     harmonicPatterns?: import('./types-advanced').HarmonicPattern[]; // NEW: Patrones para UI
+    fairValueGaps?: { // NEW: SMC FVG zones for UI
+        bullish: import('./types-advanced').FairValueGapData[];
+        bearish: import('./types-advanced').FairValueGapData[];
+    };
+    orderBlocks?: { // NEW: SMC Order Blocks for UI
+        bullish: import('./types-advanced').OrderBlockData[];
+        bearish: import('./types-advanced').OrderBlockData[];
+    };
     freezeSignal?: any; // import('../../services/strategies/FreezeStrategy').FreezeSignal; (Stubbed for now)
     tier?: FundamentalTier; // NEW: Tier Badge for UI
 

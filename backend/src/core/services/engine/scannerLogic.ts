@@ -538,6 +538,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     technicalReasoning: reasoning.join(". "),
                     chartPatterns: indicators.chartPatterns || [], // Pass list of patterns
                     harmonicPatterns: (indicators as any).harmonics || [],
+                    fairValueGaps: indicators.fairValueGaps || { bullish: [], bearish: [] }, // NEW: SMC FVG
+                    orderBlocks: indicators.orderBlocks || { bullish: [], bearish: [] }, // NEW: SMC Order Blocks
                     invalidated: false,
                     metrics: {
                         adx: indicators.adx || 0, // NEW: For filtering
