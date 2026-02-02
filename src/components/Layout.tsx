@@ -82,7 +82,7 @@ const Layout: React.FC = () => {
                                 }`
                             }
                         >
-                            <ShieldAlert size={14} /> Sistema
+                            <ShieldAlert size={14} /> Logs y Errores
                         </NavLink>
                     </nav>
                 </div>
@@ -150,7 +150,7 @@ const Layout: React.FC = () => {
                     }
                 >
                     <ShieldAlert size={20} />
-                    <span className="text-[10px] font-medium">Sistema</span>
+                    <span className="text-[10px] font-medium">Logs</span>
                 </NavLink>
             </nav>
         </div>

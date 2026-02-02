@@ -21,8 +21,8 @@ const SystemAlertsBanner: React.FC = () => {
                         setLastAlert(alertRes.data[0]);
                     }
                 }
-            } catch (e) {
-                setHealth({ status: 'OFFLINE' });
+            } catch (e: any) {
+                setHealth({ status: 'OFFLINE', message: `No se pudo conectar al motor en ${effectiveBaseUrl}. Verifica que el backend esté corriendo en el puerto 3001.` });
             }
         };
 

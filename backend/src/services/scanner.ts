@@ -200,8 +200,14 @@ class ScannerService extends EventEmitter {
                 console.log("ℹ️ [ScannerService] Scan complete. Market is quiet (0 signals found).");
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("❌ [ScannerService] Critical Error:", error);
+            const { systemAlerts } = await import('./systemAlertService');
+            systemAlerts.logAlert({
+                severity: 'CRITICAL',
+                category: 'API_FAILURE',
+                message: `SCANNER_CRITICAL_FAILURE: ${error.message}`
+            });
             this.emit('error', error);
         } finally {
             this.isScanning = false;

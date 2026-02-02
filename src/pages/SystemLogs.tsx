@@ -101,7 +101,17 @@ const SystemLogs: React.FC = () => {
                 </button>
             </div>
 
-            {getStatusCard()}
+            {!health && !loading && (
+                <div className="p-6 rounded-2xl border bg-danger/5 border-danger/20 flex items-center justify-center gap-4 mb-8">
+                    <AlertOctagon className="text-danger" size={32} />
+                    <div className="flex flex-col">
+                        <h2 className="text-lg font-bold uppercase">Backend Fuera de Línea</h2>
+                        <p className="text-secondary text-xs uppercase font-bold">No se pudo conectar con el motor de blindaje ({effectiveBaseUrl})</p>
+                    </div>
+                </div>
+            )}
+
+            {health && getStatusCard()}
 
             <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-2xl">
                 <div className="p-4 border-b border-border bg-black/20 flex items-center justify-between">
