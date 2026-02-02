@@ -1,7 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import OpportunityFinder from '../components/OpportunityFinder';
-import ActiveTradesPanel from '../components/opportunities/ActiveTradesPanel'; // NEW Import
+import ActiveTradesPanel from '../components/opportunities/ActiveTradesPanel';
+import SystemAlertsBanner from '../components/SystemAlertsBanner';
 
 const Opportunities: React.FC = () => {
     const navigate = useNavigate();
@@ -12,7 +13,8 @@ const Opportunities: React.FC = () => {
     };
 
     return (
-        <div className="h-full overflow-y-auto pb-24 custom-scrollbar">
+        <div className="h-full overflow-y-auto pb-24 custom-scrollbar flex flex-col gap-4">
+            <SystemAlertsBanner />
             {/* NEW: Live Control Room Panel */}
             <ActiveTradesPanel />
             <OpportunityFinder onSelectOpportunity={handleSelectOpportunity} />

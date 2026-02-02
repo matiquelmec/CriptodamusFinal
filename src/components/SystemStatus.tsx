@@ -80,8 +80,8 @@ const SystemStatus: React.FC = () => {
                     ) : null}
                 </div>
 
-                <span className="text-[10px] font-mono font-bold tracking-tight uppercase hidden sm:block">
-                    Engine: {health?.status || 'OFFLINE'}
+                <span className="text-[10px] font-mono font-bold tracking-tight uppercase">
+                    {health?.status || 'ENGINE'}
                 </span>
 
                 <ChevronDown size={12} className={`opacity-50 transition-transform ${showDetails ? 'rotate-180' : ''}`} />
