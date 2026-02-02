@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import OpportunityFinder from '../components/OpportunityFinder';
 import ActiveTradesPanel from '../components/opportunities/ActiveTradesPanel';
 import PerformanceStats from '../components/opportunities/PerformanceStats';
+import OpportunitySection from '../components/opportunities/OpportunitySection';
 import SystemAlertsBanner from '../components/SystemAlertsBanner';
 
 const Opportunities: React.FC = () => {
@@ -20,8 +20,8 @@ const Opportunities: React.FC = () => {
             <ActiveTradesPanel />
             {/* Performance Monitor Panel */}
             <PerformanceStats />
-            {/* Opportunities Section */}
-            <OpportunityFinder onSelectOpportunity={handleSelectOpportunity} />
+            {/* Signals Section */}
+            <OpportunitySection onSelectOpportunity={handleSelectOpportunity} />
         </div>
     );
 };
