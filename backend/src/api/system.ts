@@ -49,9 +49,7 @@ router.get('/health', async (req, res) => {
         const hasCritical = data.some(a => a.severity === 'CRITICAL');
         const hasHigh = data.some(a => a.severity === 'HIGH');
 
-        let status = 'OPTIMAL';
-        if (hasCritical) status = 'CRITICAL';
-        else if (hasHigh) status = 'DEGRADED';
+        const status = hasCritical ? 'CRITICAL' : (data.length > 0 ? 'DEGRADED' : 'OPTIMAL');
 
         res.json({
             status,

@@ -7,6 +7,7 @@ import ProgressIndicator from './ProgressIndicator';
 import SignalCard from './opportunities/SignalCard';
 import EducationalModal from './opportunities/EducationalModal';
 import PerformanceStats from './opportunities/PerformanceStats';
+import SystemStatus from './SystemStatus';
 
 interface OpportunityFinderProps {
     onSelectOpportunity: (symbol: string) => void;
@@ -128,8 +129,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
                         </div>
                     </div>
 
-                    <div className="flex gap-2">
-
+                    <div className="flex items-center gap-2">
+                        <SystemStatus />
 
                         <button
                             onClick={handleRefresh}
