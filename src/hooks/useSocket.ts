@@ -25,12 +25,20 @@ export interface SocketState {
     activeTrades: any[]; // NEW: Live Trades from SignalAudit
 }
 
-const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
-const WS_BASE_URL = IS_PROD
-    ? `wss://${window.location.host}`
-    : 'ws://localhost:3001';
+import { API_CONFIG } from '../services/config';
 
-const WS_URL = import.meta.env.VITE_BACKEND_URL || `${WS_BASE_URL}/ws`;
+const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
+
+// Robust WS URL Detection
+const getWsUrl = () => {
+    if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
+    if (import.meta.env.VITE_BACKEND_URL) return `${import.meta.env.VITE_BACKEND_URL.replace('http', 'ws')}/ws`;
+
+    const base = API_CONFIG.BASE_URL.replace('http', 'ws');
+    return `${base}/ws`;
+};
+
+const WS_URL = getWsUrl();
 
 export const useSocket = () => {
     const [isConnected, setIsConnected] = useState(false);

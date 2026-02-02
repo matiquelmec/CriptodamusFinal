@@ -19,25 +19,37 @@ export class DataIntegrityGuard {
      * Aggregates integrity across all subsystems to determine if signal generation is safe.
      */
     static async getSystemIntegrityReport(context: {
-        candles: any[],
+        candles?: any[], // Made optional for global pre-flights
         globalData: any,
         newsSentiment: any,
-        economicShield: any
+        economicShield: any,
+        isPreFlight?: boolean // NEW: Explicitly signal if this is a global source check
     }): Promise<IntegrityReport> {
         const staleSources: string[] = [];
         const missingCritical: string[] = [];
         let score = 1.0;
 
         // 1. RAW CANDLE INTEGRITY (The Foundation)
-        if (!context.candles || context.candles.length < 200) {
-            score -= 0.5;
-            missingCritical.push('CANDLES_INSUFFICIENT');
+        if (context.isPreFlight) {
+            // In pre-flight, we just care if we HAVE global data (which implies APIs are up)
+            // Specific per-coin candles are checked later.
+            if (!context.globalData || context.globalData.isDataValid === false) {
+                // If global market data is dead, something is very wrong with connectivity
+                score -= 0.3;
+                staleSources.push('GLOBAL_CONNECTIVITY');
+            }
         } else {
-            const lastCandle = context.candles[context.candles.length - 1];
-            const msSinceLast = Date.now() - lastCandle.timestamp;
-            if (msSinceLast > 30 * 60 * 1000) { // > 30 mins stale
-                score -= 0.4;
-                staleSources.push('CEX_CANDLES_STALE');
+            // Depth check for signal generation (Per-coin)
+            if (!context.candles || context.candles.length < 200) {
+                score -= 0.5;
+                missingCritical.push('CANDLES_INSUFFICIENT');
+            } else {
+                const lastCandle = context.candles[context.candles.length - 1];
+                const msSinceLast = Date.now() - lastCandle.timestamp;
+                if (msSinceLast > 30 * 60 * 1000) { // > 30 mins stale
+                    score -= 0.4;
+                    staleSources.push('CEX_CANDLES_STALE');
+                }
             }
         }
 

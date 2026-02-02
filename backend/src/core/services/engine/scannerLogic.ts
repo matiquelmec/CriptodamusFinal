@@ -96,8 +96,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
     // --- STAGE 0.9: HOLISTIC INTEGRITY GUARD (Fail-Fast Logic) ---
     const integrityReport = await DataIntegrityGuard.getSystemIntegrityReport({
-        // Candles are checked per-coin in the loop, passing dummy here for global check
-        candles: new Array(201).fill({ timestamp: Date.now() }),
+        isPreFlight: true,
         globalData,
         newsSentiment: globalSentiment,
         economicShield: { reason: TradingConfig.TOURNAMENT_MODE ? 'TOURNEY_BYPASS' : 'OK' }
