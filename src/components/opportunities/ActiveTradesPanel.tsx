@@ -6,8 +6,26 @@ const ActiveTradesPanel: React.FC = () => {
     const { activeTrades, isConnected } = useSocket();
 
     if (!activeTrades || activeTrades.length === 0) {
-        // Optional: Show nothing if no trades, or a small "Standby" badge
-        return null;
+        // STANDBY MODE: Show that the system is ready and listening
+        return (
+            <div className="mb-6 mx-4 p-[1px] rounded-3xl bg-gradient-to-r from-slate-800/50 to-slate-900/50 border border-white/5 opacity-70 hover:opacity-100 transition-opacity">
+                <div className="bg-[#0a0c10]/95 backdrop-blur-sm rounded-[23px] px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-slate-800 rounded-xl text-slate-500">
+                            <Activity size={20} />
+                        </div>
+                        <div>
+                            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Sala de Control <span className="text-[10px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full border border-slate-700">STANDBY</span></h2>
+                            <p className="text-[10px] text-slate-600">Esperando ejecución profesional...</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] font-mono text-slate-600">
+                        <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        {isConnected ? 'SYSTEM ONLINE' : 'OFFLINE'}
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     // Helper: Calculate Time Open
