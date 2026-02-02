@@ -285,7 +285,9 @@ class SignalAuditService extends EventEmitter {
                 const isLong = signal.side === 'LONG';
                 const originalWAP = updates.activation_price || signal.activation_price || signal.entry_price;
                 let currentWAP = originalWAP;
-                const currentStage = signal.stage || 0; // 0=Fresh, 1=TP1 Hit, etc.
+                // Fix: Legacy/Sync check - If status implies progress but stage is 0, force stage.
+                const derivedStage = (signal.status === 'PARTIAL_WIN' && (!signal.stage || signal.stage < 1)) ? 1 : (signal.stage || 0);
+                const currentStage = derivedStage;
                 const sl = signal.stop_loss;
                 const { tp1, tp2, tp3 } = signal;
 
