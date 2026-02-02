@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Zap, Target, Shield, Activity, TrendingUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Zap, Target, Trophy } from 'lucide-react';
 import { useSocket } from '../../hooks/useSocket';
 import OpportunityFinder from '../OpportunityFinder';
 
@@ -12,8 +12,6 @@ const OpportunitySection: React.FC<OpportunitySectionProps> = ({ onSelectOpportu
     const { isConnected, aiOpportunities } = useSocket();
 
     const totalSignals = aiOpportunities?.length || 0;
-    const validCount = aiOpportunities?.filter(o => o.confidenceScore >= 60).length || 0;
-    const goldCount = aiOpportunities?.filter(o => o.strategy === 'pau_perdices_gold').length || 0;
 
     return (
         <div className="mb-6 mx-4 p-[1px] rounded-3xl bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 shadow-2xl">
@@ -29,46 +27,27 @@ const OpportunitySection: React.FC<OpportunitySectionProps> = ({ onSelectOpportu
                             <Zap size={20} className={isConnected ? 'animate-pulse' : ''} />
                         </div>
                         <div className="flex items-center gap-6">
-                            {/* Tournament Context */}
+                            {/* Elite 9 Tournament */}
                             <div className="flex items-center gap-2">
-                                <TrendingUp className="text-purple-400" size={16} />
+                                <Trophy className="text-yellow-400" size={16} />
                                 <div>
                                     <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Elite 9</div>
-                                    <div className="text-lg font-black text-purple-400">
+                                    <div className="text-lg font-black text-yellow-400">
                                         Tournament
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Total Signals */}
+                            {/* Separator */}
+                            <div className="h-8 w-px bg-white/10"></div>
+
+                            {/* Total Signals (75+ Only) */}
                             <div className="flex items-center gap-2">
                                 <Target className="text-cyan-400" size={16} />
                                 <div>
-                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Total</div>
+                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Señales (75+)</div>
                                     <div className="text-lg font-black text-cyan-400">
                                         {totalSignals}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Valid (60+) */}
-                            <div className="flex items-center gap-2">
-                                <Shield className="text-emerald-400" size={16} />
-                                <div>
-                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Valid (60+)</div>
-                                    <div className="text-lg font-bold text-emerald-400">
-                                        {validCount}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Gold Strategy */}
-                            <div className="flex items-center gap-2">
-                                <Target className="text-yellow-400" size={16} />
-                                <div>
-                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Gold (Pau)</div>
-                                    <div className="text-lg font-bold text-yellow-400">
-                                        {goldCount}
                                     </div>
                                 </div>
                             </div>
@@ -77,7 +56,7 @@ const OpportunitySection: React.FC<OpportunitySectionProps> = ({ onSelectOpportu
 
                     <div className="flex items-center gap-3">
                         {/* Connection Status */}
-                        <div className={`px-2  py-1 rounded-full text-[9px] font-bold border ${isConnected ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-500/20 text-slate-400 border-slate-500/30'}`}>
+                        <div className={`px-2 py-1 rounded-full text-[9px] font-bold border ${isConnected ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-500/20 text-slate-400 border-slate-500/30'}`}>
                             {isConnected ? '🟢 LIVE' : '🔴 OFF'}
                         </div>
 
