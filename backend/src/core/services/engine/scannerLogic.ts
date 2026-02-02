@@ -32,7 +32,7 @@ import { fetchGlobalMarketData } from '../../../services/globalMarketService'; /
 
 import { calculateEMA } from '../mathUtils';
 import { predictNextMove, savePrediction } from '../../../ml/inference'; // NEW: Brain Import
-import { getExpertVolumeAnalysis, enrichWithDepthAndLiqs } from '../../../services/volumeExpert'; // NEW: Volume Expert Service
+import { getExpertVolumeAnalysis, enrichWithDepthAndLiqs } from '../volumeExpertService'; // Volume Expert Service
 import { VolumeExpertAnalysis } from '../../types/types-advanced'; // NEW: Correct Type Import
 import { CEXConnector } from '../api/CEXConnector'; // NEW: Professional Source
 import { EconomicService } from '../economicService'; // NEW: Nuclear Shield
@@ -721,6 +721,26 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
     if (opportunities.length === 0) {
         console.warn("[Scanner] 0 Opportunities found. Check console for [Filter] rejection reasons. Possible causes: Low Volatility (ADX<25), Risk Shield, or stricter scoring.");
+    }
+
+    // --- FINAL GATEKEEPER (SAFETY NET) ---
+    // Ensure absolutely NO non-tournament assets leak out due to any logic bypass above
+    if (TradingConfig.TOURNAMENT_MODE) {
+        const eliteSymbols = TradingConfig.assets.tournament_list;
+        const beforeCount = opportunities.length;
+        const filteredOps = opportunities.filter(o => {
+            const cleanId = o.symbol.replace('/', '') + 'USDT';
+            const cleanSym = o.symbol.replace('/', '');
+            // Check formatted list (BTCUSDT) - cast as string[] to avoid strict union mismatch
+            const eliteList = eliteSymbols as readonly string[];
+            const isElite = eliteList.includes(cleanSym) || eliteList.some(e => e.includes(cleanSym));
+            return isElite;
+        });
+
+        if (filteredOps.length !== beforeCount) {
+            console.warn(`[Scanner] 🛡️ GATEKEEPER CAUGHT ${beforeCount - filteredOps.length} UNAUTHORIZED SIGNALS! (Logic Leak or Cache Issue)`);
+        }
+        return filteredOps.sort((a, b) => b.confidenceScore - a.confidenceScore);
     }
 
     return opportunities.sort((a, b) => b.confidenceScore - a.confidenceScore);

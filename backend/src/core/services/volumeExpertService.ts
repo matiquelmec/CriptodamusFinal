@@ -1,6 +1,9 @@
 import { VolumeExpertAnalysis, DerivativesData, CVDData } from '../types/types-advanced';
 import { fetchCandles, fetchOrderBook } from './api/binanceApi';
 import { estimateLiquidationClusters, analyzeOrderBook } from './engine/liquidationEngine';
+import { SmartFetch } from './SmartFetch';
+import { CEXConnector } from './api/CEXConnector';
+import { createClient } from '@supabase/supabase-js';
 
 // ============================================================================
 // CONSTANTS & ENDPOINTS
@@ -23,18 +26,46 @@ const cache: Record<string, CacheEntry<any>> = {};
 // HELPER FUNCTIONS
 // ============================================================================
 
-const fetchWithTimeout = async (url: string, timeout = 4000): Promise<Response> => {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    try {
-        const response = await fetch(url, { signal: controller.signal });
-        clearTimeout(id);
-        return response;
-    } catch (error) {
-        clearTimeout(id);
-        throw error;
+// Supabase Init for Wall Historian
+const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_KEY)
+    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
+    : null;
+
+async function saveSnapshot(symbol: string, ob: any) {
+    if (!supabase) return;
+    const items = [];
+
+    // Save Bid Wall (Support) if significant
+    if (ob.bidWall && ob.bidWall.strength > 80) {
+        items.push({
+            symbol,
+            wall_price: ob.bidWall.price,
+            wall_volume: ob.bidWall.volume,
+            side: 'BID',
+            strength: ob.bidWall.strength,
+            timestamp: Date.now()
+        });
     }
-};
+
+    // Save Ask Wall (Resistance)
+    if (ob.askWall && ob.askWall.strength > 80) {
+        items.push({
+            symbol,
+            wall_price: ob.askWall.price,
+            wall_volume: ob.askWall.volume,
+            side: 'ASK',
+            strength: ob.askWall.strength,
+            timestamp: Date.now()
+        });
+    }
+
+    if (items.length > 0) {
+        // Fire and forget (don't await to block scanner)
+        supabase.from('orderbook_snapshots').insert(items).then(({ error }) => {
+            if (error) console.error("❌ Snapshot Error:", error.message);
+        });
+    }
+}
 
 const getCached = <T>(key: string): T | null => {
     const entry = cache[key];
@@ -76,14 +107,12 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
     const cached = getCached<DerivativesData>(cacheKey);
     if (cached) return cached;
 
-    // Helper to safely fetch with a default fallback
-    const safeFetch = async (url: string, defaultVal: any = null) => {
+    // Helper to safely fetch with SmartFetch (handles geoblocking)
+    const safeFetch = async (url: string) => {
         try {
-            const res = await fetchWithTimeout(url, 3000);
-            if (res.status === 400 || res.status === 451 || !res.ok) return null; // Silent fail for Bad Request (Invalid Symbol) or Geoblock
-            return await res.json();
+            return await SmartFetch.get(url, { timeout: 3000 });
         } catch (e) {
-            return null; // Silent fail (Network/CORS)
+            return null; // Silent fail
         }
     };
 
@@ -111,9 +140,9 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
         //     buySellRatio = parseFloat(ratioRes[0].longShortRatio);
         // }
 
-        const openInterest = parseFloat(oiData.openInterest); // En monedas
-        const fundingRate = parseFloat(fundingData.lastFundingRate);
-        const price = parseFloat(fundingData.markPrice); // Use Mark Price specifically
+        const openInterest = parseFloat((oiData as any).openInterest); // En monedas
+        const fundingRate = parseFloat((fundingData as any).lastFundingRate);
+        const price = parseFloat((fundingData as any).markPrice); // Use Mark Price specifically
 
         const fundingRateDaily = fundingRate * 3;
 
@@ -151,9 +180,7 @@ const COINBASE_EXCHANGE_API = 'https://api.exchange.coinbase.com';
  */
 async function fetchCoinbaseCandles(productIds: string, granularity: number = 3600): Promise<any[]> {
     try {
-        const res = await fetchWithTimeout(`${COINBASE_EXCHANGE_API}/products/${productIds}/candles?granularity=${granularity}`, 4000);
-        if (!res.ok) return [];
-        return await res.json();
+        return await SmartFetch.get<any[]>(`${COINBASE_EXCHANGE_API}/products/${productIds}/candles?granularity=${granularity}`, { timeout: 4000 });
     } catch (e) { return []; }
 }
 
@@ -230,15 +257,10 @@ export async function getCoinbasePremium(symbol: string): Promise<VolumeExpertAn
         }
 
         // Fallback: Snapshot Logic
-        const [bnRes, cbRes] = await Promise.all([
-            fetchWithTimeout(`${BINANCE_SPOT_API}/ticker/price?symbol=${bnSymbol}`),
-            fetchWithTimeout(`${COINBASE_API}/prices/${cbSymbol}/spot`)
+        const [bnData, cbData] = await Promise.all([
+            SmartFetch.get<any>(`${BINANCE_SPOT_API}/ticker/price?symbol=${bnSymbol}`, { timeout: 4000 }),
+            SmartFetch.get<any>(`${COINBASE_API}/prices/${cbSymbol}/spot`, { timeout: 4000 })
         ]);
-
-        if (!bnRes.ok || !cbRes.ok) throw new Error('Price API Error');
-
-        const bnData = await bnRes.json();
-        const cbData = await cbRes.json();
 
         const bnPrice = parseFloat(bnData.price);
         const cbPrice = parseFloat(cbData.data.amount);
@@ -271,11 +293,24 @@ export async function getInstantCVD(symbol: string): Promise<CVDData> {
     const fSymbol = symbol.replace('/', '').toUpperCase();
 
     try {
-        // Fetch last 500 trades (approx last few minutes depending on volume)
-        const res = await fetchWithTimeout(`${BINANCE_SPOT_API}/aggTrades?symbol=${fSymbol}&limit=500`);
-        if (!res.ok) throw new Error('Binance Trades API Error');
+        // Professional Pivot: Try CEXConnector first (Premium Data)
+        const realCVD = await CEXConnector.getRealCVD(symbol);
+        if (realCVD.integrity >= 1.0) {
+            // Return premium data but preserve bubble/absorption analysis structure
+            return {
+                current: realCVD.delta,
+                trend: realCVD.delta > 0.05 ? 'BULLISH' : realCVD.delta < -0.05 ? 'BEARISH' : 'NEUTRAL',
+                divergence: null,
+                candleDelta: realCVD.delta,
+                cvdSeries: [],
+                priceSeries: [],
+                bubbles: [], // CEX data doesn't provide granular bubbles yet
+                absorption: null
+            };
+        }
 
-        const trades = await res.json();
+        // Fallback: Public aggTrades (Integrity 0.5)
+        const trades = await SmartFetch.get<any[]>(`${BINANCE_SPOT_API}/aggTrades?symbol=${fSymbol}&limit=500`, { timeout: 5000 });
 
         let cvdDelta = 0;
         let buyVol = 0;
@@ -444,6 +479,9 @@ export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: Vo
         if (enriched.liquidity.orderBook.bidWall && enriched.liquidity.orderBook.bidWall.strength > 50) {
             enriched.liquidity.marketDepthScore = Math.min(100, enriched.liquidity.marketDepthScore + 10);
         }
+
+        // NEW: Save historical snapshot (Wall Historian)
+        saveSnapshot(normalizedSymbol, enriched.liquidity.orderBook);
     }
 
     return enriched;
