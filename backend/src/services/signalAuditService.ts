@@ -252,6 +252,10 @@ class SignalAuditService extends EventEmitter {
                     const realEntry = (signal.side === 'LONG') ? currentPrice + slippage : currentPrice - slippage;
                     updates.activation_price = realEntry;
                     updates.fees_paid = (realEntry * this.FEE_RATE);
+
+                    // NEW: Store buffer distance for Smart Beakeven validation
+                    const bufferPercent = (await import('../core/config/tradingConfig')).TradingConfig.risk.safety.smart_breakeven_buffer_percent || 0.15;
+                    signal.smart_be_buffer = realEntry * (bufferPercent / 100);
                     updates.max_price_reached = realEntry;
                     updates.stage = 0;
 
@@ -315,7 +319,10 @@ class SignalAuditService extends EventEmitter {
                 // --- 2C: SMART BREAKEVEN & STOP LOSS ---
                 let effectiveSL = sl;
                 if (currentStage >= 1) {
-                    effectiveSL = currentWAP; // Breakeven after TP1
+                    // SMART BREAKEVEN: Entry +/- Buffer to cover fees
+                    // If signal.smart_be_buffer is not set (legacy), default to 0.15% estimate
+                    const buffer = signal.smart_be_buffer || (currentWAP * 0.0015);
+                    effectiveSL = isLong ? currentWAP + buffer : currentWAP - buffer;
                 }
 
                 const slHit = isLong ? currentPrice <= effectiveSL : currentPrice >= effectiveSL;
@@ -356,8 +363,8 @@ class SignalAuditService extends EventEmitter {
                         if (tp1Hit) {
                             updates.stage = 1;
                             updates.status = 'PARTIAL_WIN';
-                            updates.realized_pnl_percent = this.calculateNetPnL(currentWAP, tp1, signal.side, 0, 0.4);
-                            console.log(`💰 [SignalAudit] TP1 Hit: ${signal.symbol} (SL -> Breakeven Active)`);
+                            updates.realized_pnl_percent = this.calculateNetPnL(currentWAP, tp1, signal.side, 0, 0.50); // 50% Secured
+                            console.log(`💰 [SignalAudit] TP1 Hit: ${signal.symbol} (50% Secured | Smart Breakeven Active)`);
                         }
                     }
                     // TP2 (30% out)
@@ -377,7 +384,7 @@ class SignalAuditService extends EventEmitter {
                             shouldClose = true;
                             updates.status = 'WIN';
                             updates.stage = 3;
-                            const profit3 = this.calculateNetPnL(currentWAP, tp3, signal.side, 0, 0.3);
+                            const profit3 = this.calculateNetPnL(currentWAP, tp3, signal.side, 0, 0.20); // 20% Moonbag
                             updates.pnl_percent = (signal.realized_pnl_percent || 0) + profit3;
                             console.log(`🚀🚀🚀 [SignalAudit] TP3 Target Reached: ${signal.symbol}`);
                         }
@@ -393,7 +400,7 @@ class SignalAuditService extends EventEmitter {
                     // Final PnL Fallback (if stopped at BE or SL)
                     if (updates.status !== 'WIN' || !updates.pnl_percent) {
                         const currentWAP = updates.activation_price || signal.activation_price || signal.entry_price;
-                        const weightLeft = (signal.stage === 0) ? 1.0 : (signal.stage === 1 ? 0.6 : (signal.stage === 2 ? 0.3 : 0));
+                        const weightLeft = (signal.stage === 0) ? 1.0 : (signal.stage === 1 ? 0.5 : (signal.stage === 2 ? 0.2 : 0));
                         const finalChunk = this.calculateNetPnL(currentWAP, currentPrice, signal.side, currentPrice * this.FEE_RATE, weightLeft);
                         updates.pnl_percent = (signal.realized_pnl_percent || 0) + finalChunk;
                     }
@@ -661,10 +668,17 @@ class SignalAuditService extends EventEmitter {
 
                             // Mover SL a breakeven si aún no está ahí
                             // (Permitimos pequeño margen de floating point error)
-                            const currentSL = signal.stop_loss || realEntry; // FIX: local var
-                            if (Math.abs(currentSL - realEntry) > (realEntry * 0.0001)) {
-                                updates.stop_loss = realEntry;
-                                console.log(`⏰ [ForcedBreakeven] ${signal.symbol}: SL → Breakeven after ${ageHours.toFixed(1)}h (Stage: ${currentStage})`);
+                            // Smart Breakeven for Time Decay
+                            const buffer = signal.smart_be_buffer || (realEntry * 0.0015);
+                            const smartBE = isLong ? realEntry + buffer : realEntry - buffer;
+
+                            const currentSL = signal.stop_loss || realEntry;
+                            // Only update if current SL is worse than Smart BE
+                            const isImprovement = isLong ? currentSL < smartBE : currentSL > smartBE;
+
+                            if (isImprovement) {
+                                updates.stop_loss = Number(smartBE.toFixed(4));
+                                console.log(`⏰ [ForcedBreakeven] ${signal.symbol}: SL → Smart BE ($${updates.stop_loss}) after ${ageHours.toFixed(1)}h`);
                             }
                         }
                     }
@@ -682,7 +696,7 @@ class SignalAuditService extends EventEmitter {
 
                     // === EJECUTAR SALIDA ===
                     if (shouldExit) {
-                        const weightLeft = (currentStage === 0) ? 1.0 : (currentStage === 1 ? 0.6 : (currentStage === 2 ? 0.3 : 0));
+                        const weightLeft = (currentStage === 0) ? 1.0 : (currentStage === 1 ? 0.5 : (currentStage === 2 ? 0.2 : 0));
                         const closingFee = currentPrice * this.FEE_RATE * weightLeft;
                         const finalPnL = this.calculateNetPnL(currentWAP, currentPrice, signal.side, closingFee, weightLeft);
                         const totalPnL = (signal.realized_pnl_percent || 0) + finalPnL;

@@ -331,169 +331,174 @@ export function calculateDCAPlan(
         entries.forEach(e => e.factors.push(`⚠️ Proximity Alert: ${(entryGap * 100).toFixed(1)}% Gap`));
     }
 
-    // 7. Stop Loss Final
-    // DYNAMIC ATR MULTIPLIER BASED ON TIER (Elite Hedge Fund Calibration)
-    // S: Wide (3.5x), A: Strong (3.0x), B: Institutional (2.5x), C: Scalp (2.0x)
-    let atrMultiplier = 2.5; // Default (Tier B)
-    if (tier === 'S') atrMultiplier = 3.5;
-    else if (tier === 'A') atrMultiplier = 3.0;
-    else if (tier === 'B') atrMultiplier = 2.5;
-    else if (tier === 'C') atrMultiplier = 2.0;
+    // --- 7. SMART STRUCTURAL STOP LOSS (The "Pau" Method) ---
+    // Philosophy: Stop where the thesis is invalid, usually the next major structure below entry.
+    // If trade relies on 50% Fib, invalidation is losing the 61.8% or 65% pocket.
 
-    const finalDeepest = entries[entries.length - 1].price;
-    const baseStopLoss = side === 'LONG'
-        ? finalDeepest - (atr * atrMultiplier)
-        : finalDeepest + (atr * atrMultiplier);
+    // 7.1 Identify Invalidation Level
+    let invalidationPrice: number | null = null;
+    const currentEntry = entries[0].price; // Use first entry as anchor for risk check
 
-    // INSTITUTIONAL GUARD: Hard floor for Stop Loss (Min 1.0% from entry1 to allow breathing room)
-    const entry1 = entries[0].price;
-    const slDistPercent = Math.abs(entry1 - baseStopLoss) / entry1;
-    const minSLDist = 0.012; // 1.2% minimum safety buffer
+    if (fibonacciLevels) {
+        // LONG: Invalidation is below the Golden Pocket (e.g., 0.65 or 0.786)
+        // SHORT: Invalidation is above the Golden Pocket
+        if (side === 'LONG') {
+            invalidationPrice = fibonacciLevels.level0_786; // Conservative Structure
+            // If entry is shallow (38%), maybe 61.8 is better? 
+            // Pau Strategy: "Debe estar debajo del 61.8%". Let's stick to 0.65 or 0.786 as hard invalidation.
+            if (invalidationPrice > currentEntry) invalidationPrice = null; // Sanity check
+        } else {
+            invalidationPrice = fibonacciLevels.level0_786;
+            if (invalidationPrice < currentEntry) invalidationPrice = null;
+        }
+    }
 
-    let stopLoss = baseStopLoss;
-    if (slDistPercent < minSLDist) {
-        stopLoss = side === 'LONG' ? entry1 * (1 - minSLDist) : entry1 * (1 + minSLDist);
+    // 7.2 Calculate Baseline Volatility Stop (1.5x ATR - Professional Standard)
+    // We use 1.5x as the "Standard Breathing Room" per Pau's strategy
+    const { TradingConfig } = require('../config/tradingConfig'); // Lazy load to allow generic usage
+    const baseMult = TradingConfig?.pauStrategy?.risk?.sl_atr_multiplier || 1.5;
+
+    // Dynamic Tier Adjustments (Slight tweaks, not huge jumps)
+    let atrMultiplier = baseMult;
+    if (tier === 'S' || tier === 'A') atrMultiplier = baseMult * 1.0; // Standard for liquid pairs
+    else atrMultiplier = baseMult * 1.2; // Slightly wider for risky alts
+
+    const volStopPrice = side === 'LONG'
+        ? averageEntry - (atr * atrMultiplier)
+        : averageEntry + (atr * atrMultiplier);
+
+    // 7.3 Select The Smartest Stop
+    let finalStopLoss = volStopPrice;
+
+    if (invalidationPrice) {
+        // Check distance to structure
+        const structDist = Math.abs((invalidationPrice - averageEntry) / averageEntry) * 100;
+
+        // Rules from Plan:
+        // 1. If Structure is too close (< 0.5%), it's noise. Use Volatility Stop.
+        // 2. If Structure is too far (> 2.5%), it's ruinous. Cap at Max Risk (or 2x ATR).
+        // 3. Otherwise, use Structure + Buffer.
+
+        const MIN_DIST = 0.5;
+        const MAX_DIST_CAP = TradingConfig?.risk?.safety?.max_sl_distance_percent || 2.5;
+
+        if (structDist >= MIN_DIST && structDist <= MAX_DIST_CAP) {
+            // Valid Structure! Add small buffer to avoid wick-outs.
+            const buffer = atr * 0.2;
+            finalStopLoss = side === 'LONG'
+                ? invalidationPrice - buffer
+                : invalidationPrice + buffer;
+        } else if (structDist > MAX_DIST_CAP) {
+            // Structure is too far. Use Volatility Cap (Max Distance allowed)
+            const capDist = averageEntry * (MAX_DIST_CAP / 100);
+            finalStopLoss = side === 'LONG'
+                ? averageEntry - capDist
+                : averageEntry + capDist;
+        }
+        // Else (too close): Stick to volStopPrice (1.5x ATR)
+    }
+
+    // 7.4 Final Safety Checks (Sanity Floors)
+    // Absolute minimum distance: 0.8% (unless Scalp)
+    const slDistPercent = Math.abs((finalStopLoss - averageEntry) / averageEntry) * 100;
+    const ABS_MIN_SL = 0.8;
+
+    if (slDistPercent < ABS_MIN_SL) {
+        finalStopLoss = side === 'LONG'
+            ? averageEntry * (1 - (ABS_MIN_SL / 100))
+            : averageEntry * (1 + (ABS_MIN_SL / 100));
     }
 
     // 8. Calcular riesgo total
-    const riskPerShare = Math.abs(averageEntry - stopLoss) / averageEntry;
+    const riskPerShare = Math.abs(averageEntry - finalStopLoss) / averageEntry;
     const totalRisk = riskPerShare * 100;
 
-    // 9. Take Profits (SMART PREDICTIVE LOGIC)
+    // 9. Take Profits (SMART RISK:REWARD ENFORCEMENT)
     const targetPOIs = side === 'LONG'
         ? confluenceAnalysis.topResistances
         : confluenceAnalysis.topSupports;
 
-    // STRICT FILTER: Only accept TPs that are PROFITABLE relative to current price AND entry
-    const refPrice = Math.max(entries[0].price, signalPrice);
-    const profitablePOIs = targetPOIs.filter(p => {
-        if (side === 'LONG') return p.price > refPrice * 1.005;
-        return p.price < Math.min(entries[0].price, signalPrice) * 0.995;
-    });
-
-    // INTELLIGENT MERGE: Combine Static POIs with Predictive Targets
     let smartTargets: { price: number, score: number, label: string }[] = [];
 
-    // A. Add Structural POIs (Base Layer)
-    profitablePOIs.forEach(p => smartTargets.push({ price: p.price, score: p.score, label: 'Structure' }));
+    // Filter Targets: MUST be > Min Reward Distance
+    // Professional Rule: Reward >= Risk (Ideally). Check against TP1.
+    // Minimum acceptable TP1: Risk * 0.8 OR Config Min (0.8%)
+    const minTpDist = Math.max(riskPerShare * 0.8, (TradingConfig?.risk?.safety?.min_tp_distance_percent || 0.8) / 100);
 
-    // B. Add Predictive Targets (God Tier Layer)
-    if (predictiveTargets) {
-        // 1. RSI Target (High Accuracy)
-        if (predictiveTargets.rsiReversal) {
-            const isProfitable = side === 'LONG' ? predictiveTargets.rsiReversal > entries[0].price * 1.005 : predictiveTargets.rsiReversal < entries[0].price * 0.995;
-            if (isProfitable) smartTargets.push({ price: predictiveTargets.rsiReversal, score: 20, label: '🎯 RSI Target' });
-        }
-        // 2. Liquidity Magnet (High Probability)
-        if (predictiveTargets.liquidationCluster) {
-            const isProfitable = side === 'LONG' ? predictiveTargets.liquidationCluster > entries[0].price * 1.005 : predictiveTargets.liquidationCluster < entries[0].price * 0.995;
-            if (isProfitable) smartTargets.push({ price: predictiveTargets.liquidationCluster, score: 18, label: '🧲 Liquidity' });
-        }
-        // 3. Sell Wall (Smart Exit)
-        if (predictiveTargets.orderBookWall) {
-            // Front-run wall by 0.2% to ensure fill before the rejection
-            const safePrice = side === 'LONG' ? predictiveTargets.orderBookWall * 0.998 : predictiveTargets.orderBookWall * 1.002;
-            const isProfitable = side === 'LONG' ? safePrice > entries[0].price * 1.005 : safePrice < entries[0].price * 0.995;
-            if (isProfitable) smartTargets.push({ price: safePrice, score: 15, label: '🧱 Wall Front-Run' });
-        }
+    const validTargets = targetPOIs.filter(p => {
+        const dist = Math.abs((p.price - averageEntry) / averageEntry);
+        return dist >= minTpDist;
+    });
+
+    if (validTargets.length > 0) {
+        // Use best available valid targets
+        validTargets.forEach(p => smartTargets.push({ price: p.price, score: p.score, label: 'Structure' }));
+    } else {
+        // No structural targets found with good R:R. 
+        // Force Artificial Targets based on R:R
+        const r1 = side === 'LONG' ? averageEntry * (1 + minTpDist) : averageEntry * (1 - minTpDist);
+        smartTargets.push({ price: r1, score: 2, label: 'Min R:R Target' });
     }
 
-    // C. Deduplicate & Sort
-    const NOTE_THRESHOLD = 0.01; // 1% distance considered "same level"
-    let uniqueTargets: { price: number, score: number, label: string }[] = [];
+    // Inject Predictive Targets (Only if valid distance)
+    if (predictiveTargets) {
+        if (predictiveTargets.rsiReversal) smartTargets.push({ price: predictiveTargets.rsiReversal, score: 20, label: '🎯 RSI Target' });
+        if (predictiveTargets.liquidationCluster) smartTargets.push({ price: predictiveTargets.liquidationCluster, score: 18, label: '🧲 Liquidity' });
+        if (predictiveTargets.orderBookWall) smartTargets.push({ price: predictiveTargets.orderBookWall, score: 15, label: '🧱 Wall' });
+    }
 
-    // Sort by price for deduplication logic
+    // Deduplicate and Sort
+    // ... (Existing logic adapted) ...
+    let uniqueTargets: { price: number, score: number, label: string }[] = [];
     smartTargets.sort((a, b) => a.price - b.price);
 
     for (const t of smartTargets) {
-        const existing = uniqueTargets.find(u => Math.abs((u.price - t.price) / t.price) < NOTE_THRESHOLD);
+        // Filter again for strict Valid Distance vs Entry (Predictive ones might be close)
+        const dist = Math.abs((t.price - averageEntry) / averageEntry);
+        if (dist < minTpDist) continue;
+
+        const existing = uniqueTargets.find(u => Math.abs((u.price - t.price) / t.price) < 0.01);
         if (existing) {
-            // Merge: Keep higher score, combine labels
             if (t.score > existing.score) existing.score = t.score;
             if (!existing.label.includes(t.label)) existing.label += ` + ${t.label}`;
-            // If the new one is more precise (Predictive), usually we prefer its price? 
-            // Let's bias towards the Predictive price if score is high
-            if (t.score >= 15) existing.price = t.price;
         } else {
             uniqueTargets.push(t);
         }
     }
 
-    // Sort for TPs: Closest to Entry 1 is TP1 (Use entries[0] instead of weighted average for safer scaling)
-    uniqueTargets.sort((a, b) => Math.abs(a.price - entries[0].price) - Math.abs(b.price - entries[0].price));
+    // Final Sort for TPs
+    uniqueTargets.sort((a, b) => Math.abs(a.price - averageEntry) - Math.abs(b.price - averageEntry));
 
-    // Fallback if empty (shouldn't happen often with confluence)
+    // Fill TPs
     let tpsArray: number[] = [];
-
     if (uniqueTargets.length >= 3) {
         tpsArray = [uniqueTargets[0].price, uniqueTargets[1].price, uniqueTargets[2].price];
     } else {
-        // Fill from unique
         tpsArray = uniqueTargets.map(u => u.price);
-
-        // Fill remaining with Multipliers (ATR)
+        // Fill absolute needed
         const needed = 3 - tpsArray.length;
+        const startDist = tpsArray.length > 0 ? Math.abs(tpsArray[tpsArray.length - 1] - averageEntry) : (atr * 2);
         const dir = side === 'LONG' ? 1 : -1;
-        // Start multipliers higher than existing TPs if possible? 
-        // Simple fallback logic:
-        for (let i = 0; i < needed; i++) {
-            const baseMult = 2 + (i + tpsArray.length) * 2;
 
-            tpsArray.push(averageEntry + (atr * baseMult * dir));
+        for (let i = 0; i < needed; i++) {
+            // Incremental steps from last TP
+            const step = atr * 2;
+            const prevPrice = tpsArray.length > 0 ? tpsArray[tpsArray.length - 1] : averageEntry;
+            tpsArray.push(prevPrice + (step * dir));
         }
     }
 
-    // --- EXPERT OPTIMIZATION: RSI TARGET INJECTION ---
-    // If we have an expert RSI target that aligns with trade direction, use it as TP3 (Moonbag)
-    /* 
-       Note: Passing rsiExpert param would require signature update. 
-       For now, we will handle this in dcaReportGenerator by passing the value down or overriding.
-       Actually, let's stick to core calculation here. 
-       If I want to use RSI target, I should pass it in 'fibonacciLevels' or a new 'expertTargets' param.
-       Since I am editing this file, I will add the param to the function signature in a separate edit 
-       or just assume standard TPs and let the report generator override/note it.
-       
-       Better approach: Keep this function pure math based on POIs.
-       Real "Pro" move: The report generator will check RSI target and SWAP TP3 if valid.
-    */
-
+    // Sort Final TPs
     const tps = tpsArray.sort((a, b) => side === 'LONG' ? a - b : b - a);
 
-    // Validate TPs are profitable relative to BOTH Current Price and Entry 1
-    // This prevents the "Immediate Closure" bug where a signal is registered at 97k 
-    // but TPs are set at 95k (leftover from deep supports).
-    const entry1Price = entries[0].price;
-    const safetyRef = side === 'LONG' ? Math.max(entry1Price, signalPrice) : Math.min(entry1Price, signalPrice);
-
-    if (side === 'LONG') {
-        // TP1 must be > Reference Price (Min 0.5% gap for fees coverage)
-        const minGap = 1.005;
-        if (tps[0] <= safetyRef * minGap) {
-            tps[0] = safetyRef * minGap;
-        }
-        // Ensure TP alignment (TP1 < TP2 < TP3)
-        if (tps[1] <= tps[0]) tps[1] = tps[0] + (atr * 2);
-        if (tps[2] <= tps[1]) tps[2] = tps[1] + (atr * 2);
-
-    } else { // SHORT
-        // TP1 must be < Reference Price
-        const minGap = 0.995;
-        if (tps[0] >= safetyRef * minGap) {
-            tps[0] = safetyRef * minGap;
-        }
-        // Ensure TP alignment (TP1 > TP2 > TP3)
-        if (tps[1] >= tps[0]) tps[1] = tps[0] - (atr * 2);
-        if (tps[2] >= tps[1]) tps[2] = tps[1] - (atr * 2);
-    }
-
-
+    // Calculate Sizes
     const tpSizes = getRegimeAwareTPs(marketRegime);
 
     return {
         entries,
         averageEntry,
         totalRisk,
-        stopLoss,
+        stopLoss: finalStopLoss,
         takeProfits: {
             tp1: { price: tps[0], exitSize: tpSizes[0] },
             tp2: { price: tps[1], exitSize: tpSizes[1] },

@@ -201,12 +201,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     indicators.atr,
                     indicators.price,
                     indicators.fibonacci,
-                    indicators.pivots,
-                    indicators.ema200,
-                    indicators.ema50,
+                    (indicators as any).pivots,
+                    (indicators as any).ema200,
+                    (indicators as any).ema50,
                     [], // Harmonics fallback
                     volumeAnalysis?.liquidity?.orderBook,
-                    volumeAnalysis?.liquidity?.liquidationClusters || []
+                    (volumeAnalysis?.liquidity?.liquidationClusters || []) as any[]
                 );
 
                 // Merge Advanced Data into Indicators
@@ -380,18 +380,19 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
 
                 // --- STAGE 4.7: ORDER FLOW VERIFICATION (Truth Layer) ---
-                if (indicators.cvdDivergence && indicators.cvdDivergence !== 'NONE') {
+                if ((indicators as any).cvdDivergence && (indicators as any).cvdDivergence !== 'NONE') {
                     const cvdBoost = TradingConfig.scoring.weights.cvd_divergence_boost;
+                    const divType = (indicators as any).cvdDivergence;
 
-                    if (indicators.cvdDivergence === 'BULLISH' && signalSide === 'LONG') {
+                    if (divType === 'BULLISH' && signalSide === 'LONG') {
                         totalScore += cvdBoost; // Massive Boost: Buying into the dip (Absorption)
                         reasoning.push("🌊 CVD Divergence: Institutional Absorption Detected");
-                    } else if (indicators.cvdDivergence === 'BEARISH' && signalSide === 'SHORT') {
+                    } else if (divType === 'BEARISH' && signalSide === 'SHORT') {
                         totalScore += cvdBoost; // Massive Boost: Selling into the pump (Exhaustion)
                         reasoning.push("🌊 CVD Divergence: Institutional Exhaustion Detected");
                     } else if (
-                        (indicators.cvdDivergence === 'BULLISH' && signalSide === 'SHORT') ||
-                        (indicators.cvdDivergence === 'BEARISH' && signalSide === 'LONG')
+                        (divType === 'BULLISH' && signalSide === 'SHORT') ||
+                        (divType === 'BEARISH' && signalSide === 'LONG')
                     ) {
                         totalScore -= 15; // Penalty: Fighting the hidden flow
                         reasoning.push("⚠️ CVD Warning: Order Flow Contradicts Signal");
@@ -448,270 +449,181 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // --- STAGE 4.10: DORMANT ENGINES ACTIVATION ("God Mode" Integrations) ---
 
                 // A. LIQUIDATION MAGNETS (Hunting the Squeeze)
-                try {
-                    // Generate pivots for liquidation estimation
-                    const highs = candles.map(c => c.high);
-                    const lows = candles.map(c => c.low);
-                    const liqClusters = estimateLiquidationClusters(highs, lows, indicators.price);
+                let liquidationTarget = null;
+                const liqMod = (indicators as any).liquidationInfo;
 
-                    if (liqClusters.length > 0) {
-                        const nearestLiq = liqClusters[0]; // Closest cluster
-                        const distPercent = Math.abs((nearestLiq.priceMin - indicators.price) / indicators.price) * 100;
+                if (liqMod && liqMod.clusters) {
+                    const targetClusters = liqMod.clusters.filter((c: any) =>
+                        (signalSide === 'LONG' ? c.price > indicators.price : c.price < indicators.price)
+                    );
+                    targetClusters.sort((a: any, b: any) => Math.abs(a.price - indicators.price) - Math.abs(b.price - indicators.price));
 
-                        if (distPercent < 1.5) { // Within 1.5% range = Magnet Zone
-                            if (nearestLiq.type === 'SHORT_LIQ' && signalSide === 'LONG') {
-                                totalScore += TradingConfig.scoring.weights.liquidation_flutter; // Targeting Shorts
-                                reasoning.push(`🧲 Liq Magnet: Targeting Short Cluster at $${nearestLiq.priceMin.toFixed(2)}`);
-                            } else if (nearestLiq.type === 'LONG_LIQ' && signalSide === 'SHORT') {
-                                totalScore += TradingConfig.scoring.weights.liquidation_flutter; // Targeting Longs
-                                reasoning.push(`🧲 Liq Magnet: Targeting Long Cluster at $${nearestLiq.priceMin.toFixed(2)}`);
-                            }
-                        }
+                    if (targetClusters.length > 0) {
+                        liquidationTarget = targetClusters[0].price;
+                        totalScore += 10;
+                        reasoning.push(`🧲 Liquidity: Targeting Cluster @ $${liquidationTarget.toFixed(2)}`);
                     }
-                } catch (e) {
-                    // Fail silently, engine is supplementary
                 }
 
-                // B. GLOBAL MACRO SHIELD (DXY & Gold Correlation)
-                try {
-                    const globalData = await fetchGlobalMarketData();
+                // B. RSI REVERSAL TARGET
+                let rsiTarget = null;
+                const pivots = (indicators as any).pivots;
+                if (signalSide === 'LONG' && pivots) rsiTarget = pivots.r2;
+                if (signalSide === 'SHORT' && pivots) rsiTarget = pivots.s2;
 
-                    // DXY Filter (Strong Dollar = Weak Crypto)
-                    if (globalData.dxyIndex > TradingConfig.risk.macro.dxy_risk && signalSide === 'LONG') {
-                        totalScore -= 5; // Headwind
-                        reasoning.push(`💵 Macro Headwind: Strong Dollar (DXY ${globalData.dxyIndex.toFixed(1)})`);
+                // C. ORDER BOOK WALL
+                let wallTarget = null;
+                const veSafe = indicators.volumeExpert;
+
+                if (veSafe && veSafe.liquidity && veSafe.liquidity.orderBook) {
+                    if (signalSide === 'LONG' && veSafe.liquidity.orderBook.askWall) wallTarget = veSafe.liquidity.orderBook.askWall.price;
+                    if (signalSide === 'SHORT' && veSafe.liquidity.orderBook.bidWall) wallTarget = veSafe.liquidity.orderBook.bidWall.price;
+                }
+
+                // --- STAGE 5: BUILD OPPORTUNITY (If Threshold Met) ---
+                const minScore = (TradingConfig.scoring as any).min_score_to_list || 75;
+
+                if (totalScore >= minScore) {
+                    const finalScore = Math.min(100, Math.round(totalScore));
+
+                    let finalTier: 'S' | 'A' | 'B' | 'C' = 'C';
+                    if (finalScore >= 90) finalTier = 'S';
+                    else if (finalScore >= 75) finalTier = 'A';
+                    else if (finalScore >= 60) finalTier = 'B';
+
+                    // 1. DCA PLAN GENERATION
+                    const dcaPlan = calculateDCAPlan(
+                        indicators.price,
+                        indicators.atr,
+                        finalTier,
+                        strategyResult.primaryStrategy?.signal || 'NEUTRAL',
+                        indicators.marketRegime,
+                        {
+                            topSupports: indicators.confluenceAnalysis?.topSupports || [],
+                            topResistances: indicators.confluenceAnalysis?.topResistances || []
+                        },
+                        {
+                            rsiReversal: rsiTarget,
+                            liquidationCluster: liquidationTarget,
+                            orderBookWall: wallTarget
+                        },
+                        (indicators as any).fibLevels
+                    );
+
+                    // Apply Proximity Penalty (Wait for Dip) logic
+                    if (dcaPlan.proximityScorePenalty) {
+                        totalScore -= dcaPlan.proximityScorePenalty;
+                        reasoning.push(`⏳ Sniper: Waiting for dip -${dcaPlan.proximityScorePenalty}`);
                     }
 
-                    // Gold Risk-Off Filter
-                    if (globalData.goldPrice > TradingConfig.risk.macro.gold_risk_off && style === 'MEME_SCALP' && signalSide === 'LONG') {
-                        totalScore -= 10; // Risk-Off Environment
-                        reasoning.push(`🛡️ Macro Risk-Off: Gold Flight detected ($${globalData.goldPrice})`);
+                    // --- FINAL SCORE NORMALIZATION & REALISM ---
+                    totalScore = Math.min(100, Math.max(0, totalScore));
+
+                    // RE-CALC TIER AFTER PENALTY for Metadata
+                    let postPenaltyTier: 'S' | 'A' | 'B' | 'C' = 'C';
+                    if (totalScore >= 90) postPenaltyTier = 'S';
+                    else if (totalScore >= 75) postPenaltyTier = 'A';
+                    else if (totalScore >= 60) postPenaltyTier = 'B';
+
+                    // DYNAMIC R:R CALCULATION
+                    let dynamicRR = 2.5;
+                    if (dcaPlan.averageEntry && dcaPlan.stopLoss && dcaPlan.takeProfits.tp2.price) {
+                        const risk = Math.abs(dcaPlan.averageEntry - dcaPlan.stopLoss);
+                        const reward = Math.abs(dcaPlan.takeProfits.tp2.price - dcaPlan.averageEntry);
+                        if (risk > 0) dynamicRR = parseFloat((reward / risk).toFixed(2));
                     }
 
-                    // BTC Dominance Context
-                    if (coin.symbol !== 'BTCUSDT' && globalData.btcDominance > 58 && signalSide === 'LONG') {
-                        // High BTC Dominance sucks liquidity from alts
-                        // moderate penalty unless it's a specific pump
-                        if (totalScore < 80) totalScore -= 5;
-                    }
-                } catch (e) { }
+                    // Portfolio Heatmap
+                    const activeTrades = signalAuditService.getActiveSignals().map((s: any) => s.symbol);
+                    const correlationRisk = calculatePortfolioCorrelation(coin.symbol, activeTrades, style === 'MEME_SCALP');
 
-                // Portfolio Heatmap (Phase 8) 
-                // REAL: Pull active trades from Audit Service
-                const activeTrades = signalAuditService.getActiveSignals().map((s: any) => s.symbol);
-                const correlationRisk = calculatePortfolioCorrelation(coin.symbol, activeTrades, style === 'MEME_SCALP');
-
-                // --- FINAL SCORE NORMALIZATION & REALISM ---
-                // We ensure the score never exceeds 100% (Institutional Standard)
-                // and never goes below 0.
-                totalScore = Math.min(100, Math.max(0, totalScore));
-
-                // Add explicit logic for "Confidence Tier" based on normalized score
-                let confidenceTier: 'A' | 'B' | 'C' | 'S' = 'C';
-                if (totalScore >= 90) confidenceTier = 'S';
-                else if (totalScore >= 75) confidenceTier = 'A';
-                else if (totalScore >= 60) confidenceTier = 'B';
-
-                const opportunity: AIOpportunity = {
-                    id: coin.id,
-                    symbol: coin.symbol,
-                    timestamp: Date.now(),
-                    timeframe: interval,
-                    session: sessionLabel, // DYNAMIC: "LONDON + NEW_YORK", etc.
-                    riskRewardRatio: 2.5, // Calc dynamically if possible
-                    strategy: strategyResult.primaryStrategy?.id || baseScoreResult.strategies[0] || 'hybrid_algo',
-                    side: signalSide,
-                    confidenceScore: Math.round(Math.min(100, totalScore)),
-                    debugLog: `Base: ${baseScoreResult.score} + Strat: ${strategyResult.primaryStrategy?.score || 0} + Boost: ${strategyResult.scoreBoost}. Context: ${applyTechnicalContext(totalScore, indicators, strategyResult.primaryStrategy?.id) !== totalScore ? 'ADX Penalty Applied' : 'Normal'}`,
-                    mlPrediction: mlResult ? {
-                        probability: mlResult.probabilityUp * 100,
-                        signal: mlResult.signal as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
-                        confidence: mlResult.confidence * 100
-                    } : undefined,
-                    entryZone: {
-                        min: indicators.price * 0.995,
-                        max: indicators.price * 1.005,
-                        currentPrice: indicators.price
-                    },
-                    stopLoss: indicators.price * 0.98, // Placeholder default, DCA calculator refines this
-                    takeProfits: { tp1: 0, tp2: 0, tp3: 0 }, // Placeholder
-                    technicalReasoning: reasoning.join(". "),
-                    chartPatterns: indicators.chartPatterns || [], // Pass list of patterns
-                    harmonicPatterns: (indicators as any).harmonics || [],
-                    fairValueGaps: indicators.fairValueGaps || { bullish: [], bearish: [] }, // NEW: SMC FVG
-                    orderBlocks: indicators.orderBlocks || { bullish: [], bearish: [] }, // NEW: SMC Order Blocks
-                    invalidated: false,
-                    metrics: {
-                        adx: indicators.adx || 0, // NEW: For filtering
-                        volume24h: coin.rawVolume || 0, // FIXED: Use raw numeric volume
-                        rvol: indicators.rvol || 0,
-                        rsi: indicators.rsi || 50,
-                        vwapDist: indicators.vwap ? ((indicators.price - indicators.vwap) / indicators.vwap) * 100 : 0, // SAFE: Prevent / 0
-                        structure: indicators.trendStatus.emaAlignment,
-                        specificTrigger: strategyResult.primaryStrategy?.reason || baseScoreResult.reasoning[0] || "Technical Setup",
-                        zScore: indicators.zScore || 0,
-                        emaSlope: indicators.emaSlope || 0,
-                        isSqueeze: !!indicators.isSqueeze,
-                        volumeExpert: volumeAnalysis, // NEW: Populated from Backend Service
-                        macdDivergence: indicators.macdDivergence?.type || undefined,
-                        rsiDivergence: indicators.rsiDivergence?.type || undefined,
-                        chartPatterns: (indicators.chartPatterns && indicators.chartPatterns.length > 0) ? indicators.chartPatterns : undefined,
-                        harmonics: ((indicators as any).harmonics && (indicators as any).harmonics.length > 0) ? (indicators as any).harmonics : undefined,
-
-                        // NEW: GOD MODE MAPPING
-                        cvdDivergence: (indicators.cvdDivergence && indicators.cvdDivergence !== 'NONE') ? {
-                            type: indicators.cvdDivergence,
-                            strength: 0.8 // Default heavy weight for now
+                    const opportunity: AIOpportunity = {
+                        id: coin.id,
+                        symbol: coin.symbol,
+                        timestamp: Date.now(),
+                        timeframe: interval,
+                        session: sessionLabel,
+                        riskRewardRatio: dynamicRR,
+                        strategy: strategyResult.primaryStrategy?.id || baseScoreResult.strategies[0] || 'hybrid_algo',
+                        side: signalSide,
+                        confidenceScore: Math.round(Math.min(100, totalScore)),
+                        debugLog: `Base: ${baseScoreResult.score} + Strat: ${strategyResult.primaryStrategy?.score || 0} + Boost: ${strategyResult.scoreBoost}.`,
+                        mlPrediction: mlResult ? {
+                            probability: mlResult.probabilityUp * 100,
+                            signal: mlResult.signal as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
+                            confidence: mlResult.confidence * 100
                         } : undefined,
+                        entryZone: {
+                            min: indicators.price * 0.995,
+                            max: indicators.price * 1.005,
+                            currentPrice: indicators.price
+                        },
+                        stopLoss: dcaPlan.stopLoss,
+                        takeProfits: {
+                            tp1: dcaPlan.takeProfits.tp1.price,
+                            tp2: dcaPlan.takeProfits.tp2.price,
+                            tp3: dcaPlan.takeProfits.tp3.price
+                        },
+                        technicalReasoning: reasoning.join(". "),
+                        dcaPlan: dcaPlan,
+                        metrics: {
+                            adx: indicators.adx || 0,
+                            volume24h: coin.rawVolume || 0,
+                            rvol: indicators.rvol || 0,
+                            rsi: indicators.rsi || 50,
+                            vwapDist: indicators.vwap ? ((indicators.price - indicators.vwap) / indicators.vwap) * 100 : 0,
+                            structure: indicators.trendStatus.emaAlignment,
+                            specificTrigger: strategyResult.primaryStrategy?.reason || "Technical Setup",
+                            zScore: indicators.zScore || 0,
+                            emaSlope: indicators.emaSlope || 0,
+                            isSqueeze: !!(indicators as any).isSqueeze,
+                            volumeExpert: veSafe,
+                            macdDivergence: (indicators as any).macdDivergence?.type || undefined,
+                            rsiDivergence: (indicators as any).rsiDivergence?.type || undefined,
+                            chartPatterns: ((indicators as any).chartPatterns && (indicators as any).chartPatterns.length > 0) ? (indicators as any).chartPatterns : undefined,
+                            harmonics: ((indicators as any).harmonics && (indicators as any).harmonics.length > 0) ? (indicators as any).harmonics : undefined,
 
-                        macroContext: macroContext ? {
-                            btcRegime: macroContext.btcRegime.regime,
-                            dxyIndex: parseFloat(globalData.dxyIndex.toFixed(2)),
-                            goldPrice: parseFloat(globalData.goldPrice.toFixed(0)),
-                            btcDominance: parseFloat(macroContext.btcDominance.current.toFixed(2))
-                        } : undefined,
+                            // God Mode Metrics
+                            cvdDivergence: ((indicators as any).cvdDivergence && (indicators as any).cvdDivergence !== 'NONE') ? {
+                                type: (indicators as any).cvdDivergence,
+                                strength: 0.8
+                            } : undefined,
 
-                        fractalAnalysis: macroCompass ? {
-                            trend_4h: macroCompass.trend4h,
-                            ema200_4h: macroCompass.ema200_4h,
-                            price_4h: macroCompass.price,
-                            aligned: macroCompass.aligned
-                        } : undefined
-                    },
-                    freezeSignal: undefined, // Add if computed
-                    tier: confidenceTier,
-
-                    // Phase 8: Risk Management
-                    kellySize,
-                    recommendedLeverage,
-                    correlationRisk
-                };
-
-                // Calculate DCA Plan (Institutional Money Management)
-                // Fix: Pass decomposed arguments matching calculateDCAPlan signature
-                const dcaPlan = calculateDCAPlan(
-                    indicators.price,
-                    indicators.confluenceAnalysis || { topResistances: [], topSupports: [], poiScore: 0, levels: [], supportPOIs: [], resistancePOIs: [] }, // Safe fallback
-                    indicators.atr,
-                    signalSide,
-                    indicators.marketRegime,
-                    indicators.fibonacci,
-                    fundamentalTier || 'B',
-                    { // Predictive Targets
-                        rsiReversal: indicators.rsiExpert?.target || undefined,
-                        liquidationCluster: ((await getRealLiquidationClusters(coin.symbol))[0]?.priceMin) || (estimateLiquidationClusters([], [], indicators.price)[0]?.priceMin), // Try Real -> Fallback Estimate
-                        orderBookWall: undefined // Add if available
-                    }
-                );
-                opportunity.dcaPlan = dcaPlan;
-                opportunity.stopLoss = dcaPlan.stopLoss;
-                opportunity.takeProfits = {
-                    tp1: dcaPlan.takeProfits.tp1.price,
-                    tp2: dcaPlan.takeProfits.tp2.price,
-                    tp3: dcaPlan.takeProfits.tp3.price
-                };
-
-                // DYNAMIC R:R CALCULATION
-                // Formula: (TP2 - AvgEntry) / (AvgEntry - StopLoss)
-                let dynamicRR = 2.5; // Default fallback
-                if (dcaPlan.averageEntry && dcaPlan.stopLoss && dcaPlan.takeProfits.tp2.price) {
-                    const risk = Math.abs(dcaPlan.averageEntry - dcaPlan.stopLoss);
-                    const reward = Math.abs(dcaPlan.takeProfits.tp2.price - dcaPlan.averageEntry);
-                    if (risk > 0) dynamicRR = parseFloat((reward / risk).toFixed(2));
-                }
-                opportunity.riskRewardRatio = dynamicRR;
-
-                // --- STAGE 5.5: PROFESSIONAL TRADER GATEKEEPER ---
-                // Apply Proximity Penalty from DCA engine
-                if (dcaPlan.proximityScorePenalty && dcaPlan.proximityScorePenalty > 0) {
-                    totalScore -= dcaPlan.proximityScorePenalty;
-                    opportunity.confidenceScore = Math.max(0, Math.round(totalScore));
-                    // REFINED MESSAGE: Be specific about waiting
-                    reasoning.push(`⏳ Filtro Sniper: Esperando Dip (Limit Order -${dcaPlan.proximityScorePenalty})`);
-
-                }
-
-                // PIVOT LOGIC: If a Short is distant but trend is Bullish, add tactical warning
-                const isDistantShort = signalSide === 'SHORT' && (dcaPlan.proximityScorePenalty || 0) > 15;
-                const localBullishTrend = indicators.emaSlope > 3 && indicators.price > indicators.ema200;
-
-                if (isDistantShort && localBullishTrend) {
-                    opportunity.technicalReasoning = `🏦 TÁCTICA PROFESIONAL: Tendencia alcista fuerte. No shortear el "pump" prematuramente. Buscar confirmación en zona de resistencia superior ($${dcaPlan.entries[1].price.toFixed(0)}) o scalp LONG hasta dicho nivel. ` + reasoning.join(". ");
-                    // Downgrade score further to ensure it's not a 'Golden Ticket'
-                    opportunity.confidenceScore = Math.max(40, opportunity.confidenceScore - 10);
-                } else {
-                    opportunity.technicalReasoning = reasoning.join(". ");
-                }
-
-                // --- WALL WARNING SUPPRESSION (Deep Entry Logic) ---
-                // If we are waiting for a dip (> 2% away), a current sell wall is irrelevant for entry.
-                const entryDist = Math.abs((dcaPlan.averageEntry - indicators.price) / indicators.price);
-                if (entryDist > 0.02) {
-                    // Remove "Buying into a Sell Wall" from reasoning if present
-                    opportunity.technicalReasoning = opportunity.technicalReasoning.replace(/⚠️ Wall Warning: Buying into a Sell Wall \(-20\)/g, "🛡️ Wall Filter: Muro de Venta ignorado (Entrada Profunda)");
-                    // Restore score penalty if we removed it? 
-                    // Technically checking string is brittle, checking previous array state is better but text is already joined.
-                    // Doing a simple string replace is "surgical" enough for now to clean the UI.
-                    // Ideally we would recalc score, but visual consistency is the user's main complaint.
-                    // Let's rely on the replace for now.
-                }
-
-                // --- STAGE 6: FOMO PREVENTION (The Sniper Check) ---
-                const isFresh = strategyResult.primaryStrategy?.isFresh ?? true; // Default to true if strategy doesn't support fresh check yet
-                const bestEntryDist = Math.abs(dcaPlan.entries[0].distanceFromCurrent);
-
-                // Dynamic Threshold based on timeframe
-                const fomoThreshold = interval === '4h' ? 2.5 : 0.6; // 2.5% for Swing (Relaxed), 0.6% for Scalp
-
-                if (!isFresh && bestEntryDist > fomoThreshold) {
-                    // It's a stale signal AND we are far from the ideal entry.
-                    // This is classic FOMO / Chasing.
-                    // We don't discard entirely to allow 'Limit Order' setups, but we penalize score HEAVILY
-                    // so it only shows up if everything else is perfect.
-                    // Actually, user said "Entradas Ideales", "No FOMO".
-                    // A limit order far away IS an ideal entry (waiting for dip).
-                    // But showing it as a "Live Opportunity" might be confusing?
-                    // Let's MARK it as "WAITING" status via score penalty or separate flag.
-                    // For now, we will SKIP sending it to avoiding cluttering the UI with "Old Trends".
-
-                    // Decision: Filters out 'Chasing'. If you want to enter a trend, wait for the dip (which dcaPlan provides).
-                    // If price is > fomoThreshold away from dip, it's not a valid "Now" opportunity.
-                    console.log(`[Sniper] Rejected ${coin.symbol}: Stale signal + Bad Entry (${bestEntryDist.toFixed(2)}% > ${fomoThreshold}%).`);
-                    return;
-                }
-
-                // --- STAGE 5: FILTERING & OUTPUT ---
-
-                // Final Safety Checks
-                const symbolHistory = await signalAuditService.getRecentSymbolHistory(coin.symbol);
-                const globalMLStats = await signalAuditService.getAdvancedMLMetrics();
-
-                // Propagate metrics for filters
-                if (!opportunity.metrics) {
-                    opportunity.metrics = {
-                        rvol: indicators.rvol,
-                        rsi: indicators.rsi,
-                        vwapDist: 0,
-                        structure: indicators.trendStatus.emaAlignment,
-                        specificTrigger: ''
+                            // Macro Context
+                            macroContext: macroContext ? {
+                                btcRegime: macroContext.btcRegime.regime,
+                                dxyIndex: parseFloat(globalData.dxyIndex.toFixed(2)),
+                                goldPrice: parseFloat(globalData.goldPrice.toFixed(0)),
+                                btcDominance: parseFloat(macroContext.btcDominance.current.toFixed(2))
+                            } : undefined
+                        },
+                        tier: postPenaltyTier,
+                        kellySize,
+                        recommendedLeverage,
+                        correlationRisk: correlationRisk || 0
                     };
-                }
-                opportunity.metrics.marketRegime = indicators.marketRegime;
 
-                const filterResult = FilterEngine.shouldDiscard(opportunity, risk, style);
-                if (filterResult.discarded) {
-                    console.log(`[Filter] Rejected ${coin.symbol}: ${filterResult.reason} (Score: ${opportunity.confidenceScore})`);
-                    return;
-                }
+                    // --- STAGE 6: FOMO PREVENTION (The Sniper Check) ---
+                    const isFresh = strategyResult.primaryStrategy?.isFresh ?? true;
+                    const bestEntryDist = Math.abs(dcaPlan.entries[0].distanceFromCurrent);
+                    const fomoThreshold = interval === '4h' ? 2.5 : 0.6;
 
-                const apexResult = FilterEngine.checkApexSafety(opportunity, symbolHistory, globalMLStats);
-                if (apexResult.discarded) {
-                    console.log(`[Safety] Apex Rejected ${coin.symbol}: ${apexResult.reason}`);
-                    return;
-                }
+                    if (!isFresh && bestEntryDist > fomoThreshold) {
+                        console.log(`[Sniper] Rejected ${coin.symbol}: Stale signal + Bad Entry (${bestEntryDist.toFixed(2)}% > ${fomoThreshold}%).`);
+                        return; // Continue to next coin
+                    }
 
-                opportunities.push(opportunity);
-                console.log(`[Scanner] [${coin.symbol}] ✅ ACCEPTED with Match Score ${opportunity.confidenceScore}`);
+                    // --- FINAL OUTPUT ---
+                    // Final Filters
+                    const filterResult = FilterEngine.shouldDiscard(opportunity, risk, style);
+                    if (filterResult.discarded) {
+                        console.log(`[Filter] Rejected ${coin.symbol}: ${filterResult.reason}`);
+                        return;
+                    }
+
+                    opportunities.push(opportunity);
+                    console.log(`[Scanner] [${coin.symbol}] ✅ ACCEPTED with Match Score ${opportunity.confidenceScore}`);
+                }
             } catch (err) {
                 // Individual coin failure is acceptable, but we log it clearly
                 // console.warn(`[Scanner] Skipped ${coin.symbol}:`, err); 

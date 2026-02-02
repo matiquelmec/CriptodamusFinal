@@ -79,8 +79,13 @@ export const TradingConfig = {
             whipsaw_cooldown_hours: 4,
             direction_flip_penalty: 25,
             high_conviction_threshold: 85,
-            min_sl_distance_percent: 1.2,
-            smart_breakeven_buffer_percent: 0.1 // Fee coverage
+            min_sl_distance_percent: 1.2, // Safety Floor for SL
+            smart_breakeven_buffer_percent: 0.2, // Fee coverage (0.1% Entry + 0.1% Exit)
+
+            // NEW: Professional Structural Logic
+            min_tp_distance_percent: 0.8, // 0.8% Min Target (Avoids Cent-Wins)
+            max_sl_distance_percent: 2.5, // 2.5% Max Cap (Avoids Ruin)
+            smart_sl_structure_lookback: true // Enable Structural Invalidation Search
         }
     },
 
