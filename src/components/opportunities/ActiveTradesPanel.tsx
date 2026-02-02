@@ -77,8 +77,9 @@ const ActiveTradesPanel: React.FC = () => {
                         const isWin = pnl > 0;
                         const pnlColor = isWin ? 'text-emerald-400' : 'text-rose-400';
                         const pnlBg = isWin ? 'bg-emerald-500/5' : 'bg-rose-500/5';
-                        const entryPrice = trade.entry || trade.target;
-                        const currentPrice = trade.last_price || entryPrice;
+                        // DB uses 'entry_price' or 'activation_price'
+                        const entryPrice = trade.entry_price || trade.activation_price || 0;
+                        const currentPrice = trade.last_price || trade.final_price || entryPrice;
 
                         // Smart Status Label
                         let statusLabel = 'OPEN';

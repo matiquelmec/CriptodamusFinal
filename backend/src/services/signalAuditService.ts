@@ -246,6 +246,9 @@ class SignalAuditService extends EventEmitter {
             // but for "Pro" feel we want fairly frequent updates (e.g. every 1% move or every 10 mins)
             // Ideally, we store "last_persisted_price" in memory to check delta.
 
+            // FASE 0: LIVE MEMORY UPDATE (For WebSocket Real-time)
+            signal.last_price = currentPrice;
+
             // FASE 1: Activation (PENDING -> ACTIVE)
             if (signal.status === 'PENDING' || signal.status === 'OPEN') {
                 const entryPrice = signal.entry_price;
@@ -348,11 +351,15 @@ class SignalAuditService extends EventEmitter {
 
                 // Update live metrics on object usually, but for DB we throttle.
                 // However, to fix "stagnant UI", we force update if sufficient time passed or huge move.
+
+                // LIVE MEMORY UPDATE (For WebSocket)
+                signal.pnl_percent = totalPnL;
+
                 const lastSync = signal.last_sync || 0;
                 if (Date.now() - lastSync > 30000) { // Sync every 30s
                     updates.last_sync = Date.now();
                     updates.final_price = currentPrice; // Use this as "Current Price" in UI
-                    updates.pnl_percent = totalPnL; // Live PnL
+                    updates.pnl_percent = totalPnL; // Persist PnL
                 }
 
                 if (slHit) {
