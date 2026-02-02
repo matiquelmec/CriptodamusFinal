@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Activity, AlertTriangle, CheckCircle, ShieldAlert, ChevronDown, ListRestart } from 'lucide-react';
 import { API_CONFIG } from '../services/config';
+import { useSocket } from '../hooks/useSocket';
 
 interface SystemHealth {
-    status: 'OPTIMAL' | 'DEGRADED' | 'CRITICAL' | 'BOOTING';
+    status: 'OPTIMAL' | 'DEGRADED' | 'CRITICAL' | 'BOOTING' | 'SCANNING' | 'ACTIVE';
     alertCount: number;
     lastChecked: string;
     uptime: number;
@@ -27,6 +28,9 @@ const SystemStatus: React.FC = () => {
 
     const effectiveBaseUrl = API_CONFIG.BASE_URL || 'http://localhost:3001';
 
+    // Subscribe to WebSocket for real-time status updates
+    const { systemStatus } = useSocket();
+
     const fetchStatus = async () => {
         try {
             const healthRes = await axios.get(`${effectiveBaseUrl}/api/system/health`);
@@ -43,11 +47,26 @@ const SystemStatus: React.FC = () => {
         }
     };
 
+    // Initial fetch and periodic refresh (less frequent now since WS provides updates)
     useEffect(() => {
         fetchStatus();
-        const interval = setInterval(fetchStatus, 30000); // Poll every 30s
+        const interval = setInterval(fetchStatus, 60000); // Reduced to 60s since WS handles real-time
         return () => clearInterval(interval);
     }, []);
+
+    // Update health when WebSocket status changes
+    useEffect(() => {
+        if (systemStatus) {
+            setHealth(prev => ({
+                ...prev,
+                status: systemStatus.status || prev?.status || 'BOOTING',
+                reason: systemStatus.message || systemStatus.reason || prev?.reason,
+                lastChecked: new Date().toISOString(),
+                uptime: prev?.uptime || 0,
+                alertCount: prev?.alertCount || 0
+            }));
+        }
+    }, [systemStatus]);
 
     const getStatusColor = () => {
         if (!health) return 'text-secondary opacity-50';

@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { AlertOctagon, AlertTriangle, ShieldCheck, ChevronRight } from 'lucide-react';
 import { API_CONFIG } from '../services/config';
+import { useSocket } from '../hooks/useSocket';
 
 const SystemAlertsBanner: React.FC = () => {
     const [health, setHealth] = useState<any>(null);
     const [lastAlert, setLastAlert] = useState<any>(null);
 
     const effectiveBaseUrl = API_CONFIG.BASE_URL || 'http://localhost:3001';
+
+    // Subscribe to WebSocket for real-time updates
+    const { systemStatus } = useSocket();
 
     useEffect(() => {
         const fetchHealth = async () => {
@@ -27,9 +31,20 @@ const SystemAlertsBanner: React.FC = () => {
         };
 
         fetchHealth();
-        const timer = setInterval(fetchHealth, 60000);
-        return () => clearInterval(timer);
+        const timer = setInterval(fetchHealth, 120000); // Reduced frequency since WS provides updates
+        return () => clearTimeout(timer);
     }, [effectiveBaseUrl]);
+
+    // Update health when WebSocket status changes
+    useEffect(() => {
+        if (systemStatus) {
+            setHealth((prev: any) => ({
+                ...prev,
+                status: systemStatus.status || prev?.status || 'BOOTING',
+                reason: systemStatus.message || systemStatus.reason || prev?.reason
+            }));
+        }
+    }, [systemStatus]);
 
     if (!health || ['OPTIMAL', 'BOOTING', 'SCANNING', 'ACTIVE'].includes(health.status)) return null;
 
