@@ -99,6 +99,21 @@ async function startServices() {
             console.log("   • Initializing Signal Auditor...");
             const { signalAuditService } = await import('./services/signalAuditService');
             signalAuditService.start();
+
+            // NEW: Connect Signal Auditor to WebSocket (Live Panel)
+            signalAuditService.on('active_trades_update', (activeSignals: any[]) => {
+                const msg = JSON.stringify({
+                    type: 'active_trades', // The message type frontend will listen for
+                    data: activeSignals
+                });
+
+                // Broadcast to all clients
+                clients.forEach((client) => {
+                    if (client.ws.readyState === WebSocket.OPEN) {
+                        client.ws.send(msg);
+                    }
+                });
+            });
         } catch (e) {
             console.error("   ❌ Auditor Failed to Start:", e);
         }
@@ -353,6 +368,18 @@ wss.on('connection', (ws, req) => {
     // 3. System Status Snapshot (Nuclear Shield)
     const currentStatus = scannerService.getLastStatus();
     ws.send(JSON.stringify({ type: 'system_status', data: currentStatus }));
+
+    // 4. Active Trades Snapshot (Live Panel)
+    const { signalAuditService } = require('./services/signalAuditService');
+    // Note: dynamic require because it's imported in startServices, 
+    // but we can access the singleton if it's exported.
+    // Ideally we'd import it at top level if it's singleton.
+    if (signalAuditService?.getActiveSignalsSnapshot) {
+        const activeTrades = signalAuditService.getActiveSignalsSnapshot();
+        if (activeTrades.length > 0) {
+            ws.send(JSON.stringify({ type: 'active_trades', data: activeTrades }));
+        }
+    }
 
     ws.on('message', (message) => {
         try {

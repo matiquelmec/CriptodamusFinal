@@ -22,6 +22,7 @@ export interface SocketState {
     liquidations: RealTimeLiquidation[];
     cvd: Record<string, RealTimeCVD>;
     aiOpportunities: AIOpportunity[];
+    activeTrades: any[]; // NEW: Live Trades from SignalAudit
 }
 
 const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
@@ -36,6 +37,7 @@ export const useSocket = () => {
     const [liquidations, setLiquidations] = useState<RealTimeLiquidation[]>([]);
     const [cvd, setCvd] = useState<Record<string, RealTimeCVD>>({});
     const [aiOpportunities, setAIOpportunities] = useState<AIOpportunity[]>([]);
+    const [activeTrades, setActiveTrades] = useState<any[]>([]); // NEW State
     const [systemStatus, setSystemStatus] = useState<any>(null); // New State
 
     const wsRef = useRef<WebSocket | null>(null);
@@ -110,6 +112,10 @@ export const useSocket = () => {
                             setAIOpportunities(msg.data);
                             break;
 
+                        case 'active_trades': // NEW LISTENER
+                            setActiveTrades(msg.data);
+                            break;
+
                         case 'system_status': // NEW LISTENER
                             console.log('[Frontend] System Status Update:', msg.data);
                             setSystemStatus(msg.data);
@@ -151,6 +157,7 @@ export const useSocket = () => {
         liquidations,
         cvd,
         aiOpportunities,
+        activeTrades, // EXPORTED
         systemStatus, // EXPORTED
         subscribe
     };

@@ -494,20 +494,17 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     // 1. DCA PLAN GENERATION
                     const dcaPlan = calculateDCAPlan(
                         indicators.price,
+                        (indicators.confluenceAnalysis as any) || { topSupports: [], topResistances: [] },
                         indicators.atr,
-                        finalTier,
-                        strategyResult.primaryStrategy?.signal || 'NEUTRAL',
+                        signalSide,
                         indicators.marketRegime,
+                        (indicators as any).fibLevels,
+                        finalTier,
                         {
-                            topSupports: indicators.confluenceAnalysis?.topSupports || [],
-                            topResistances: indicators.confluenceAnalysis?.topResistances || []
-                        },
-                        {
-                            rsiReversal: rsiTarget,
+                            rsiReversal: (typeof rsiTarget === 'number' && rsiTarget > 0) ? rsiTarget : undefined,
                             liquidationCluster: liquidationTarget,
                             orderBookWall: wallTarget
-                        },
-                        (indicators as any).fibLevels
+                        }
                     );
 
                     // Apply Proximity Penalty (Wait for Dip) logic
@@ -597,6 +594,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                                 btcDominance: parseFloat(macroContext.btcDominance.current.toFixed(2))
                             } : undefined
                         },
+                        invalidated: false,
                         tier: postPenaltyTier,
                         kellySize,
                         recommendedLeverage,
@@ -655,6 +653,13 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             console.warn(`[Scanner] 🛡️ GATEKEEPER CAUGHT ${beforeCount - filteredOps.length} UNAUTHORIZED SIGNALS! (Logic Leak or Cache Issue)`);
         }
         return filteredOps.sort((a, b) => b.confidenceScore - a.confidenceScore);
+    }
+
+    // --- 4.11 UPDATE ACTIVE CONTEXT (Slow Lane) ---
+    // Every 15m scan, we also check our soldiers in the field for new threats (Walls)
+    if (TradingConfig.TOURNAMENT_MODE) {
+        // Run completely async to not block the main scanner return
+        updateActiveSignalsContext().catch(e => console.error(`[Scanner] Context Update Failed: ${e.message}`));
     }
 
     return opportunities.sort((a, b) => b.confidenceScore - a.confidenceScore);
@@ -767,4 +772,59 @@ function applyTechnicalContext(
     }
 
     return adjustedScore;
+}
+
+// --- HELPER: ACTIVE CONTEXT UPDATE (The "Slow Lane") ---
+async function updateActiveSignalsContext() {
+    try {
+        const activeSignals = signalAuditService.getActiveSignals();
+        if (activeSignals.length === 0) return;
+
+        console.log(`[Scanner] 🕵️ Deep Audit on ${activeSignals.length} active positions...`);
+
+        for (const signal of activeSignals) {
+            try {
+                // only check if we are in profit (don't adjust losing trades TPs yet)
+                if (signal.pnl_percent && signal.pnl_percent > 0.5) {
+                    let volAnalysis = await getExpertVolumeAnalysis(signal.symbol);
+
+                    // Fetch candles for enrichment
+                    const candles = await fetchCandles(signal.symbol, '15m');
+                    if (candles && candles.length > 50) {
+                        const highs = candles.map((c: any) => c.high);
+                        const lows = candles.map((c: any) => c.low);
+                        const currentPrice = candles[candles.length - 1].close;
+
+                        // ENRICH (Fetch Order Book)
+                        // Note: enrichWithDepthAndLiqs handles pure math + Order Book fetch if available
+                        volAnalysis = await enrichWithDepthAndLiqs(signal.symbol, volAnalysis, highs, lows, currentPrice);
+
+                        // CHECK FOR OPPOSING WALLS (Front-run logic)
+                        if (signal.side === 'LONG' && volAnalysis.liquidity.orderBook?.askWall) {
+                            const wall = volAnalysis.liquidity.orderBook.askWall;
+                            // If wall is huge (>50 strength) and below our TP, we must respect it.
+                            if (wall.strength > 50) {
+                                await signalAuditService.updateSignalContext(signal.symbol, {
+                                    new_tp: wall.price * 0.999, // Front-run 0.1%
+                                    reason: `Sell Wall Detected @ $${wall.price}`
+                                });
+                            }
+                        } else if (signal.side === 'SHORT' && volAnalysis.liquidity.orderBook?.bidWall) {
+                            const wall = volAnalysis.liquidity.orderBook.bidWall;
+                            if (wall.strength > 50) {
+                                await signalAuditService.updateSignalContext(signal.symbol, {
+                                    new_tp: wall.price * 1.001, // Front-run 0.1%
+                                    reason: `Buy Wall Detected @ $${wall.price}`
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch (innerE) {
+                // Skip individual failure
+            }
+        }
+    } catch (e) {
+        // Silent fail, this is auxiliary
+    }
 }

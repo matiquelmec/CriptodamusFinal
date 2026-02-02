@@ -102,6 +102,15 @@ class SignalAuditService extends EventEmitter {
         return this.activeSignals;
     }
 
+    /**
+     * Force an immediate emit of active trades (for new WS connections)
+     */
+    public getActiveSignalsSnapshot() {
+        return this.activeSignals;
+    }
+
+
+
     public async registerSignals(opportunities: AIOpportunity[]) {
         if (!this.supabase) return;
 
@@ -352,6 +361,11 @@ class SignalAuditService extends EventEmitter {
                     updates.final_price = currentPrice;
                     if (currentStage > 0) {
                         console.log(`🛡️ [SignalAudit] Smart Breakeven Hit: ${signal.symbol} (Secured Profit)`);
+                        telegramService.sendUpdateAlert('SL_MOVED', {
+                            symbol: signal.symbol,
+                            newSl: updates.final_price,
+                            reason: 'Smart Breakeven (Profit Secured)'
+                        });
                     } else {
                         console.log(`⛔ [SignalAudit] Technical Stop Loss Hit: ${signal.symbol} @ $${currentPrice}`);
                     }
@@ -365,6 +379,12 @@ class SignalAuditService extends EventEmitter {
                             updates.status = 'PARTIAL_WIN';
                             updates.realized_pnl_percent = this.calculateNetPnL(currentWAP, tp1, signal.side, 0, 0.50); // 50% Secured
                             console.log(`💰 [SignalAudit] TP1 Hit: ${signal.symbol} (50% Secured | Smart Breakeven Active)`);
+                            telegramService.sendUpdateAlert('TP_HIT', {
+                                symbol: signal.symbol,
+                                stage: 1,
+                                price: tp1,
+                                pnl: updates.realized_pnl_percent.toFixed(2)
+                            });
                         }
                     }
                     // TP2 (30% out)
@@ -375,6 +395,12 @@ class SignalAuditService extends EventEmitter {
                             const profit2 = this.calculateNetPnL(currentWAP, tp2, signal.side, 0, 0.3);
                             updates.realized_pnl_percent = (signal.realized_pnl_percent || 0) + profit2;
                             console.log(`💰💰 [SignalAudit] TP2 Hit: ${signal.symbol}`);
+                            telegramService.sendUpdateAlert('TP_HIT', {
+                                symbol: signal.symbol,
+                                stage: 2,
+                                price: tp2,
+                                pnl: profit2.toFixed(2)
+                            });
                         }
                     }
                     // TP3 (30% out / Final Moon)
@@ -450,6 +476,13 @@ class SignalAuditService extends EventEmitter {
                 const finalPnL = upd.pnl_percent || 0;
                 this.activeSignals = this.activeSignals.filter((s: any) => s.id !== upd.id);
                 console.log(`🎯 [SignalAudit] CERRADA (${upd.status}): ${upd.id} | Net PnL: ${finalPnL.toFixed(2)}%`);
+
+                telegramService.sendUpdateAlert('TRADE_CLOSED', {
+                    symbol: upd.symbol || 'UNKNOWN',
+                    status: upd.status,
+                    pnl: finalPnL.toFixed(2),
+                    reason: upd.exit_reason || 'Target/SL Hit'
+                });
 
                 // ML FEEDBACK LOOP: Update model_predictions outcome
                 this.updateMLOutcome(upd.id, finalPnL, upd.status).catch(e =>
@@ -634,6 +667,20 @@ class SignalAuditService extends EventEmitter {
                             shouldExit = true;
                             exitReason = 'TRAILING_STOP';
                             console.log(`📉 [AdvancedExit] ${signal.symbol}: Trailing Stop (${trailingDistance.toFixed(2)} from max)`);
+                        } else {
+                            // NEW: Persist Trailing SL if it moved significantly
+                            const currentStoredSL = signal.stop_loss || 0;
+                            if (Math.abs(trailingSL - currentStoredSL) > (currentPrice * 0.005)) { // Only update if > 0.5% move to avoid spam
+                                const betterSL = isLong ? Math.max(currentStoredSL, trailingSL) : Math.min(currentStoredSL || Infinity, trailingSL);
+                                if (betterSL !== currentStoredSL) {
+                                    updates.stop_loss = Number(betterSL.toFixed(4));
+                                    telegramService.sendUpdateAlert('SL_MOVED', {
+                                        symbol: signal.symbol,
+                                        newSl: updates.stop_loss,
+                                        reason: 'Trailing Stop Follow-up'
+                                    });
+                                }
+                            }
                         }
                     }
 
@@ -653,8 +700,13 @@ class SignalAuditService extends EventEmitter {
                         // Solo actualizar SL si cambió significativamente
                         const slChanged = Math.abs(tightenedSL - signal.stop_loss) > (currentPrice * 0.001);
                         if (slChanged) {
-                            updates.stop_loss = tightenedSL;
+                            updates.stop_loss = Number(tightenedSL.toFixed(4));
                             console.log(`⏱️ [TimeDecay] ${signal.symbol}: SL tightened to ${tightenedSL.toFixed(2)} (${ageHours.toFixed(1)}h, factor: ${tightenFactor.toFixed(2)})`);
+                            telegramService.sendUpdateAlert('SL_MOVED', {
+                                symbol: signal.symbol,
+                                newSl: updates.stop_loss,
+                                reason: `Time Decay (${ageHours.toFixed(1)}h)`
+                            });
                         }
                     }
 
@@ -679,6 +731,11 @@ class SignalAuditService extends EventEmitter {
                             if (isImprovement) {
                                 updates.stop_loss = Number(smartBE.toFixed(4));
                                 console.log(`⏰ [ForcedBreakeven] ${signal.symbol}: SL → Smart BE ($${updates.stop_loss}) after ${ageHours.toFixed(1)}h`);
+                                telegramService.sendUpdateAlert('SL_MOVED', {
+                                    symbol: signal.symbol,
+                                    newSl: updates.stop_loss,
+                                    reason: `Forced Breakeven (>12h)`
+                                });
                             }
                         }
                     }
@@ -726,6 +783,12 @@ class SignalAuditService extends EventEmitter {
 
             if (signalsToUpdate.length > 0) {
                 await this.syncUpdates(signalsToUpdate);
+            }
+
+            // GLOBAL EVENT EMIT (For WebSocket)
+            // We emit the full list of active signals after every audit cycle (1m) or major update
+            if (this.activeSignals.length > 0) {
+                this.emit('active_trades_update', this.activeSignals);
             }
 
         } catch (e: any) {
@@ -781,6 +844,57 @@ class SignalAuditService extends EventEmitter {
         }
 
         return sum / period;
+    }
+
+    /**
+     * ═══════════════════════════════════════════════════════════
+     */
+
+    /**
+     * EXTERNAL CONTEXT INJECTION (The "Slow Lane")
+     * Allows ScannerLogic (15m cycle) to update active trades with deep insights.
+     */
+    public async updateSignalContext(symbol: string, context: { new_tp?: number, reason?: string }) {
+        const signal = this.activeSignals.find(s => s.symbol === symbol || s.symbol.replace('/', '') === symbol.replace('/', ''));
+
+        if (signal && context.new_tp) {
+            // Validate: Only Lower TP for LONGs (Front-run), Only Raise TP for SHORTs (Front-run) - Safety First
+            const isLong = signal.side === 'LONG';
+            const currentTP2 = signal.dcaPlan?.takeProfits?.tp2?.price || 0;
+            const currentTP3 = signal.dcaPlan?.takeProfits?.tp3?.price || 0;
+
+            // Simple Logic: We target TP2 or TP3 adjustment. Let's assume we adjust the NEXT relevant TP.
+            let targetStage = signal.stage < 2 ? 2 : 3;
+            let currentTargetPrice = targetStage === 2 ? currentTP2 : currentTP3;
+
+            // Only update if improvement (safer/more likely to hit)
+            // For LONG: New TP < Old TP (Front-running)
+            // For SHORT: New TP > Old TP (Front-running)
+            const isSafer = isLong ? context.new_tp < currentTargetPrice : context.new_tp > currentTargetPrice;
+
+            if (isSafer && Math.abs(context.new_tp - currentTargetPrice) > (currentTargetPrice * 0.002)) { // >0.2% change
+
+                // Update Local Cache
+                if (targetStage === 2 && signal.dcaPlan?.takeProfits?.tp2) signal.dcaPlan.takeProfits.tp2.price = context.new_tp;
+                if (targetStage === 3 && signal.dcaPlan?.takeProfits?.tp3) signal.dcaPlan.takeProfits.tp3.price = context.new_tp;
+
+                // Sync to DB (Update reasoning or context field)
+                if (this.supabase) {
+                    await this.supabase.from('signals_audit').update({
+                        technical_reasoning: `${signal.technical_reasoning || ''} | [Updated] ${context.reason}`
+                    }).eq('id', signal.id);
+                }
+
+                console.log(`📉 [SignalAudit] Dynamic TP Adapted for ${symbol}: ${currentTargetPrice} -> ${context.new_tp}`);
+
+                // Notify User
+                telegramService.sendUpdateAlert('TP_ADAPTED', {
+                    symbol: symbol,
+                    newTp: context.new_tp,
+                    reason: context.reason
+                });
+            }
+        }
     }
 
     /**

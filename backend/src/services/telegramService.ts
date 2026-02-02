@@ -180,6 +180,58 @@ export class TelegramService {
             console.error(`[Telegram] Failed to send Reversal Alert: ${error.message}`);
         }
     }
+    /**
+     * Alert for Live Updates (SL Move, TP Hit, Context Change)
+     */
+    public async sendUpdateAlert(type: 'SL_MOVED' | 'TP_HIT' | 'TP_ADAPTED' | 'TRADE_CLOSED', data: any) {
+        if (!this.bot || !TradingConfig.telegram.chatId) return;
+
+        let icon = 'ℹ️';
+        let title = 'ACTUALIZACIÓN';
+        let message = '';
+
+        switch (type) {
+            case 'SL_MOVED':
+                icon = '🛡️';
+                title = 'STOP LOSS ACTUALIZADO';
+                message += `<b>${data.symbol}</b>\n`;
+                message += `Nuevo SL: <b>$${data.newSl}</b>\n`;
+                message += `Motivo: <i>${data.reason || 'Protección de Ganancias'}</i>`;
+                break;
+            case 'TP_HIT':
+                icon = '💰';
+                title = 'TAKE PROFIT ALCANZADO';
+                message += `<b>${data.symbol}</b>\n`;
+                message += `Nivel: <b>${data.stage} (TP${data.stage})</b>\n`;
+                message += `Precio: $${data.price}\n`;
+                message += `PnL Parcial: +${data.pnl}%\n`;
+                break;
+            case 'TP_ADAPTED':
+                icon = '📉';
+                title = 'TP DINÁMICO AJUSTADO';
+                message += `<b>${data.symbol}</b>\n`;
+                message += `Nuevo TP: $${data.newTp}\n`;
+                message += `Detectado: <b>${data.reason}</b> (Front-run)`;
+                break;
+            case 'TRADE_CLOSED':
+                icon = data.pnl >= 0 ? '✅' : '❌';
+                title = data.pnl >= 0 ? 'OPERACIÓN GANADORA' : 'OPERACIÓN CERRADA';
+                message += `<b>${data.symbol}</b>\n`;
+                message += `Estado Final: ${data.status}\n`;
+                message += `PnL Total: <b>${data.pnl >= 0 ? '+' : ''}${data.pnl}%</b>\n`;
+                message += `<i>${data.reason}</i>`;
+                break;
+        }
+
+        const fullMessage = `${icon} <b>${title}</b>\n\n${message}`;
+
+        try {
+            await this.bot.sendMessage(TradingConfig.telegram.chatId, fullMessage, { parse_mode: 'HTML' });
+            console.log(`[Telegram] Sent UPDATE alert for ${data.symbol} (${type})`);
+        } catch (error: any) {
+            console.error(`[Telegram] Failed to send Update Alert: ${error.message}`);
+        }
+    }
 }
 
 // Singleton Export
