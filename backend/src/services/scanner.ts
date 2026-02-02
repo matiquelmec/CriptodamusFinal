@@ -208,6 +208,9 @@ class ScannerService extends EventEmitter {
                 category: 'API_FAILURE',
                 message: `SCANNER_CRITICAL_FAILURE: ${error.message}`
             });
+            const errorStatus = { status: 'CRITICAL', reason: 'SCANNER_ERROR', message: error.message };
+            this.currentStatus = errorStatus;
+            this.emit('system_status', errorStatus);
             this.emit('error', error);
         } finally {
             this.isScanning = false;

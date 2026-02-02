@@ -3,14 +3,19 @@
  * Si existe backend propio, lo usa. Si no, usa APIs públicas como siempre.
  */
 
+const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
+const BACKEND_BASE_URL = IS_PROD
+  ? `${window.location.protocol}//${window.location.host}`
+  : 'http://localhost:3001';
+
 export const API_CONFIG = {
   // Backend URL - Solo se activa si existe la variable de entorno
-  BASE_URL: import.meta.env.VITE_API_URL || null,
+  BASE_URL: import.meta.env.VITE_API_URL || BACKEND_BASE_URL,
 
   // Feature flags - Activan funcionalidades premium gradualmente
-  USE_PROXY: !!import.meta.env.VITE_API_URL,
-  USE_CACHE: !!import.meta.env.VITE_API_URL,
-  USE_WEBSOCKET: !!import.meta.env.VITE_WS_URL,
+  USE_PROXY: !!import.meta.env.VITE_API_URL || true, // Enable proxy if we have a backend
+  USE_CACHE: !!import.meta.env.VITE_API_URL || true,
+  USE_WEBSOCKET: !!import.meta.env.VITE_WS_URL || true,
 
   // WebSocket config
   WS_URL: import.meta.env.VITE_WS_URL || null,

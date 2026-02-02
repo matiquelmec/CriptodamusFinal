@@ -7,7 +7,7 @@ import { telegramService } from './telegramService';
 import { SmartFetch } from '../core/services/SmartFetch'; // Import SmartFetch for Proxy Polling
 import EventEmitter from 'events';
 
-// ... (Imports remain same)
+import { calculateRSIArray } from '../core/services/mathUtils';
 
 class SignalAuditService extends EventEmitter {
     private supabase: any = null;
@@ -861,7 +861,6 @@ class SignalAuditService extends EventEmitter {
 
     // Helper: Calculate RSI
     private calculateRSI(closes: number[], period: number = 14): number[] {
-        const { calculateRSIArray } = require('../core/services/mathUtils');
         return calculateRSIArray(closes, period);
     }
 
