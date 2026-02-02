@@ -104,11 +104,33 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
     if (integrityReport.status === 'HALTED') {
         console.error(`[Scanner] 🚨 SYSTEM HALTED: Data Integrity Compromised. sources: ${integrityReport.missingCritical.join(', ')}`);
+
+        // Log critical alert to database
+        const { systemAlerts } = await import('../../../services/systemAlertService');
+        await systemAlerts.logCritical(
+            `Data Integrity Shield Triggered: ${integrityReport.missingCritical.join(', ')}`,
+            { score: integrityReport.score, staleSources: integrityReport.staleSources }
+        );
+
         throw new Error("DATA_INTEGRITY_SHIELD_TRIGGERED");
     }
 
-    if (integrityReport.status !== 'OPTIMAL') {
-        console.warn(`[Scanner] ⚠️ SYSTEM DEGRADED: Integrity Score ${integrityReport.score.toFixed(2)}. Stale: ${integrityReport.staleSources.join(', ')}`);
+    if (integrityReport.status === 'DEGRADED' || integrityReport.status === 'DOUBTFUL') {
+        const warningMsg = `Integrity ${integrityReport.status}: Score ${integrityReport.score.toFixed(2)}. Stale: ${integrityReport.staleSources.join(', ')}`;
+        console.warn(`[Scanner] ⚠️ ${warningMsg}`);
+
+        // Log degradation alert to database
+        const { systemAlerts } = await import('../../../services/systemAlertService');
+        await systemAlerts.logAlert({
+            severity: integrityReport.status === 'DEGRADED' ? 'HIGH' : 'MEDIUM',
+            category: 'DATA_INTEGRITY',
+            message: warningMsg,
+            metadata: {
+                score: integrityReport.score,
+                staleSources: integrityReport.staleSources,
+                missingCritical: integrityReport.missingCritical
+            }
+        });
     }
 
     let topCandidates = style === 'MEME_SCALP' ? market : market.slice(0, 60);
