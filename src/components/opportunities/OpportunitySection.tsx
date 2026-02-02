@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Zap, Target, Shield, Activity } from 'lucide-react';
+import { ChevronDown, ChevronUp, Zap, Target, Shield, Activity, TrendingUp } from 'lucide-react';
 import { useSocket } from '../../hooks/useSocket';
 import OpportunityFinder from '../OpportunityFinder';
 
@@ -11,6 +11,7 @@ const OpportunitySection: React.FC<OpportunitySectionProps> = ({ onSelectOpportu
     const [isCollapsed, setIsCollapsed] = useState(false);
     const { isConnected, aiOpportunities } = useSocket();
 
+    const totalSignals = aiOpportunities?.length || 0;
     const validCount = aiOpportunities?.filter(o => o.confidenceScore >= 60).length || 0;
     const goldCount = aiOpportunities?.filter(o => o.strategy === 'pau_perdices_gold').length || 0;
 
@@ -28,13 +29,24 @@ const OpportunitySection: React.FC<OpportunitySectionProps> = ({ onSelectOpportu
                             <Zap size={20} className={isConnected ? 'animate-pulse' : ''} />
                         </div>
                         <div className="flex items-center gap-6">
+                            {/* Tournament Context */}
+                            <div className="flex items-center gap-2">
+                                <TrendingUp className="text-purple-400" size={16} />
+                                <div>
+                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Elite 9</div>
+                                    <div className="text-lg font-black text-purple-400">
+                                        Tournament
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Total Signals */}
                             <div className="flex items-center gap-2">
                                 <Target className="text-cyan-400" size={16} />
                                 <div>
-                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Señales</div>
+                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Total</div>
                                     <div className="text-lg font-black text-cyan-400">
-                                        {aiOpportunities?.length || 0}
+                                        {totalSignals}
                                     </div>
                                 </div>
                             </div>
@@ -50,11 +62,11 @@ const OpportunitySection: React.FC<OpportunitySectionProps> = ({ onSelectOpportu
                                 </div>
                             </div>
 
-                            {/* Gold */}
+                            {/* Gold Strategy */}
                             <div className="flex items-center gap-2">
                                 <Target className="text-yellow-400" size={16} />
                                 <div>
-                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Elite 9</div>
+                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Gold (Pau)</div>
                                     <div className="text-lg font-bold text-yellow-400">
                                         {goldCount}
                                     </div>
@@ -65,7 +77,7 @@ const OpportunitySection: React.FC<OpportunitySectionProps> = ({ onSelectOpportu
 
                     <div className="flex items-center gap-3">
                         {/* Connection Status */}
-                        <div className={`px-2 py-1 rounded-full text-[9px] font-bold border ${isConnected ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-500/20 text-slate-400 border-slate-500/30'}`}>
+                        <div className={`px-2  py-1 rounded-full text-[9px] font-bold border ${isConnected ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-500/20 text-slate-400 border-slate-500/30'}`}>
                             {isConnected ? '🟢 LIVE' : '🔴 OFF'}
                         </div>
 
