@@ -1,12 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
 
-dotenv.config();
+// Initialize client lazily to avoid top-level environment variable issues
+let supabaseInstance: any = null;
 
-const supabase = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_ANON_KEY || ''
-);
+function getSupabase() {
+    if (supabaseInstance) return supabaseInstance;
+
+    const url = process.env.SUPABASE_URL || '';
+    const key = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+    if (!url || !key) {
+        console.warn('⚠️ [AlertCleanup] Supabase URL or Key missing. Service will be inactive.');
+        return null;
+    }
+
+    supabaseInstance = createClient(url, key);
+    return supabaseInstance;
+}
 
 /**
  * ALERT CLEANUP SERVICE
@@ -48,6 +58,9 @@ export class AlertCleanupService {
                 const expirationTime = new Date(now - ttl).toISOString();
 
                 // Mark stale alerts as resolved
+                const supabase = getSupabase();
+                if (!supabase) return stats;
+
                 const { data, error } = await supabase
                     .from('system_alerts')
                     .update({
@@ -89,6 +102,9 @@ export class AlertCleanupService {
      */
     static async emergencyCleanup(): Promise<number> {
         try {
+            const supabase = getSupabase();
+            if (!supabase) return 0;
+
             const { data, error } = await supabase
                 .from('system_alerts')
                 .update({
