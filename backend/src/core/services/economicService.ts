@@ -21,7 +21,7 @@ export interface ShieldStatus {
 
 export class EconomicService {
 
-    private static CSV_URL = 'https://cdn.forexfactory.com/ff_calendar_thisweek.csv';
+    private static CSV_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.csv';
     private static NUCLEAR_KEYWORDS = ['CPI', 'FOMC', 'Funds Rate', 'Non-Farm Employment', 'Unemployment Rate'];
 
     // --- HYBRID CACHE STATE ---
