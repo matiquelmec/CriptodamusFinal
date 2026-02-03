@@ -43,9 +43,16 @@ export const useRealtimeTrades = (initialTrades: any[] = []) => {
                     event: 'UPDATE',
                     schema: 'public',
                     table: 'signals_audit',
-                    filter: "status=in.(ACTIVE,OPEN,PARTIAL_WIN)"
+                    // Removed 'filter' because complex 'in' syntax is often not supported in Realtime.
+                    // We will filter irrelevant updates in the callback/render logic if needed.
                 },
                 (payload) => {
+                    // Client-side filter: Only care about active/open/partial trades
+                    const newStatus = payload.new.status;
+                    if (!['ACTIVE', 'OPEN', 'PARTIAL_WIN', 'WIN', 'LOSS'].includes(newStatus)) {
+                        return;
+                    }
+
                     console.log(`📡 [RealtimeDB] Trade Updated: ${payload.new.symbol}`, payload.new);
                     setTrades((current) => {
                         const index = current.findIndex(t => t.id === payload.new.id);
