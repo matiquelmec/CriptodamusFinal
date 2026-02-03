@@ -347,9 +347,16 @@ class SignalAuditService extends EventEmitter {
                     let effectiveSL = sl;
                     if (currentStage >= 1) {
                         // SMART BREAKEVEN: Entry +/- Buffer to cover fees
-                        // If signal.smart_be_buffer is not set (legacy), default to 0.15% estimate
                         const buffer = signal.smart_be_buffer || (currentWAP * 0.0015);
-                        effectiveSL = isLong ? currentWAP + buffer : currentWAP - buffer;
+                        const smartBE = isLong ? currentWAP + buffer : currentWAP - buffer;
+
+                        // RATCHET SYSTEM: Never move SL backwards (loosen risk).
+                        // If current SL is already better than BE (e.g. Trailing Stop), keep it.
+                        // Long: Higher is better. Short: Lower is better.
+                        // We use the 'sl' variable which holds the CURRENT db/memory SL.
+                        effectiveSL = isLong
+                            ? Math.max(sl, smartBE)
+                            : Math.min(sl, smartBE);
                     }
 
                     const slHit = isLong ? currentPrice <= effectiveSL : currentPrice >= effectiveSL;
