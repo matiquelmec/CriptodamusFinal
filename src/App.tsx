@@ -7,6 +7,7 @@ import Opportunities from './pages/Opportunities';
 import News from './pages/News';
 import Calendar from './pages/Calendar';
 import SystemLogs from './pages/SystemLogs';
+import DebugDB from './pages/DebugDB';
 
 const App: React.FC = () => {
   return (
@@ -18,6 +19,7 @@ const App: React.FC = () => {
           <Route path="noticias" element={<News />} />
           <Route path="eventos" element={<Calendar />} />
           <Route path="sistema" element={<SystemLogs />} />
+          <Route path="debug-db" element={<DebugDB />} />
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
