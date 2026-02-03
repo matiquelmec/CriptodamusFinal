@@ -46,13 +46,14 @@ export class SmartFetch {
     private static async executeRequest<T>(url: string, config: AxiosRequestConfig, retriesLeft: number): Promise<T> {
         const domain = new URL(url).hostname;
         const isBinance = domain.includes('binance.com') || domain.includes('binance.vision');
+        const isForex = domain.includes('forexfactory.com');
         const isBifrost = process.env.BIFROST_URL && url.includes(process.env.BIFROST_URL);
 
         // 2. Rate Limiting (Domain Level)
         await this.enforceRateLimit(domain);
 
-        // 2.5 PROACTIVE PROXY (Institutional Grade for Binance)
-        if (isBinance && process.env.BIFROST_URL && !isBifrost) {
+        // 2.5 PROACTIVE PROXY (Institutional Grade for Binance & News)
+        if ((isBinance || isForex) && process.env.BIFROST_URL && !isBifrost) {
             const bifrostUrl = `${process.env.BIFROST_URL}/api?target=${encodeURIComponent(url)}`;
             return this.executeRequest<T>(bifrostUrl, config, retriesLeft);
         }
