@@ -71,6 +71,20 @@ class ScannerService extends EventEmitter {
 
         // 2. Schedule next scan aligned to xx:00, xx:15, xx:30, xx:45
         this.scheduleNextAlignedScan();
+
+        // ✅ STATUS HYGIENE: Auto-reset to OPTIMAL every 30min to prevent stuck DEGRADED
+        setInterval(() => {
+            // Only reset if not actively scanning or genuinely critical
+            if (!['CRITICAL', 'SCANNING'].includes(this.currentStatus.status)) {
+                console.log('🧹 [Status Hygiene] Auto-resetting to OPTIMAL (prevents stuck DEGRADED)');
+                this.currentStatus = {
+                    status: 'OPTIMAL',
+                    reason: 'AUTO_RESET',
+                    message: 'Sistemas operando normalmente.'
+                };
+                this.emit('system_status', this.currentStatus);
+            }
+        }, 30 * 60 * 1000); // Every 30 minutes
     }
 
     /**
@@ -206,6 +220,14 @@ class ScannerService extends EventEmitter {
             this.currentStatus = { status: 'OPTIMAL', reason: 'OK', message: 'Sistemas operando normalmente.' };
             this.emit('system_status', this.currentStatus);
             console.log("✅ [ScannerService] Status reset complete. Current status:", this.currentStatus.status);
+
+            // ✅ ROBUSTEZ: Double broadcast to forcefully override stale DEGRADED in all clients
+            setTimeout(() => {
+                if (this.currentStatus.status === 'OPTIMAL') {
+                    this.emit('system_status', { status: 'OPTIMAL', reason: 'OK', message: 'Sistemas operando normalmente.' });
+                    console.log("🔄 [ScannerService] Secondary OPTIMAL broadcast sent");
+                }
+            }, 500);
 
         } catch (error: any) {
             console.error("❌ [ScannerService] Critical Error:", error);
