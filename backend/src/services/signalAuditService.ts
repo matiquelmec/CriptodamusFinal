@@ -425,12 +425,32 @@ class SignalAuditService extends EventEmitter {
                                 updates.stage = 1;
                                 updates.status = 'PARTIAL_WIN';
                                 updates.realized_pnl_percent = this.calculateNetPnL(currentWAP, tp1, signal.side, 0, 0.50); // 50% Secured
+
+                                // FORCE SL TO BREAKEVEN (Safety Net)
+                                // If TP1 is hit, we MUST ensure the stop is at least at entry.
+                                // This fixes the discrepancy where Telegram says "Secured" but DB/Frontend still show original SL.
+                                const entryPrice = signal.entry_price;
+                                if (entryPrice) {
+                                    // Use Smart BE logic if available, otherwise strict entry
+                                    // We'll set it to entryPrice to start.
+                                    // Make sure we don't move SL *worse* if it's already better.
+                                    const betterSL = isLong ? Math.max(signal.stop_loss, entryPrice) : Math.min(signal.stop_loss, entryPrice);
+
+                                    if (betterSL !== signal.stop_loss) {
+                                        updates.stop_loss = betterSL;
+                                        signal.stop_loss = betterSL; // Update memory too
+                                        console.log(`🛡️ [TP1-Trigger] Forcing SL to Breakeven: ${betterSL}`);
+                                    }
+                                }
+
                                 console.log(`💰 [SignalAudit] TP1 Hit: ${signal.symbol} (50% Secured | Smart Breakeven Active)`);
                                 telegramService.sendUpdateAlert('TP_HIT', {
                                     symbol: signal.symbol,
                                     stage: 1,
                                     price: tp1,
-                                    pnl: updates.realized_pnl_percent.toFixed(2)
+                                    pnl: updates.realized_pnl_percent.toFixed(2),
+                                    // Add the new SL to the alert context if useful for debugging
+                                    newSl: updates.stop_loss
                                 });
                             }
                         }
@@ -527,27 +547,41 @@ class SignalAuditService extends EventEmitter {
 
             const { id, last_sync, ...data } = upd;
 
-            const { error } = await this.supabase
-                .from('signals_audit')
-                .update(data)
-                .eq('id', id);
+            if (id) {
+                // VERBOSE LOGGING START (Validation for User)
+                // console.log(`💾 [Sync] Trace: Updating ${id}, fields:`, Object.keys(data));
 
-            if (!error && (upd.status === 'WIN' || upd.status === 'LOSS')) {
-                const finalPnL = upd.pnl_percent || 0;
-                this.activeSignals = this.activeSignals.filter((s: any) => s.id !== upd.id);
-                console.log(`🎯 [SignalAudit] CERRADA (${upd.status}): ${upd.id} | Net PnL: ${finalPnL.toFixed(2)}%`);
+                const { error: dbError } = await this.supabase
+                    .from('signals_audit')
+                    .update(data)
+                    .eq('id', id);
 
-                telegramService.sendUpdateAlert('TRADE_CLOSED', {
-                    symbol: upd.symbol || 'UNKNOWN',
-                    status: upd.status,
-                    pnl: finalPnL.toFixed(2),
-                    reason: upd.exit_reason || 'Target/SL Hit'
-                });
+                if (dbError) {
+                    console.error(`❌ [Sync] FAILED to persist update for ${id}:`, dbError.message);
+                } else {
+                    if (data.stop_loss) {
+                        console.log(`✅ [Sync] DB WRITE SUCCESS: SL for ${id} set to ${data.stop_loss}`);
+                    }
 
-                // ML FEEDBACK LOOP: Update model_predictions outcome
-                this.updateMLOutcome(upd.id, finalPnL, upd.status).catch(e =>
-                    console.error(`⚠️ [ML-Audit] Failed to sync outcome:`, e)
-                );
+                    // Integrity Check for Closure
+                    if (upd.status === 'WIN' || upd.status === 'LOSS') {
+                        const finalPnL = upd.pnl_percent || 0;
+                        this.activeSignals = this.activeSignals.filter((s: any) => s.id !== upd.id);
+                        console.log(`🎯 [SignalAudit] CERRADA (${upd.status}): ${upd.id} | Net PnL: ${finalPnL.toFixed(2)}%`);
+
+                        telegramService.sendUpdateAlert('TRADE_CLOSED', {
+                            symbol: upd.symbol || 'UNKNOWN',
+                            status: upd.status,
+                            pnl: finalPnL.toFixed(2),
+                            reason: upd.exit_reason || 'Target/SL Hit'
+                        });
+
+                        // ML FEEDBACK LOOP: Update model_predictions outcome
+                        this.updateMLOutcome(upd.id, finalPnL, upd.status).catch(e =>
+                            console.error(`⚠️ [ML-Audit] Failed to sync outcome:`, e)
+                        );
+                    }
+                }
             }
         }
 
