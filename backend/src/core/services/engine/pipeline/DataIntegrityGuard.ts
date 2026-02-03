@@ -65,9 +65,9 @@ export class DataIntegrityGuard {
         }
 
         // 3. ECONOMIC INTEGRITY
-        if (context.economicShield.reason === 'Calendar Unreachable') {
-            score -= 0.2; // High risk of missing a major CPI/FOMC event
-            staleSources.push('ECONOMIC_CALENDAR');
+        if (context.economicShield.reason.includes('Calendar offline') || context.economicShield.reason.includes('Unreachable')) {
+            score -= 0.6; // High risk: Penalize below 0.5 threshold
+            missingCritical.push('ECONOMIC_CALENDAR'); // STRICT: Block if we can't check news
         }
 
         // 4. NEWS/SENTIMENT INTEGRITY

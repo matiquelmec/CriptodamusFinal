@@ -46,9 +46,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     // 1. DATA INGESTION
 
     // 0.5 NUCLEAR SHIELD (Tournament Defense)
+    let shield = { isActive: false, isImminent: false, reason: 'OK' };
     if (TradingConfig.TOURNAMENT_MODE) {
         try {
-            const shield = await EconomicService.checkNuclearStatus();
+            const { EconomicService } = await import('../economicService');
+            shield = await EconomicService.checkNuclearStatus();
             if (shield.isActive) {
                 if (shield.isImminent) {
                     console.warn(`[Scanner] ☢️ SNIPER SHIELD ACTIVE (IMMINENT EVENT): ${shield.reason}`);
@@ -62,6 +64,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             // If it's a pause error, rethrow it to stop the pipeline
             if (e.message && (e.message.includes('NUCLEAR_WINTER') || e.message.includes('SNIPER_SHIELD'))) throw e;
             console.warn("[Scanner] Shield check failed (Fail Open):", e);
+            shield = { isActive: false, isImminent: false, reason: 'Calendar offline (fail-open mode)' };
         }
     }
 
@@ -109,7 +112,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
         isPreFlight: true,
         globalData,
         newsSentiment: globalSentiment,
-        economicShield: { reason: TradingConfig.TOURNAMENT_MODE ? 'TOURNEY_BYPASS' : 'OK' }
+        economicShield: shield // Pass the actual shield with potentially 'Calendar offline' reason
     });
 
     if (integrityReport.status === 'HALTED') {
