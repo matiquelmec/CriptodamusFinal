@@ -373,6 +373,17 @@ class SignalAuditService extends EventEmitter {
                     // CRITICAL: Update visible SL in UI to reflect Smart Breakeven
                     if (effectiveSL !== sl) {
                         signal.stop_loss = effectiveSL;
+                        updates.stop_loss = effectiveSL; // FIX: Persist to DB
+
+                        // Notify if this is the first time we move to BE
+                        // (We compare against original SL to avoid spamming every tick if float changes slightly)
+                        if (Math.abs(effectiveSL - (signal.activation_price || signal.entry_price)) < (currentWAP * 0.01)) {
+                            // This is likely the "Move to BE" moment
+                            // To avoid spam, we could check if we already alerted, but for now 
+                            // updates.stop_loss causing a DB write is good. 
+                            // Let's add a console log at least.
+                            // console.log(`🛡️ [SignalAudit] ${signal.symbol}: Moving SL to Breakeven (${effectiveSL})`);
+                        }
                     }
 
                     const lastSync = signal.last_sync || 0;
