@@ -5,11 +5,17 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.warn("⚠️ Missing Supabase Env Vars for Realtime Hook");
-}
+let supabase: any = null;
 
-const supabase = createClient(SUPABASE_URL || '', SUPABASE_KEY || '');
+if (SUPABASE_URL && SUPABASE_KEY) {
+    try {
+        supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    } catch (err) {
+        console.error("⚠️ Failed to initialize Supabase Realtime Client:", err);
+    }
+} else {
+    console.warn("⚠️ Missing Supabase Env Vars (VITE_SUPABASE_URL) for Realtime Hook. Falling back to WebSocket only.");
+}
 
 export const useRealtimeTrades = (initialTrades: any[] = []) => {
     const [trades, setTrades] = useState<any[]>(initialTrades);
