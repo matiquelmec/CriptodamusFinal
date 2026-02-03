@@ -84,11 +84,6 @@ router.get('/health', async (req, res) => {
 
         // ✅ SIMPLIFIED: Use ONLY live scanner status (WebSocket is source of truth)
         // DB alerts are handled separately - don't mix them with system status
-        // This prevents confusion between 2 sources of truth
-
-        const liveStatus = scannerService.getLastStatus();
-        let status = liveStatus?.status || 'BOOTING';
-        let reason = liveStatus?.message || liveStatus?.reason || 'Initializing...';
 
         res.json({
             status,
