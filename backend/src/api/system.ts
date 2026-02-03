@@ -40,7 +40,7 @@ router.get('/health', async (req, res) => {
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         const { data: dbAlerts, error } = await supabase
             .from('system_alerts')
-            .select('severity, message')
+            .select('severity, message, created_at')
             .eq('resolved', false)
             .gt('created_at', oneDayAgo);
 
@@ -52,16 +52,23 @@ router.get('/health', async (req, res) => {
         let status = liveStatus.status || 'OPTIMAL';
         let reason = liveStatus.message || liveStatus.reason || 'Sistemas operando normalmente.';
 
-        // Critical DB alerts always take precedence
-        const dbCritical = dbAlerts.some(a => a.severity === 'CRITICAL');
-        const dbHigh = dbAlerts.some(a => a.severity === 'HIGH');
+        // Critical DB alerts always take precedence (Persistent for 24h)
+        const dbCritical = dbAlerts.find((a: any) => a.severity === 'CRITICAL');
+
+        // High severity alerts (Degraded) are only relevant if recent (e.g., last 15 mins)
+        // because the engine re-logs them every cycle if the issue persists.
+        const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).getTime();
+        const dbHigh = dbAlerts.find((a: any) =>
+            a.severity === 'HIGH' &&
+            new Date(a.created_at).getTime() > fifteenMinsAgo
+        );
 
         if (dbCritical) {
             status = 'CRITICAL';
-            reason = dbAlerts.find(a => a.severity === 'CRITICAL')?.message || reason;
+            reason = dbCritical.message;
         } else if (dbHigh && (status === 'OPTIMAL' || status === 'BOOTING' || status === 'SCANNING' || status === 'ACTIVE')) {
             status = 'DEGRADED';
-            reason = dbAlerts.find(a => a.severity === 'HIGH')?.message || reason;
+            reason = dbHigh.message; // Show the specific reason (e.g., "Integrity DEGRADED...")
         }
 
         res.json({
