@@ -27,6 +27,12 @@ export const useRealtimeTrades = (initialTrades: any[] = []) => {
             setTrades(initialTrades);
         }
 
+        if (!supabase) {
+            // If Supabase init failed (missing env vars), we do nothing here.
+            // The hook simply returns the initial state (or empty) and lets the WebSocket component handle data.
+            return;
+        }
+
         console.log("🔌 [RealtimeDB] Connecting to signals_audit stream...");
 
         const channel = supabase
