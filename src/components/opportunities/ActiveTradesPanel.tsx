@@ -29,18 +29,20 @@ const ActiveTradesPanel: React.FC = () => {
     if (!displayTrades || displayTrades.length === 0) {
         // STANDBY MODE: Show that the system is ready and listening
         return (
-            <div className="mb-6 mx-4 p-[1px] rounded-3xl bg-gradient-to-r from-slate-800/50 to-slate-900/50 border border-white/5 opacity-70 hover:opacity-100 transition-opacity">
-                <div className="bg-[#0a0c10]/95 backdrop-blur-sm rounded-[23px] px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-slate-800 rounded-xl text-slate-500">
-                            <Activity size={20} />
+            <div className="mb-4 md:mb-6 mx-2 md:mx-4 p-[1px] rounded-2xl md:rounded-3xl bg-gradient-to-r from-slate-800/50 to-slate-900/50 border border-white/5 opacity-70 hover:opacity-100 transition-opacity">
+                <div className="bg-[#0a0c10]/95 backdrop-blur-sm rounded-[15px] md:rounded-[23px] px-3 md:px-6 py-3 md:py-4 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 md:gap-3">
+                        <div className="p-1.5 md:p-2 bg-slate-800 rounded-lg md:rounded-xl text-slate-500">
+                            <Activity size={16} className="md:w-5 md:h-5" />
                         </div>
                         <div>
-                            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Sala de Control <span className="text-[10px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full border border-slate-700">STANDBY</span></h2>
-                            <p className="text-[10px] text-slate-600">Esperando ejecución profesional...</p>
+                            <h2 className="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-wider">
+                                Sala de Control <span className="text-[9px] md:text-[10px] bg-slate-800 text-slate-500 px-1.5 md:px-2 py-0.5 rounded-full border border-slate-700">STANDBY</span>
+                            </h2>
+                            <p className="text-[9px] md:text-[10px] text-slate-600">Esperando ejecución profesional...</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] font-mono text-slate-600">
+                    <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-slate-600">
                         <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`} />
                         {isConnected ? 'SYSTEM ONLINE' : 'OFFLINE'}
                     </div>
