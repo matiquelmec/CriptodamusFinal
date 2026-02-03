@@ -403,6 +403,17 @@ class SignalAuditService extends EventEmitter {
                         // SELF-HEALING: Force SL sync every 30s to correct drift
                         // This ensures backend memory and DB are always consistent.
                         updates.stop_loss = signal.stop_loss;
+
+                        // NEW: Retroactive Integrity Fix (For migrated/restarted trades)
+                        // If status is SECURED (PARTIAL_WIN/WIN) but SL is still in LOSS zone, FORCE it to Entry.
+                        if ((signal.status === 'PARTIAL_WIN' || signal.status === 'WIN') && signal.entry_price) {
+                            const isSecured = isLong ? signal.stop_loss >= signal.entry_price : signal.stop_loss <= signal.entry_price;
+                            if (!isSecured) {
+                                console.warn(`🛡️ [Integrity-Fix] Found Secured Trade ${signal.symbol} with Unsecured SL. Forcing to Entry.`);
+                                signal.stop_loss = signal.entry_price;
+                                updates.stop_loss = signal.entry_price;
+                            }
+                        }
                     }
 
                     if (slHit) {
