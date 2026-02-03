@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import { SmartFetch } from './SmartFetch';
 
 export interface EconomicEvent {
@@ -12,6 +13,7 @@ export interface EconomicEvent {
 export interface ShieldStatus {
     isActive: boolean;    // General day status
     isImminent: boolean;  // Sniper trigger: within -60m to +30m window
+    isCached?: boolean;   // NEW: Indicates if source is live or from cache
     reason: string;
     nextEvent?: string;
     nextEventTime?: string;
@@ -21,6 +23,11 @@ export class EconomicService {
 
     private static CSV_URL = 'https://cdn.forexfactory.com/ff_calendar_thisweek.csv';
     private static NUCLEAR_KEYWORDS = ['CPI', 'FOMC', 'Funds Rate', 'Non-Farm Employment', 'Unemployment Rate'];
+
+    // --- HYBRID CACHE STATE ---
+    private static cachedEvents: EconomicEvent[] = [];
+    private static lastUpdate: number = 0;
+    private static sourceStatus: 'LIVE' | 'CACHE' | 'EMPTY' = 'EMPTY';
 
     /**
      * Checks if today is a "Nuclear Winter" day (High Impact USD Events)
@@ -63,6 +70,7 @@ export class EconomicService {
     private static async checkNuclearStatusForTime(dateToCheck: Date): Promise<ShieldStatus> {
         try {
             const events = await this.fetchEvents();
+            const isCached = this.sourceStatus === 'CACHE';
             const todayStr = dateToCheck.toISOString().split('T')[0]; // YYYY-MM-DD
 
             // 1. Check for ANY nuclear event today (General Awareness)
@@ -72,7 +80,12 @@ export class EconomicService {
             });
 
             if (!nuclearEventToday) {
-                return { isActive: false, isImminent: false, reason: 'No Nuclear Events Today' };
+                return {
+                    isActive: false,
+                    isImminent: false,
+                    isCached,
+                    reason: isCached ? 'Calendar offline (using verified mirror)' : 'No Nuclear Events Today'
+                };
             }
 
             // 2. Sniper Shield: Check if we are in the DANGER ZONE (-60m to +30m)
@@ -93,69 +106,145 @@ export class EconomicService {
                 }
             }
 
+            if (isCached && !isImminent) {
+                reason = `📡 CACHED ${reason}`;
+            }
+
             return {
                 isActive: true,
                 isImminent,
+                isCached,
                 reason,
                 nextEvent: nuclearEventToday.title,
                 nextEventTime: nuclearEventToday.time
             };
 
-        } catch (e) {
-            console.warn("[EconomicService] ⚠️ Calendar Unreachable - FAILING OPEN (proceeding without news check)", e);
-            // ✅ FAIL-OPEN STRATEGY: If we can't verify events, assume NO critical events
-            // Rationale: False negatives (missing 1 event/month) << False positives (blocking ALL scans)
-            // Nuclear events are rare (~0.2% of days), calendar failures are common (rate limits/DNS)
+        } catch (e: any) {
+            console.warn("[EconomicService] ⚠️ Critical Shield Failure:", e.message);
+            // ONLY if everything else failed (Empty status)
             return {
-                isActive: false,
-                isImminent: false,
-                reason: 'Calendar offline (fail-open mode)'
+                isActive: true, // Fail-SAFE: If we have NO data at all, block until user checks
+                isImminent: true,
+                reason: 'TOTAL_NEWS_BLINDNESS: No live data and no mirror available.'
             };
         }
     }
 
     private static async fetchEvents(): Promise<EconomicEvent[]> {
+        const now = Date.now();
+
+        // 1. Live Fetch Priority
         try {
             const csvData = await SmartFetch.get<string>(this.CSV_URL);
-            if (!csvData || !csvData.includes('Title')) return [];
+            if (csvData && csvData.includes('Title')) {
+                const events = this.parseLineToEvents(csvData);
+                if (events.length > 0) {
+                    this.cachedEvents = events;
+                    this.lastUpdate = now;
+                    this.sourceStatus = 'LIVE';
 
-            const lines = csvData.split('\n');
-            const events: EconomicEvent[] = [];
+                    // Mirror to DB as background task
+                    this.persistMirror(csvData).catch(() => { });
 
-            // Skip header
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                // Basic CSV split, might break if title has comma, but FF usually clean
-                // Title,Country,Date,Time,Impact,Forecast,Previous
-                const parts = line.split(',');
-
-                if (parts.length < 5) continue;
-
-                const title = parts[0];
-                const country = parts[1];
-                const date = parts[2];
-                const time = parts[3];
-                const impact = parts[4];
-
-                if (country !== 'USD') continue; // Only care about USD
-
-                const isHighImpact = impact === 'High';
-                const isNuclear = isHighImpact && this.NUCLEAR_KEYWORDS.some(k => title.includes(k));
-
-                if (isHighImpact) {
-                    events.push({
-                        title, country, date, time,
-                        impact: 'High',
-                        isNuclear
-                    });
+                    return events;
                 }
             }
-            return events;
-
         } catch (e) {
-            console.error("[EconomicService] Fetch Error", e);
-            return [];
+            console.warn("[EconomicService] 📡 Primary source offline. Falling back to mirrors...");
         }
+
+        // 2. Database Mirror (if memory is empty or web failed)
+        if (this.cachedEvents.length === 0) {
+            const mirror = await this.recoverMirror();
+            if (mirror) {
+                this.cachedEvents = this.parseLineToEvents(mirror);
+                this.sourceStatus = 'CACHE';
+                console.log("[EconomicService] 🔄 Recovered economic data from DB Mirror.");
+            }
+        }
+
+        // 3. Memory Fallback
+        if (this.cachedEvents.length > 0) {
+            this.sourceStatus = 'CACHE';
+            return this.cachedEvents;
+        }
+
+        this.sourceStatus = 'EMPTY';
+        return [];
+    }
+
+    private static parseLineToEvents(csvData: string): EconomicEvent[] {
+        const lines = csvData.split('\n');
+        const events: EconomicEvent[] = [];
+
+        // Skip header
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            const parts = line.split(',');
+
+            if (parts.length < 5) continue;
+
+            const title = parts[0];
+            const country = parts[1];
+            const date = parts[2];
+            const time = parts[3];
+            const impact = parts[4];
+
+            if (country !== 'USD') continue; // Only care about USD
+
+            const isHighImpact = impact === 'High';
+            const isNuclear = isHighImpact && this.NUCLEAR_KEYWORDS.some(k => title.includes(k));
+
+            if (isHighImpact) {
+                events.push({
+                    title, country, date, time,
+                    impact: 'High',
+                    isNuclear
+                });
+            }
+        }
+        return events;
+    }
+
+    private static async persistMirror(csv: string) {
+        const supabase = this.getSupabase();
+        if (!supabase) return;
+
+        try {
+            await supabase
+                .from('system_metadata')
+                .upsert({
+                    key: 'economic_calendar_mirror',
+                    value: csv,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'key' });
+        } catch (e) {
+            // Silently ignore mirror fails
+        }
+    }
+
+    private static async recoverMirror(): Promise<string | null> {
+        const supabase = this.getSupabase();
+        if (!supabase) return null;
+
+        try {
+            const { data } = await supabase
+                .from('system_metadata')
+                .select('value')
+                .eq('key', 'economic_calendar_mirror')
+                .single();
+
+            return data?.value || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    private static getSupabase() {
+        const url = process.env.SUPABASE_URL;
+        const key = process.env.SUPABASE_KEY;
+        if (!url || !key) return null;
+        return createClient(url, key);
     }
 
     // Helper: Convert MM-DD-YYYY (FF) to YYYY-MM-DD (ISO)

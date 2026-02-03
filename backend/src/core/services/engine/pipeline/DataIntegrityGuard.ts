@@ -65,9 +65,17 @@ export class DataIntegrityGuard {
         }
 
         // 3. ECONOMIC INTEGRITY
-        if (context.economicShield.reason.includes('Calendar offline') || context.economicShield.reason.includes('Unreachable')) {
-            score -= 0.6; // High risk: Penalize below 0.5 threshold
-            missingCritical.push('ECONOMIC_CALENDAR'); // STRICT: Block if we can't check news
+        const shield = context.economicShield;
+        if (shield.reason.includes('Calendar offline') || shield.reason.includes('Unreachable') || shield.reason.includes('TOTAL_NEWS_BLINDNESS')) {
+            if (shield.isCached) {
+                // We have a verified mirror. We don't HALT, but we warn (DEGRADED/DOUBTFUL).
+                score -= 0.25;
+                staleSources.push('ECONOMIC_CALENDAR_MIRROR');
+            } else {
+                // Completely blind = HALT. No mirrors available.
+                score -= 0.6;
+                missingCritical.push('ECONOMIC_CALENDAR');
+            }
         }
 
         // 4. NEWS/SENTIMENT INTEGRITY
