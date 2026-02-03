@@ -347,52 +347,75 @@ class SignalAuditService extends EventEmitter {
                     let effectiveSL = sl;
 
                     if (currentStage >= 1) {
-                        // 1. FUNDAMENTAL: Smart Breakeven (Entry + Fees)
-                        const buffer = signal.smart_be_buffer || (currentWAP * 0.0015);
-                        const smartBE = isLong ? currentWAP + buffer : currentWAP - buffer;
+                        // TIME LOCK: Don't trail in first 2 hours (let trade breathe)
+                        const tradeAgeHours = (Date.now() - new Date(signal.created_at).getTime()) / (1000 * 60 * 60);
+                        const MIN_AGE_FOR_TRAILING = 2; // Professional standard
 
-                        // 2. ADVANCED: Dynamic Trailing Stop (Chasing the Moon)
-                        // Use max_price_reached to calculate where the granular trailing stop should be.
-                        let trailingSL = sl;
-
-                        // Config Defaults from TradingConfig (Hardcoded here for robustness if import is tricky, but ideally imported)
-                        // Trailing starts after 1.5% profit, maintains 1.0% distance (approx ATR proxy)
-                        const TRAILING_ACTIVATION = 0.015; // 1.5% Profit to activate Trail
-                        const TRAILING_DISTANCE = 0.010;   // 1.0% Distance from Peak
-
-                        const maxPrice = signal.max_price_reached || currentPrice;
-                        const peakProfitPct = isLong
-                            ? (maxPrice - currentWAP) / currentWAP
-                            : (currentWAP - maxPrice) / currentWAP;
-
-                        if (peakProfitPct >= TRAILING_ACTIVATION) {
-                            // Calculate Dynamic Trail Level
-                            const trailLevel = isLong
-                                ? maxPrice * (1 - TRAILING_DISTANCE)
-                                : maxPrice * (1 + TRAILING_DISTANCE);
-
-                            trailingSL = trailLevel;
-                            // console.log(`🏃 [Trailing] ${signal.symbol}: Peak +${(peakProfitPct*100).toFixed(2)}% -> Trail SL: $${trailLevel.toFixed(2)}`);
-                        }
-
-                        // 3. RATCHET SYSTEM (The "Boss" Logic)
-                        // Winner takes all: We take the BEST (Tightest) SL among:
-                        // - Current SL (Memory)
-                        // - Smart Breakeven (Floor)
-                        // - Dynamic Trailing (Ceiling)
-                        // BUT NEVER LOOSEN RISK.
-
-                        if (isLong) {
-                            // Long: Higher is Safer.
-                            // Must be at least SmartBE.
-                            // If Trailing is higher than SmartBE, take Trailing.
-                            // If current SL is already higher than both, keep current.
-                            const bestNewSL = Math.max(smartBE, trailingSL);
-                            effectiveSL = Math.max(sl, bestNewSL);
+                        if (tradeAgeHours < MIN_AGE_FOR_TRAILING) {
+                            effectiveSL = sl; // Keep initial SL
+                            // console.log(`⏳ [Time-Lock] ${signal.symbol}: Trade too young for trailing (${tradeAgeHours.toFixed(1)}h < ${MIN_AGE_FOR_TRAILING}h)`);
                         } else {
-                            // Short: Lower is Safer.
-                            const bestNewSL = Math.min(smartBE, trailingSL);
-                            effectiveSL = Math.min(sl, bestNewSL);
+                            // 1. FUNDAMENTAL: Smart Breakeven (Entry + Fees)
+                            const buffer = signal.smart_be_buffer || (currentWAP * 0.0015);
+                            const smartBE = isLong ? currentWAP + buffer : currentWAP - buffer;
+
+                            // 2. ADVANCED: Dynamic Trailing Stop (ATR-Based, Not % Fixed)
+                            let trailingSL = sl;
+
+                            // CRITICAL: Read from Config (No Hardcoded Values)
+                            const { TradingConfig } = await import('../core/config/tradingConfig');
+                            const TRAILING_ACTIVATION = TradingConfig.exit_strategy.trailing_stop.min_profit_to_activate / 100; // 2.5% → 0.025
+                            const TRAILING_DISTANCE_ATR = TradingConfig.exit_strategy.trailing_stop.atr_distance; // 2.0
+
+                            const maxPrice = signal.max_price_reached || currentPrice;
+                            const peakProfitPct = isLong
+                                ? (maxPrice - currentWAP) / currentWAP
+                                : (currentWAP - maxPrice) / currentWAP;
+
+                            if (peakProfitPct >= TRAILING_ACTIVATION) {
+                                // Use ATR for dynamic distance (not fixed %)
+                                const atr = signal.atr || (currentPrice * 0.01); // Fallback: 1% of price
+                                const trailDistance = atr * TRAILING_DISTANCE_ATR; // e.g. 2 × ATR
+
+                                // Calculate Trail Level (absolute price, not percentage)
+                                const trailLevel = isLong
+                                    ? maxPrice - trailDistance
+                                    : maxPrice + trailDistance;
+
+                                trailingSL = trailLevel;
+                                // console.log(`🏃 [Trailing] ${signal.symbol}: Peak +${(peakProfitPct*100).toFixed(2)}% → Trail SL: $${trailLevel.toFixed(2)} (ATR ${atr.toFixed(2)})`);
+                            }
+
+                            // 3. RATCHET SYSTEM + ANTI-WHIPSAW FILTER
+                            // Winner takes all: We take the BEST (Tightest) SL among:
+                            // - Current SL (Memory)
+                            // - Smart Breakeven (Floor)
+                            // - Dynamic Trailing (Ceiling)
+                            // BUT NEVER LOOSEN RISK.
+
+                            if (isLong) {
+                                // Long: Higher is Safer.
+                                const bestNewSL = Math.max(smartBE, trailingSL);
+
+                                // ANTI-WHIPSAW: Only move if improvement is significant (0.5% min)
+                                const improvement = (bestNewSL - sl) / currentWAP;
+                                if (improvement > 0.005) {
+                                    effectiveSL = bestNewSL;
+                                    // console.log(`📈 [SL-Move] ${signal.symbol}: $${sl.toFixed(2)} → $${bestNewSL.toFixed(2)} (+${(improvement*100).toFixed(2)}%)`);
+                                } else {
+                                    effectiveSL = sl; // Keep current (noise filter)
+                                    // console.log(`🔇 [Noise-Filter] ${signal.symbol}: SL unchanged (improvement ${(improvement*100).toFixed(2)}% < 0.5%)`);
+                                }
+                            } else {
+                                // Short: Lower is Safer.
+                                const bestNewSL = Math.min(smartBE, trailingSL);
+                                const improvement = (sl - bestNewSL) / currentWAP;
+                                if (improvement > 0.005) {
+                                    effectiveSL = bestNewSL;
+                                } else {
+                                    effectiveSL = sl;
+                                }
+                            }
                         }
                     }
 

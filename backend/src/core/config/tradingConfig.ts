@@ -48,7 +48,7 @@ export const TradingConfig = {
             ny_close: 17
         },
         risk: {
-            sl_atr_multiplier: 1.5,
+            sl_atr_multiplier: 2.0,  // UPGRADED: More breathing room for retests
             risk_per_trade: 0.01 // 1%
         },
         // NEW: Fibonacci Deep Retracement Penalty
@@ -94,8 +94,8 @@ export const TradingConfig = {
         // Trailing Stop (después de TP1)
         trailing_stop: {
             enabled: true,
-            atr_distance: 1.0,  // 1× ATR detrás del máximo
-            min_profit_to_activate: 1.5  // Activar tras mover 1.5% a favor
+            atr_distance: 2.0,  // UPGRADED: 2× ATR (wider trail, fewer whipsaws)
+            min_profit_to_activate: 2.5  // UPGRADED: Start trailing later (more confidence)
         },
 
         // Momentum Exhaustion
