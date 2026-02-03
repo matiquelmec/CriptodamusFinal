@@ -405,13 +405,22 @@ class SignalAuditService extends EventEmitter {
                         updates.stop_loss = signal.stop_loss;
 
                         // NEW: Retroactive Integrity Fix (For migrated/restarted trades)
-                        // If status is SECURED (PARTIAL_WIN/WIN) but SL is still in LOSS zone, FORCE it to Entry.
+                        // If status is SECURED (PARTIAL_WIN/WIN) but SL is still in LOSS zone, FORCE it to Smart Breakeven.
                         if ((signal.status === 'PARTIAL_WIN' || signal.status === 'WIN') && signal.entry_price) {
-                            const isSecured = isLong ? signal.stop_loss >= signal.entry_price : signal.stop_loss <= signal.entry_price;
+                            const isLong = signal.side === 'LONG';
+                            const feeBuffer = 0.0015; // 0.15% to cover fees + tiny profit
+
+                            // Calculate Professional Smart BE
+                            const smartBE = isLong
+                                ? signal.entry_price * (1 + feeBuffer)
+                                : signal.entry_price * (1 - feeBuffer);
+
+                            const isSecured = isLong ? signal.stop_loss >= smartBE : signal.stop_loss <= smartBE;
+
                             if (!isSecured) {
-                                console.warn(`🛡️ [Integrity-Fix] Found Secured Trade ${signal.symbol} with Unsecured SL. Forcing to Entry.`);
-                                signal.stop_loss = signal.entry_price;
-                                updates.stop_loss = signal.entry_price;
+                                console.warn(`🛡️ [Integrity-Fix] Upgrading Secured Trade ${signal.symbol} to Smart BE ($${smartBE}).`);
+                                signal.stop_loss = smartBE;
+                                updates.stop_loss = smartBE;
                             }
                         }
                     }
