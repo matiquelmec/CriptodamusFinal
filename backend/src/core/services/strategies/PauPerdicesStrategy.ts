@@ -221,24 +221,28 @@ export function analyzePauPerdicesStrategy(
             }
         }
     } else {
-        // BEARISH Fibs
-        // Assuming Logic: If trend is down, logic often calculates retracement from Top to Bottom
-        // But autoFibs might handle it. If not, usually 0.382 is the FIRST retracement level from the move start.
-        // If price is BELOW SMA, the "Retracement" is going UP towards the SMA.
-        // So we look for Price to be between Level 0.382 and 0.5 (which are ABOVE current price action usually?)
-        // Wait, standard fib: 0 is Low, 1 is High. Retracement 0.382 is High - (Range*0.382).
-        // If Autocalc does this correct, we just check if price is near level0_382 ??
-        // Actually, let's look for "Price is pulling back".
-        // Short Pullback: Price Rises.
-        // We want price to be *higher* than the recent low.
-        // Let's rely on RSI + Divergence as primary triggers for shorts if Fibs are ambiguous without verifying correct Swing High/Low logic.
-        // BUT user loves "Pau Perdices" which is Fib based. 
-        // Let's assume if Price is < EMA200 but RSI is "High" locally (pullback), it's a Short Candidate.
-        // For simplicity/robustness without rewriting Fib engine:
-        // Short Zone: Price closes *below* EMA50 but rallied recently?
-        // Let's keep strict Fib check only if confident. 
-        // I'll skip Strict Fib check for Shorts *unless* I can verify it, relying on Hidden Divergence (Trend Follow) instead.
-        // Actually, Hidden Bearish Div implies a Lower High (Pullback) in Price while RSI makes Higher High. This CAPTURES the Pullback logic perfectly.
+        // --- SHORT: BEARISH Fibonacci Pullback Zone ---
+        // In bearish trend, we look for pullback (price retracing UP)
+        // Golden Zone: 38.2%-50% of the last bearish swing
+
+        const fib382 = fibs.level0_382;
+        const fib500 = fibs.level0_5;
+
+        if (fib382 && fib500) {
+            // In BEAR trend, retracement goes UP from the low
+            // mathUtils calculates: level0_382 is absolute price of 38.2% FROM THE LOW
+            // We need to verify price is BETWEEN these levels
+
+            // Safety: Sort to handle both configurations (ascending/descending)
+            const upperLevel = Math.max(fib382, fib500) * 1.002;  // +0.2% buffer
+            const lowerLevel = Math.min(fib382, fib500) * 0.998;  // -0.2% buffer
+
+            if (currentPrice >= lowerLevel && currentPrice <= upperLevel) {
+                inGoldenZone = true;
+                score += 25;
+                reasons.push("🎯 In Bear Golden Zone (Pullback 38-50%)");
+            }
+        }
     }
 
     // --- PENALIZACIÓN POR RETROCESO PROFUNDO (NEW) ---

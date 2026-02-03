@@ -116,39 +116,61 @@ export const getVolatilityAdjustedLeverage = (atr: number, price: number, riskPe
 };
 
 /**
- * PORTFOLIO HEATMAP (Correlation Management)
+ * PORTFOLIO HEATMAP (Professional Pearson Correlation)
  * Logic:
- * 1. Categorize assets by Sector/Type.
- * 2. Calculate overlap with currently open positions.
- * 3. Penalize size if correlation is > 0.70.
+ * 1. Categorize assets by Sector/Type (Base).
+ * 2. If historical price data is provided, calculate Pearson Correlation.
+ * 3. Penalize or BLOCK if correlation with existing positions is too high (>0.80).
  */
-export const calculatePortfolioCorrelation = (
+export const calculatePortfolioCorrelation = async (
     newSymbol: string,
     openPositions: string[],
-    isMeme: boolean
-): { score: number; recommendation: 'PROCEED' | 'REDUCE' | 'BLOCK' } => {
+    isMeme: boolean,
+    currentPrices?: number[] // Historical prices of the new signal asset
+): Promise<{ score: number; recommendation: 'PROCEED' | 'REDUCE' | 'BLOCK' }> => {
 
-    // Categorization (Simplified)
     const tiers = TradingConfig.assets.tiers;
     const isNewS_Tier = (tiers.s_tier as unknown as string[]).includes(newSymbol);
     const isNewA_Tier = (tiers.a_tier_bluechips as unknown as string[]).includes(newSymbol);
     const isNewC_Tier = isMeme || (tiers.c_tier_patterns as unknown as string[]).some(p => newSymbol.includes(p));
 
+    let maxCorrelation = 0;
     let overlapCount = 0;
 
+    // 1. Sector overlap check (Base)
     openPositions.forEach(symbol => {
-        // Sector overlap check
         if (isNewC_Tier && (tiers.c_tier_patterns as unknown as string[]).some(p => symbol.includes(p))) overlapCount++;
         if (isNewS_Tier && (tiers.s_tier as unknown as string[]).includes(symbol)) overlapCount++;
         if (isNewA_Tier && (tiers.a_tier_bluechips as unknown as string[]).includes(symbol)) overlapCount++;
     });
 
-    // Correlation Proxy: 1 position in same sector = 0.5, 2 = 0.8, 3+ = 1.0
-    const score = overlapCount === 0 ? 0 : overlapCount === 1 ? 0.5 : overlapCount === 2 ? 0.8 : 1.0;
+    const sectorScore = overlapCount === 0 ? 0 : overlapCount === 1 ? 0.5 : overlapCount === 2 ? 0.8 : 1.0;
+
+    // 2. Real Correlation Check (Elite)
+    if (currentPrices && currentPrices.length >= 20 && openPositions.length > 0) {
+        const { calculatePearsonCorrelation } = await import('../mathUtils');
+
+        for (const openSymbol of openPositions) {
+            try {
+                // Fetch candles for the open position (cached)
+                const openCandles = await fetchCandles(openSymbol.replace('/', ''), '15m');
+                if (openCandles && openCandles.length >= 20) {
+                    const openPrices = openCandles.map(c => c.close);
+                    const corr = Math.abs(calculatePearsonCorrelation(currentPrices, openPrices));
+                    if (corr > maxCorrelation) maxCorrelation = corr;
+                }
+            } catch (e) {
+                // Skip if fetch fails
+            }
+        }
+    }
+
+    // Final Heatmap Score: Max of sector logic and real correlation
+    const finalScore = Math.max(sectorScore, maxCorrelation);
 
     let recommendation: 'PROCEED' | 'REDUCE' | 'BLOCK' = 'PROCEED';
-    if (score >= 0.8) recommendation = 'BLOCK';
-    else if (score >= 0.5) recommendation = 'REDUCE';
+    if (finalScore >= 0.85) recommendation = 'BLOCK'; // Ultra-correlated -> No diversifaction
+    else if (finalScore >= 0.65) recommendation = 'REDUCE'; // Strong correlation -> Half size
 
-    return { score, recommendation };
+    return { score: finalScore, recommendation };
 };

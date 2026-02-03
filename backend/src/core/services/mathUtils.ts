@@ -873,3 +873,34 @@ export function detectCVDDivergence(prices: number[], cvd: number[], lows: numbe
 
     return 'NONE';
 }
+
+/**
+ * CALCULATE PEARSON CORRELATION COEFFICIENT
+ * Returns a value between -1 and 1.
+ * 1: Move exactly together
+ * 0: No correlation
+ * -1: Move exactly opposite
+ */
+export function calculatePearsonCorrelation(seriesA: number[], seriesB: number[]): number {
+    const n = Math.min(seriesA.length, seriesB.length);
+    if (n < 5) return 0; // Not enough data
+
+    const a = seriesA.slice(-n);
+    const b = seriesB.slice(-n);
+
+    let sumA = 0, sumB = 0, sumAB = 0, sumA2 = 0, sumB2 = 0;
+
+    for (let i = 0; i < n; i++) {
+        sumA += a[i];
+        sumB += b[i];
+        sumAB += a[i] * b[i];
+        sumA2 += a[i] * a[i];
+        sumB2 += b[i] * b[i];
+    }
+
+    const numerator = (n * sumAB) - (sumA * sumB);
+    const denominator = Math.sqrt((n * sumA2 - sumA * sumA) * (n * sumB2 - sumB * sumB));
+
+    if (denominator === 0) return 0;
+    return numerator / denominator;
+}
