@@ -916,11 +916,8 @@ class SignalAuditService extends EventEmitter {
                 await this.syncUpdates(signalsToUpdate);
             }
 
-            // GLOBAL EVENT EMIT (For WebSocket)
-            // We emit the full list of active signals after every audit cycle (1m) or major update
-            if (this.activeSignals.length > 0) {
-                this.emit('active_trades_update', this.activeSignals);
-            }
+            // DOUBLE EMIT REMOVED: syncUpdates() now handles the broadcast logic centrally.
+            // This prevents the frontend from receiving duplicate messages/renders.
 
         } catch (e: any) {
             console.error('[AdvancedExit] Critical error:', e.message);
