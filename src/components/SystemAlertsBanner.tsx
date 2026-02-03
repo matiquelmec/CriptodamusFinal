@@ -68,7 +68,7 @@ const SystemAlertsBanner: React.FC = () => {
                 </div>
 
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-black/20 rounded-lg border border-white/5">
-                    <span className="text-[9px] font-mono font-bold uppercase">Estado: {health.status}</span>
+                    <span className="text-[9px] font-mono font-bold uppercase">Estado: {health.status || 'DEGRADED'}</span>
                 </div>
             </div>
         </div>
