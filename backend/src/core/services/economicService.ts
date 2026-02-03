@@ -28,6 +28,7 @@ export class EconomicService {
     private static cachedEvents: EconomicEvent[] = [];
     private static lastUpdate: number = 0;
     private static sourceStatus: 'LIVE' | 'CACHE' | 'EMPTY' = 'EMPTY';
+    private static supabaseInstance: any = null;
 
     /**
      * Checks if today is a "Nuclear Winter" day (High Impact USD Events)
@@ -218,8 +219,10 @@ export class EconomicService {
                     value: csv,
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'key' });
-        } catch (e) {
-            // Silently ignore mirror fails
+
+            console.log("💾 [EconomicService] Sync: Mirror successfully persisted to Supabase.");
+        } catch (e: any) {
+            console.error("❌ [EconomicService] Sync: Failed to persist mirror to Supabase:", e.message);
         }
     }
 
@@ -234,17 +237,30 @@ export class EconomicService {
                 .eq('key', 'economic_calendar_mirror')
                 .single();
 
-            return data?.value || null;
-        } catch (e) {
+            if (data?.value) {
+                console.log("📂 [EconomicService] Sync: Mirror data recovered from DB.");
+                return data.value;
+            }
+            return null;
+        } catch (e: any) {
+            console.warn("⚠️ [EconomicService] Sync: Mirror recovery failed:", e.message);
             return null;
         }
     }
 
     private static getSupabase() {
+        if (this.supabaseInstance) return this.supabaseInstance;
+
         const url = process.env.SUPABASE_URL;
-        const key = process.env.SUPABASE_KEY;
-        if (!url || !key) return null;
-        return createClient(url, key);
+        const key = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
+
+        if (!url || !key) {
+            console.warn("⚠️ [EconomicService] Supabase credentials missing. Mirroring disabled.");
+            return null;
+        }
+
+        this.supabaseInstance = createClient(url, key);
+        return this.supabaseInstance;
     }
 
     // Helper: Convert MM-DD-YYYY (FF) to YYYY-MM-DD (ISO)
