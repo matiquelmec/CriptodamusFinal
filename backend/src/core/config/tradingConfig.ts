@@ -126,6 +126,17 @@ export const TradingConfig = {
                 hours: 12,  // Mover SL a breakeven después de 12h
                 stage_threshold: 0  // Solo si no ha tocado TP1 (stage 0)
             }
+        },
+
+        // NEW: Nuclear Event Protection (Smart Defense)
+        event_protection: {
+            enabled: true,
+            pre_event_minutes: 60, // Activate defense 1 hour before
+            actions: {
+                profitable_threshold: 0.5, // Move to Breakeven if > 0.5% profit
+                weak_loss_threshold: -1.0, // Close if loss is currently < -1.0% (Risk of slippage)
+                critical_action: 'HOLD_WITH_SL' // Deep drawdown: Hold with original SL
+            }
         }
     },
 

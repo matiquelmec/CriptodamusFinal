@@ -795,6 +795,71 @@ class SignalAuditService extends EventEmitter {
                         }
                     }
 
+                    // === EXIT CHECK 6: NUCLEAR EVENT DEFENSE (Smart Defense) ===
+                    // Added by Antigravity: Protects capital before NFP/FOMC
+                    const eventProtection = (TradingConfig as any).event_protection;
+                    if (!shouldExit && eventProtection && eventProtection.enabled) {
+                        const { EconomicService } = await import('../core/services/economicService');
+
+                        // Check cache/state to avoid spamming the API every 2 mins? 
+                        // EconomicService handles fetching weekly CSV, it's cheap (memory).
+                        // We check for event in next 60 mins.
+                        const approachingEvent = await EconomicService.getApproachingNuclearEvent(eventProtection.pre_event_minutes);
+
+                        if (approachingEvent) {
+                            const pnlPercent = ((currentPrice - currentWAP) / currentWAP) * 100 * (isLong ? 1 : -1);
+
+                            // A. PROFITABLE TRADES -> FORCE BREAKEVEN (Free Roll)
+                            if (pnlPercent > eventProtection.actions.profitable_threshold) {
+                                const realEntry = signal.activation_price || signal.entry_price;
+                                // Smart BE (Entry + Buffer)
+                                const buffer = signal.smart_be_buffer || (realEntry * 0.0015);
+                                const smartBE = isLong ? realEntry + buffer : realEntry - buffer;
+
+                                const currentSL = signal.stop_loss || realEntry;
+                                // Check if we need to secure it (if SL is worse than BE)
+                                const isUnsecured = isLong ? currentSL < smartBE : currentSL > smartBE;
+
+                                if (isUnsecured) {
+                                    updates.stop_loss = Number(smartBE.toFixed(4));
+                                    updates.technical_reasoning = `${signal.technical_reasoning || ''} | [NUCLEAR] Secured BE before ${approachingEvent.title}`;
+
+                                    console.log(`☢️ [NuclearGuard] ${signal.symbol}: Secured at BE (PnL ${pnlPercent.toFixed(2)}%) before ${approachingEvent.title}`);
+                                    telegramService.sendUpdateAlert('SL_MOVED', {
+                                        symbol: signal.symbol,
+                                        oldSl: signal.stop_loss,
+                                        newSl: updates.stop_loss,
+                                        reason: `Nuclear Shield (${approachingEvent.title})`
+                                    });
+                                }
+                            }
+                            // B. WEAK TRADES -> EMERGENCY CLOSE (Avoid Slippage)
+                            else if (pnlPercent < eventProtection.actions.weak_loss_threshold) {
+                                // If loss is massive (e.g. -5%), maybe we hold? 
+                                // But here we config to CLOSE if "weak" loss.
+                                // Config says weak_loss_threshold = -1.0. 
+                                // So if PnL is BETTER than -1.0 (e.g. -0.5), we are fine? 
+                                // Wait, logic in plan: "Weak Trades (Loss < -1%): Force Close". 
+                                // Actually, usually you close the small losses. You hold the deep ones (structura).
+                                // Let's interpret "weak_loss_threshold" as the floor.
+                                // If PnL is between -1.0 and 0.5 (The "Zone of Uncertainty"), kill it?
+                                // Let's follow the standard:
+                                // If PnL is NEGATIVE but manageable (e.g. > -1.5%). Kill it.
+                                // If PnL is DEEP NEGATIVE (e.g. < -5%). Hold?
+
+                                // Let's implement: If PnL is between -1.0% and 0.5% (The Flat/Weak Zone).
+                                // Explicitly: Close if we are not winning significantly, and not losing massively.
+                                const isWeak = pnlPercent < eventProtection.actions.profitable_threshold && pnlPercent > -2.0;
+
+                                if (isWeak) {
+                                    shouldExit = true;
+                                    exitReason = `NUCLEAR_EVACUATION_${approachingEvent.title.replace(/\s+/g, '_')}`;
+                                    console.log(`☢️ [NuclearGuard] ${signal.symbol}: Evacuating Weak Position (${pnlPercent.toFixed(2)}%) before ${approachingEvent.title}`);
+                                }
+                            }
+                        }
+                    }
+
                     // === EJECUTAR SALIDA ===
                     if (shouldExit) {
                         const weightLeft = (currentStage === 0) ? 1.0 : (currentStage === 1 ? 0.5 : (currentStage === 2 ? 0.2 : 0));
