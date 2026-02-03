@@ -339,8 +339,8 @@ class SignalAuditService extends EventEmitter {
                     const prevMax = signal.max_price_reached;
                     const isNewExtreme = isLong ? (currentPrice > (prevMax || 0)) : (currentPrice < (prevMax || 999999));
                     if (isNewExtreme) {
-                        updates.max_price_reached = currentPrice;
-                        signal.max_price_reached = currentPrice;
+                        // updates.max_price_reached = currentPrice; // REMOVED: Too spammy for DB/WS
+                        signal.max_price_reached = currentPrice; // Keep Memory Updated for Trailing Stop Logic (Robust)
                     }
 
                     // --- 2C: SMART BREAKEVEN & STOP LOSS ---
@@ -398,6 +398,7 @@ class SignalAuditService extends EventEmitter {
                         updates.last_sync = Date.now();
                         updates.final_price = currentPrice; // Use this as "Current Price" in UI
                         updates.pnl_percent = totalPnL; // Persist PnL
+                        updates.max_price_reached = signal.max_price_reached; // Persist Extreme High/Low (Efficient Batching)
                     }
 
                     if (slHit) {
