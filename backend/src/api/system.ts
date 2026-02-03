@@ -82,24 +82,13 @@ router.get('/health', async (req, res) => {
         let status = liveStatus.status || 'OPTIMAL';
         let reason = liveStatus.message || liveStatus.reason || 'Sistemas operando normalmente.';
 
-        // Critical DB alerts always take precedence (Persistent for 24h)
-        const dbCritical = dbAlerts.find((a: any) => a.severity === 'CRITICAL');
+        // ✅ SIMPLIFIED: Use ONLY live scanner status (WebSocket is source of truth)
+        // DB alerts are handled separately - don't mix them with system status
+        // This prevents confusion between 2 sources of truth
 
-        // High severity alerts (Degraded) are only relevant if recent (e.g., last 15 mins)
-        // because the engine re-logs them every cycle if the issue persists.
-        const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).getTime();
-        const dbHigh = dbAlerts.find((a: any) =>
-            a.severity === 'HIGH' &&
-            new Date(a.created_at).getTime() > fifteenMinsAgo
-        );
-
-        if (dbCritical) {
-            status = 'CRITICAL';
-            reason = dbCritical.message;
-        } else if (dbHigh && (status === 'OPTIMAL' || status === 'BOOTING' || status === 'SCANNING' || status === 'ACTIVE')) {
-            status = 'DEGRADED';
-            reason = dbHigh.message; // Show the specific reason (e.g., "Integrity DEGRADED...")
-        }
+        const liveStatus = scannerService.getLastStatus();
+        let status = liveStatus?.status || 'BOOTING';
+        let reason = liveStatus?.message || liveStatus?.reason || 'Initializing...';
 
         res.json({
             status,
