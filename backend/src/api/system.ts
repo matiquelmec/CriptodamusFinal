@@ -62,7 +62,11 @@ router.post('/cleanup-alerts', async (req, res) => {
  */
 router.get('/health', async (req, res) => {
     try {
-        // 1. Check database alerts
+        // ✅ CRITICAL FIX: Run cleanup BEFORE querying DB
+        const { AlertCleanupService } = await import('../services/alertCleanupService');
+        await AlertCleanupService.cleanupStaleAlerts();
+
+        // 1. Check database alerts (AFTER cleanup removes stale ones)
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         const { data: dbAlerts, error } = await supabase
             .from('system_alerts')
@@ -80,11 +84,6 @@ router.get('/health', async (req, res) => {
 
         // Critical DB alerts always take precedence (Persistent for 24h)
         const dbCritical = dbAlerts.find((a: any) => a.severity === 'CRITICAL');
-
-        // INTELLIGENT CLEANUP: Auto-resolve stale HIGH alerts before evaluation
-        // This prevents ghost alerts from causing permanent DEGRADED status
-        const { AlertCleanupService } = await import('../services/alertCleanupService');
-        await AlertCleanupService.cleanupStaleAlerts(); // Non-blocking, runs in background
 
         // High severity alerts (Degraded) are only relevant if recent (e.g., last 15 mins)
         // because the engine re-logs them every cycle if the issue persists.

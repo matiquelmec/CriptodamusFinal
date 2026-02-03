@@ -35,6 +35,27 @@ export class SystemAlertService {
     }) {
         const { symbol, severity, category, message, metadata } = params;
 
+        // 🔒 DEDUPLICATION: Prevent alert spam (same alert within 5 min)
+        try {
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+            const { data: existingAlert } = await supabase
+                .from('system_alerts')
+                .select('id')
+                .eq('category', category)
+                .eq('severity', severity)
+                .eq('resolved', false)
+                .gt('created_at', fiveMinutesAgo)
+                .limit(1);
+
+            if (existingAlert && existingAlert.length > 0) {
+                console.log(`[Alert-Dedup] Skipped duplicate ${category}/${severity} alert`);
+                return; // Avoid spamming DB with identical alerts
+            }
+        } catch (dedupError: any) {
+            // Dedup check failed - proceed anyway (fail-open for critical alerts)
+            console.warn(`[Alert-Dedup] Check failed, proceeding: ${dedupError.message}`);
+        }
+
         // 1. Console Output (Immediate visibility)
         const logMethod = severity === 'CRITICAL' || severity === 'HIGH' ? 'error' : 'warn';
         console[logMethod](`[SystemAlert] [${category}] ${symbol ? `(${symbol}) ` : ''}${message}`);

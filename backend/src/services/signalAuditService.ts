@@ -235,7 +235,7 @@ class SignalAuditService extends EventEmitter {
         if (!currentPrice || Number.isNaN(currentPrice) || currentPrice <= 0 || typeof currentPrice !== 'number') {
             systemAlerts.logAlert({
                 symbol,
-                severity: 'HIGH',
+                severity: 'MEDIUM',  // ✅ DOWNGRADED: HIGH → MEDIUM (tick validation is not critical)
                 category: 'DATA_INTEGRITY',
                 message: `CORRUPTED_TICK: Price=${currentPrice}`
             });
