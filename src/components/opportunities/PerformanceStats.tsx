@@ -56,48 +56,48 @@ const PerformanceStats: React.FC = () => {
     const profitFactorColor = stats.profitFactor >= 2 ? 'text-emerald-400' : stats.profitFactor >= 1 ? 'text-blue-400' : 'text-rose-400';
 
     return (
-        <div className="mb-6 mx-4 p-[1px] rounded-3xl bg-gradient-to-r from-emerald-500/20 via-blue-500/20 to-purple-500/20 shadow-2xl">
-            <div className="bg-[#0a0c10]/95 backdrop-blur-2xl rounded-[23px] overflow-hidden border border-emerald-500/10">
+        <div className="mb-4 md:mb-6 mx-2 md:mx-4 p-[1px] rounded-2xl md:rounded-3xl bg-gradient-to-r from-emerald-500/20 via-blue-500/20 to-purple-500/20 shadow-2xl">
+            <div className="bg-[#0a0c10]/95 backdrop-blur-2xl rounded-[15px] md:rounded-[23px] overflow-hidden border border-emerald-500/10">
 
                 {/* Header with Full Stats - Always Visible */}
                 <div
                     onClick={() => setShowHistory(!showHistory)}
-                    className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/2 cursor-pointer hover:bg-white/5 transition-colors"
+                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-3 md:px-6 py-3 md:py-4 border-b border-white/5 bg-white/2 cursor-pointer hover:bg-white/5 transition-colors gap-3"
                 >
-                    <div className="flex items-center gap-4">
-                        <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400">
-                            <BarChart2 size={20} />
+                    <div className="flex items-center gap-2 md:gap-4 w-full sm:w-auto">
+                        <div className="p-1.5 md:p-2 bg-emerald-500/10 rounded-lg md:rounded-xl text-emerald-400">
+                            <BarChart2 size={16} className="md:w-5 md:h-5" />
                         </div>
-                        <div className="flex items-center gap-6">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 flex-1">
                             {/* Win Rate */}
-                            <div className="flex items-center gap-2">
-                                <Target className="text-emerald-400" size={16} />
+                            <div className="flex items-center gap-1.5 md:gap-2">
+                                <Target className="text-emerald-400" size={14} />
                                 <div>
-                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Win Rate</div>
-                                    <div className={`text-lg font-black ${winRateColor}`}>
+                                    <div className="text-[7px] md:text-[8px] uppercase tracking-wider font-bold text-slate-500">Win Rate</div>
+                                    <div className={`text-sm md:text-lg font-black ${winRateColor}`}>
                                         {stats.winRate.toFixed(1)}%
                                     </div>
                                 </div>
                             </div>
 
                             {/* Profit Factor */}
-                            <div className="flex items-center gap-2">
-                                <TrendingUp className="text-blue-400" size={16} />
+                            <div className="flex items-center gap-1.5 md:gap-2">
+                                <TrendingUp className="text-blue-400" size={14} />
                                 <div>
-                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">Profit Factor</div>
-                                    <div className={`text-lg font-bold ${profitFactorColor}`}>
-                                        {stats.profitFactor} <span className="text-[8px] text-slate-600">Gold</span>
+                                    <div className="text-[7px] md:text-[8px] uppercase tracking-wider font-bold text-slate-500">Profit Factor</div>
+                                    <div className={`text-sm md:text-lg font-bold ${profitFactorColor}`}>
+                                        {stats.profitFactor} <span className="text-[7px] md:text-[8px] text-slate-600">Gold</span>
                                     </div>
                                 </div>
                             </div>
 
                             {/* En Vigilancia */}
-                            <div className="flex items-center gap-2">
-                                <Activity className="text-amber-400" size={16} />
+                            <div className="flex items-center gap-1.5 md:gap-2">
+                                <Activity className="text-amber-400" size={14} />
                                 <div>
-                                    <div className="text-[8px] uppercase tracking-wider font-bold text-slate-500">En Vigilancia</div>
-                                    <div className="text-lg font-bold text-white">
-                                        {stats.open} <span className="text-[8px] text-slate-600">Vivas</span>
+                                    <div className="text-[7px] md:text-[8px] uppercase tracking-wider font-bold text-slate-500">En Vigilancia</div>
+                                    <div className="text-sm md:text-lg font-bold text-white">
+                                        {stats.open} <span className="text-[7px] md:text-[8px] text-slate-600">Vivas</span>
                                     </div>
                                 </div>
                             </div>
