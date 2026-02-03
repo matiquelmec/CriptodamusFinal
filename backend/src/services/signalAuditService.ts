@@ -399,6 +399,10 @@ class SignalAuditService extends EventEmitter {
                         updates.final_price = currentPrice; // Use this as "Current Price" in UI
                         updates.pnl_percent = totalPnL; // Persist PnL
                         updates.max_price_reached = signal.max_price_reached; // Persist Extreme High/Low (Efficient Batching)
+
+                        // SELF-HEALING: Force SL sync every 30s to correct drift
+                        // This ensures backend memory and DB are always consistent.
+                        updates.stop_loss = signal.stop_loss;
                     }
 
                     if (slHit) {
