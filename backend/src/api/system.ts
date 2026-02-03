@@ -31,6 +31,32 @@ router.get('/alerts', async (req, res) => {
 });
 
 /**
+ * POST /api/system/cleanup-alerts (ADMIN ONLY)
+ * Emergency cleanup: Resolves all non-critical ghost alerts immediately
+ */
+router.post('/cleanup-alerts', async (req, res) => {
+    try {
+        // Basic auth check
+        const secret = req.headers['x-admin-secret'];
+        if (secret !== process.env.ADMIN_SECRET) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const { AlertCleanupService } = await import('../services/alertCleanupService');
+        const count = await AlertCleanupService.emergencyCleanup();
+
+        res.json({
+            success: true,
+            message: `Resolved ${count} ghost alerts`,
+            count
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+/**
  * GET /api/system/health
  * Returns a summary of system health based on recent critical alerts and live engine state.
  */
