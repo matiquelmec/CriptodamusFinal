@@ -549,6 +549,9 @@ class SignalAuditService extends EventEmitter {
                 );
             }
         }
+
+        // NEW: Real-time Frontend Update (Broadcast to WebSocket)
+        this.emit('active_trades_update', this.activeSignals);
     }
 
     /**
