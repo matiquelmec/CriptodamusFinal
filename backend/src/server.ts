@@ -459,4 +459,16 @@ server.listen(PORT, async () => {
 
     // Start Services AFTER server is listening (Prevent boot loop)
     await startServices();
+
+    // 🧹 INTELLIGENT ALERT CLEANUP: Auto-resolve stale alerts every 5 minutes
+    const { AlertCleanupService } = await import('./services/alertCleanupService');
+    setInterval(async () => {
+        try {
+            await AlertCleanupService.cleanupStaleAlerts();
+        } catch (err: any) {
+            console.error('❌ [Cleanup-Job] Failed:', err.message);
+        }
+    }, 5 * 60 * 1000); // Every 5 minutes
+
+    console.log('🧹 Alert Cleanup Job: Scheduled (every 5 min)');
 });

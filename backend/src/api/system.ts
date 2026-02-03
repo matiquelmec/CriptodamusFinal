@@ -55,6 +55,11 @@ router.get('/health', async (req, res) => {
         // Critical DB alerts always take precedence (Persistent for 24h)
         const dbCritical = dbAlerts.find((a: any) => a.severity === 'CRITICAL');
 
+        // INTELLIGENT CLEANUP: Auto-resolve stale HIGH alerts before evaluation
+        // This prevents ghost alerts from causing permanent DEGRADED status
+        const { AlertCleanupService } = await import('../services/alertCleanupService');
+        await AlertCleanupService.cleanupStaleAlerts(); // Non-blocking, runs in background
+
         // High severity alerts (Degraded) are only relevant if recent (e.g., last 15 mins)
         // because the engine re-logs them every cycle if the issue persists.
         const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).getTime();
