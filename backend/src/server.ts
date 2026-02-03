@@ -106,11 +106,9 @@ async function startServices() {
             // NEW: Connect Signal Auditor to WebSocket (Live Panel)
             signalAuditService.on('active_trades_update', (activeSignals: any[]) => {
                 const msg = JSON.stringify({
-                    type: 'active_trades', // The message type frontend will listen for
+                    type: 'active_trades',
                     data: activeSignals
                 });
-
-                // Broadcast to all clients
                 clients.forEach((client) => {
                     if (client.ws.readyState === WebSocket.OPEN) {
                         client.ws.send(msg);
@@ -119,6 +117,15 @@ async function startServices() {
             });
         } catch (e) {
             console.error("   ❌ Auditor Failed to Start:", e);
+        }
+
+        // 4. Strategy Performance (Meta-Scoring)
+        try {
+            console.log("   • Initializing Strategy Meta-Scorer...");
+            const { strategyPerformanceService } = await import('./services/strategyPerformanceService');
+            await strategyPerformanceService.refreshWeights();
+        } catch (e) {
+            console.error("   ❌ Meta-Scorer Failed to Initialize:", e);
         }
 
     } catch (e) {

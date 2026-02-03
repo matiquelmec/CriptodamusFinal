@@ -150,22 +150,26 @@ class ScannerService extends EventEmitter {
         try {
             console.log(`🔍 [ScannerService] Executing DUAL-CORE Scan at ${new Date().toISOString()}...`);
 
-            // 0. NUCLEAR SHIELD CHECK (Hard Filter)
+            // 0. NUCLEAR SHIELD CHECK (Institutional Sniper Mode)
             const { EconomicService } = await import('../core/services/economicService');
-            try {
-                await EconomicService.checkNuclearStatus();
-            } catch (e: any) {
-                console.warn(`🛡️ [ScannerService] Nuclear Shield Active: ${e.message}`);
-                const status = {
-                    status: 'PAUSED',
-                    reason: 'NUCLEAR_EVENT',
-                    message: e.message
-                };
-                this.currentStatus = status; // Update State
-                this.emit('system_status', status);
-                console.log("⏸️ [ScannerService] Status set to PAUSED (Nuclear Shield)");
-                this.isScanning = false;
-                return; // SKIP SCAN
+            const shield = await EconomicService.checkNuclearStatus();
+
+            if (shield.isActive) {
+                if (shield.isImminent) {
+                    console.warn(`🛡️ [ScannerService] Sniper Shield Active (IMMINENT): ${shield.reason}`);
+                    const status = {
+                        status: 'PAUSED',
+                        reason: 'NUCLEAR_EVENT',
+                        message: shield.reason
+                    };
+                    this.currentStatus = status;
+                    this.emit('system_status', status);
+                    this.isScanning = false;
+                    return; // PAUSE SCAN
+                } else {
+                    console.log(`🛡️ [ScannerService] Nuclear Day Awareness: ${shield.reason}`);
+                    // We continue, but we'll have the warning in console
+                }
             }
 
             // If we pass, we assume status is ACTIVE

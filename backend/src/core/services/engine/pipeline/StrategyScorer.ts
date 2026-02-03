@@ -17,7 +17,13 @@ export interface ScoringResult {
 
 export class StrategyScorer {
 
-    static score(symbol: string, indicators: TechnicalIndicators, signalSide: 'LONG' | 'SHORT' = 'LONG', sentiment?: SentimentAnalysis): ScoringResult {
+    static score(
+        symbol: string,
+        indicators: TechnicalIndicators,
+        signalSide: 'LONG' | 'SHORT' = 'LONG',
+        sentiment?: SentimentAnalysis,
+        strategyWeights: Record<string, number> = {}
+    ): ScoringResult {
         let score = 0;
         const reasoning: string[] = [];
         const strategies: string[] = [];
@@ -216,6 +222,24 @@ export class StrategyScorer {
                     score += 15;
                     reasoning.push(`📰 Sentiment: Extreme Euphoria (Contrarian Sell Signal) (+15)`);
                 }
+            }
+        }
+
+        // 12. Meta-Scoring (Dynamic Weights based on Global Performance)
+        if (strategies.length > 0) {
+            let combinedMultiplier = 1.0;
+            strategies.forEach(s => {
+                if (strategyWeights[s]) {
+                    // We take the average or the best? Usually best-performing strategy leads the way
+                    combinedMultiplier = Math.max(combinedMultiplier, strategyWeights[s]);
+                }
+            });
+
+            if (combinedMultiplier !== 1.0) {
+                const oldScore = score;
+                score = score * combinedMultiplier;
+                const type = combinedMultiplier > 1 ? 'Boost' : 'Penalty';
+                reasoning.push(`🧠 Meta-Scoring: Strategy ${type} applied (x${combinedMultiplier.toFixed(2)})`);
             }
         }
 

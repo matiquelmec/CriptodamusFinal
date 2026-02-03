@@ -50,13 +50,17 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
         try {
             const shield = await EconomicService.checkNuclearStatus();
             if (shield.isActive) {
-                console.warn(`[Scanner] ☢️ NUCLEAR WINTER PROTOCOL ACTIVE: ${shield.reason}`);
-                console.warn(`[Scanner] System is in capital preservation mode. No trades will be taken today.`);
-                throw new Error(`NUCLEAR_WINTER_PAUSE: ${shield.reason}`);
+                if (shield.isImminent) {
+                    console.warn(`[Scanner] ☢️ SNIPER SHIELD ACTIVE (IMMINENT EVENT): ${shield.reason}`);
+                    throw new Error(`SNIPER_SHIELD_PAUSE: ${shield.reason}`);
+                } else {
+                    console.warn(`[Scanner] ☢️ NUCLEAR DAY DETECTED: ${shield.reason}`);
+                    console.log(`[Scanner] Institutional Sniper mode: Operational until 60m before event.`);
+                }
             }
         } catch (e: any) {
-            // If it's the pause error, rethrow it to stop the pipeline
-            if (e.message && e.message.includes('NUCLEAR_WINTER')) throw e;
+            // If it's a pause error, rethrow it to stop the pipeline
+            if (e.message && (e.message.includes('NUCLEAR_WINTER') || e.message.includes('SNIPER_SHIELD'))) throw e;
             console.warn("[Scanner] Shield check failed (Fail Open):", e);
         }
     }
@@ -93,6 +97,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     } catch (e) {
         console.warn("[Scanner] Global Market Data missing", e);
     }
+
+    // NEW (Institutional 100%): Strategy Performance weights (Meta-Scoring)
+    const { strategyPerformanceService } = await import('../../../services/strategyPerformanceService');
+    const stratWeightsMap: Record<string, number> = {};
+    const allWeights = strategyPerformanceService.getAllWeights();
+    Object.keys(allWeights).forEach(k => { stratWeightsMap[k] = allWeights[k].weight; });
 
     // --- STAGE 0.9: HOLISTIC INTEGRITY GUARD (Fail-Fast Logic) ---
     const integrityReport = await DataIntegrityGuard.getSystemIntegrityReport({
@@ -302,7 +312,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     console.warn(`[Scanner] Sentiment fetch failed for ${coin.symbol}`);
                 }
 
-                const baseScoreResult = StrategyScorer.score(coin.symbol, indicators, signalSide, coinSentiment);
+                const baseScoreResult = StrategyScorer.score(coin.symbol, indicators, signalSide, coinSentiment, stratWeightsMap);
 
                 // Initial Score (Capped to baseline level before boosts)
                 let totalScore = Math.min(100, (baseScoreResult.score + (strategyResult.primaryStrategy?.score || 0) + strategyResult.scoreBoost) / 1.5);
@@ -754,7 +764,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         tier: postPenaltyTier,
                         kellySize,
                         recommendedLeverage,
-                        correlationRisk: correlationRisk || 0
+                        correlationRisk
                     };
 
                     // --- STAGE 6: FOMO PREVENTION (The Sniper Check) ---

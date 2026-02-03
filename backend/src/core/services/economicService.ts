@@ -10,9 +10,11 @@ export interface EconomicEvent {
 }
 
 export interface ShieldStatus {
-    isActive: boolean;
+    isActive: boolean;    // General day status
+    isImminent: boolean;  // Sniper trigger: within -60m to +30m window
     reason: string;
     nextEvent?: string;
+    nextEventTime?: string;
 }
 
 export class EconomicService {
@@ -63,24 +65,41 @@ export class EconomicService {
             const events = await this.fetchEvents();
             const todayStr = dateToCheck.toISOString().split('T')[0]; // YYYY-MM-DD
 
-            // Format today to match CSV format (roughly) or parse CSV date to ISO
-            // FF CSV Date format is usually MM-DD-YYYY
-
-            // Let's rely on parsing the CSV rows correctly
+            // 1. Check for ANY nuclear event today (General Awareness)
             const nuclearEventToday = events.find(e => {
-                const eventDate = this.parseCSVDate(e.date); // Returns YYYY-MM-DD
+                const eventDate = this.parseCSVDate(e.date);
                 return eventDate === todayStr && e.country === 'USD' && e.isNuclear;
             });
 
-            if (nuclearEventToday) {
-                return {
-                    isActive: true,
-                    reason: `NUCLEAR EVENT DETECTED: [${nuclearEventToday.title}] at ${nuclearEventToday.time}. TRADING PAUSED ALL DAY.`,
-                    nextEvent: nuclearEventToday.title
-                };
+            if (!nuclearEventToday) {
+                return { isActive: false, isImminent: false, reason: 'No Nuclear Events Today' };
             }
 
-            return { isActive: false, reason: 'No Nuclear Events Today' };
+            // 2. Sniper Shield: Check if we are in the DANGER ZONE (-60m to +30m)
+            const now = new Date();
+            const eventDateTime = this.parseCSVDateTime(nuclearEventToday.date, nuclearEventToday.time);
+
+            let isImminent = false;
+            let reason = `NUCLEAR DAY: [${nuclearEventToday.title}] at ${nuclearEventToday.time}. Scanner observing from distance.`;
+
+            if (eventDateTime) {
+                const diffMs = now.getTime() - eventDateTime.getTime();
+                const diffMins = diffMs / 60000;
+
+                // Window: 60 mins before until 30 mins after
+                if (diffMins >= -60 && diffMins <= 30) {
+                    isImminent = true;
+                    reason = `💥 SNIPER SHIELD ACTIVE: [${nuclearEventToday.title}] is happening NOW. Trading Vetoed for safety.`;
+                }
+            }
+
+            return {
+                isActive: true,
+                isImminent,
+                reason,
+                nextEvent: nuclearEventToday.title,
+                nextEventTime: nuclearEventToday.time
+            };
 
         } catch (e) {
             console.warn("[EconomicService] ⚠️ Calendar Unreachable - FAILING OPEN (proceeding without news check)", e);
@@ -89,6 +108,7 @@ export class EconomicService {
             // Nuclear events are rare (~0.2% of days), calendar failures are common (rate limits/DNS)
             return {
                 isActive: false,
+                isImminent: false,
                 reason: 'Calendar offline (fail-open mode)'
             };
         }
