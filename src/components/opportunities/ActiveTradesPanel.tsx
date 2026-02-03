@@ -1,12 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSocket } from '../../hooks/useSocket';
+import { useRealtimeTrades } from '../../hooks/useRealtimeTrades';
 import { TrendingUp, TrendingDown, Clock, Shield, Target, DollarSign, Activity, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 const ActiveTradesPanel: React.FC = () => {
     const { activeTrades, isConnected } = useSocket();
+    const { trades: realtimeUpdates } = useRealtimeTrades();
     const [isCollapsed, setIsCollapsed] = useState(true); // Start collapsed
 
-    if (!activeTrades || activeTrades.length === 0) {
+    // HYBRID MERGE: Socket (Fast Price) + RealtimeDB (Reliable State/SL/TP)
+    const displayTrades = useMemo(() => {
+        if (!activeTrades) return [];
+        return activeTrades.map(socketTrade => {
+            // Find if we have a fresher DB update for this trade
+            const dbUpdate = realtimeUpdates.find(r => r.id === socketTrade.id);
+            if (dbUpdate) {
+                return {
+                    ...socketTrade,
+                    ...dbUpdate,
+                    // Prefer Socket Price if available (fresher tick), otherwise DB price
+                    final_price: socketTrade.last_price || socketTrade.final_price || dbUpdate.final_price
+                };
+            }
+            return socketTrade;
+        });
+    }, [activeTrades, realtimeUpdates]);
+
+    if (!displayTrades || displayTrades.length === 0) {
         // STANDBY MODE: Show that the system is ready and listening
         return (
             <div className="mb-6 mx-4 p-[1px] rounded-3xl bg-gradient-to-r from-slate-800/50 to-slate-900/50 border border-white/5 opacity-70 hover:opacity-100 transition-opacity">
@@ -85,7 +105,7 @@ const ActiveTradesPanel: React.FC = () => {
 
                         {/* Rows */}
                         <div className="divide-y divide-white/5">
-                            {activeTrades.map((trade) => {
+                            {displayTrades.map((trade) => {
                                 const isLong = trade.side === 'LONG';
                                 const pnl = trade.pnl_percent || 0;
                                 const isWin = pnl > 0;
@@ -103,7 +123,7 @@ const ActiveTradesPanel: React.FC = () => {
                                 if (stage === 2) { nextTp = trade.tp3; tpLabel = "TP3"; }
                                 if (stage >= 3) { nextTp = null; tpLabel = "MOON"; }
 
-                                const isAdapted = trade.technical_reasoning?.includes('Updated');
+                                const isAdapted = trade.technical_reasoning?.includes('Updated') || trade.technical_reasoning?.includes('NUCLEAR');
                                 let statusLabel = 'OPEN';
                                 let statusIcon = <Clock size={12} />;
                                 let statusColor = 'text-slate-400';
