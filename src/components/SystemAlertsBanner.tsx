@@ -46,7 +46,8 @@ const SystemAlertsBanner: React.FC = () => {
         }
     }, [systemStatus]);
 
-    if (!health || ['OPTIMAL', 'BOOTING', 'SCANNING', 'ACTIVE'].includes(health.status)) return null;
+    // Only show banner for CRITICAL/OFFLINE issues - hide DEGRADED noise
+    if (!health || !['CRITICAL', 'OFFLINE'].includes(health.status)) return null;
 
     const isCritical = health.status === 'CRITICAL' || health.status === 'OFFLINE';
 
