@@ -396,6 +396,41 @@ class SignalAuditService extends EventEmitter {
                         }
                     }
 
+                    // --- 2D: TIME DECAY (Professional Exit Management) ---
+                    // Force Breakeven if trade is open > 12h without hitting TP1
+                    // This prevents "zombie trades" that consume mental capital
+                    if (currentStage === 0 && signal.created_at) {
+                        const tradeAgeHours = (Date.now() - new Date(signal.created_at).getTime()) / (1000 * 60 * 60);
+                        const TIME_DECAY_HOURS = 12; // From TradingConfig
+
+                        if (tradeAgeHours >= TIME_DECAY_HOURS) {
+                            const buffer = signal.smart_be_buffer || (currentWAP * 0.0015);
+                            const forcedBE = isLong ? currentWAP + buffer : currentWAP - buffer;
+
+                            // If current price is profitable enough to at least break even
+                            const canBreakeven = isLong
+                                ? currentPrice >= forcedBE
+                                : currentPrice <= forcedBE;
+
+                            if (canBreakeven) {
+                                console.log(`⏰ [Time-Decay] ${signal.symbol}: 12h limit reached. Forcing Breakeven Exit.`);
+                                shouldClose = true;
+                                updates.status = 'WIN'; // Technically BE = tiny win (covers fees)
+                                updates.final_price = currentPrice;
+                                updates.exit_reason = 'Time Decay (12h Breakeven Rule)';
+                                updates.pnl_percent = this.calculateNetPnL(currentWAP, currentPrice, signal.side, 0, 1.0);
+                            } else {
+                                // Not profitable enough to break even, move SL to BE and let it close naturally
+                                if (isLong ? effectiveSL < forcedBE : effectiveSL > forcedBE) {
+                                    effectiveSL = forcedBE;
+                                    signal.stop_loss = forcedBE;
+                                    updates.stop_loss = forcedBE;
+                                    console.log(`⏰ [Time-Decay] ${signal.symbol}: Moving SL to Breakeven after 12h.`);
+                                }
+                            }
+                        }
+                    }
+
                     const slHit = isLong ? currentPrice <= effectiveSL : currentPrice >= effectiveSL;
 
                     // Calculate Floating PnL for UI (Unrealized)
