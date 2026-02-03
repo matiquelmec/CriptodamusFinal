@@ -343,20 +343,57 @@ class SignalAuditService extends EventEmitter {
                         signal.max_price_reached = currentPrice; // Keep Memory Updated for Trailing Stop Logic (Robust)
                     }
 
-                    // --- 2C: SMART BREAKEVEN & STOP LOSS ---
+                    // --- 2C: PROFESSIONAL DYNAMIC RISK (Smart BE + Trailing Stop) ---
                     let effectiveSL = sl;
+
                     if (currentStage >= 1) {
-                        // SMART BREAKEVEN: Entry +/- Buffer to cover fees
+                        // 1. FUNDAMENTAL: Smart Breakeven (Entry + Fees)
                         const buffer = signal.smart_be_buffer || (currentWAP * 0.0015);
                         const smartBE = isLong ? currentWAP + buffer : currentWAP - buffer;
 
-                        // RATCHET SYSTEM: Never move SL backwards (loosen risk).
-                        // If current SL is already better than BE (e.g. Trailing Stop), keep it.
-                        // Long: Higher is better. Short: Lower is better.
-                        // We use the 'sl' variable which holds the CURRENT db/memory SL.
-                        effectiveSL = isLong
-                            ? Math.max(sl, smartBE)
-                            : Math.min(sl, smartBE);
+                        // 2. ADVANCED: Dynamic Trailing Stop (Chasing the Moon)
+                        // Use max_price_reached to calculate where the granular trailing stop should be.
+                        let trailingSL = sl;
+
+                        // Config Defaults from TradingConfig (Hardcoded here for robustness if import is tricky, but ideally imported)
+                        // Trailing starts after 1.5% profit, maintains 1.0% distance (approx ATR proxy)
+                        const TRAILING_ACTIVATION = 0.015; // 1.5% Profit to activate Trail
+                        const TRAILING_DISTANCE = 0.010;   // 1.0% Distance from Peak
+
+                        const maxPrice = signal.max_price_reached || currentPrice;
+                        const peakProfitPct = isLong
+                            ? (maxPrice - currentWAP) / currentWAP
+                            : (currentWAP - maxPrice) / currentWAP;
+
+                        if (peakProfitPct >= TRAILING_ACTIVATION) {
+                            // Calculate Dynamic Trail Level
+                            const trailLevel = isLong
+                                ? maxPrice * (1 - TRAILING_DISTANCE)
+                                : maxPrice * (1 + TRAILING_DISTANCE);
+
+                            trailingSL = trailLevel;
+                            // console.log(`🏃 [Trailing] ${signal.symbol}: Peak +${(peakProfitPct*100).toFixed(2)}% -> Trail SL: $${trailLevel.toFixed(2)}`);
+                        }
+
+                        // 3. RATCHET SYSTEM (The "Boss" Logic)
+                        // Winner takes all: We take the BEST (Tightest) SL among:
+                        // - Current SL (Memory)
+                        // - Smart Breakeven (Floor)
+                        // - Dynamic Trailing (Ceiling)
+                        // BUT NEVER LOOSEN RISK.
+
+                        if (isLong) {
+                            // Long: Higher is Safer.
+                            // Must be at least SmartBE.
+                            // If Trailing is higher than SmartBE, take Trailing.
+                            // If current SL is already higher than both, keep current.
+                            const bestNewSL = Math.max(smartBE, trailingSL);
+                            effectiveSL = Math.max(sl, bestNewSL);
+                        } else {
+                            // Short: Lower is Safer.
+                            const bestNewSL = Math.min(smartBE, trailingSL);
+                            effectiveSL = Math.min(sl, bestNewSL);
+                        }
                     }
 
                     const slHit = isLong ? currentPrice <= effectiveSL : currentPrice >= effectiveSL;
