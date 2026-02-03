@@ -671,9 +671,24 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         if (risk > 0) dynamicRR = parseFloat((reward / risk).toFixed(2));
                     }
 
-                    // Portfolio Heatmap
+                    // --- STAGE 5.1: PORTFOLIO HEATMAP (Pearson Matrix Check) ---
                     const activeTrades = signalAuditService.getActiveSignals().map((s: any) => s.symbol);
-                    const correlationRisk = calculatePortfolioCorrelation(coin.symbol, activeTrades, style === 'MEME_SCALP');
+                    const priceSeries = candles.map(c => c.close);
+                    const correlationRisk = await calculatePortfolioCorrelation(
+                        coin.symbol,
+                        activeTrades,
+                        style === 'MEME_SCALP',
+                        priceSeries
+                    );
+
+                    // If correlation is too high, we block or penalize
+                    if (correlationRisk.recommendation === 'BLOCK') {
+                        // console.log(`[Scanner] 🛡️ Blocking ${coin.symbol}: Portfolio Correlation too high (${correlationRisk.score.toFixed(2)})`);
+                        return; // Drop this opportunity
+                    } else if (correlationRisk.recommendation === 'REDUCE') {
+                        totalScore -= 15; // Penalty for high similarity
+                        reasoning.push(`🛡️ Portfolio Heatmap: High correlation with open trades (${correlationRisk.score.toFixed(2)})`);
+                    }
 
                     const opportunity: AIOpportunity = {
                         id: coin.id,
