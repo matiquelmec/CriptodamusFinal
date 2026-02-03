@@ -83,9 +83,14 @@ export class EconomicService {
             return { isActive: false, reason: 'No Nuclear Events Today' };
 
         } catch (e) {
-            console.error("[EconomicService] CRITICAL: Calendar Unreachable. Switching to SAFETY MODE (High Risk).", e);
-            // FAIL SAFE: If we can't see the news, we assume high risk until connectivity restores.
-            return { isActive: true, reason: 'SYSTEM_STUCK_OFFLINE: Calendar Unreachable' };
+            console.warn("[EconomicService] ⚠️ Calendar Unreachable - FAILING OPEN (proceeding without news check)", e);
+            // ✅ FAIL-OPEN STRATEGY: If we can't verify events, assume NO critical events
+            // Rationale: False negatives (missing 1 event/month) << False positives (blocking ALL scans)
+            // Nuclear events are rare (~0.2% of days), calendar failures are common (rate limits/DNS)
+            return {
+                isActive: false,
+                reason: 'Calendar offline (fail-open mode)'
+            };
         }
     }
 
