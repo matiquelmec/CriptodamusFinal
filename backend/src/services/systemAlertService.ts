@@ -48,7 +48,8 @@ export class SystemAlertService {
                 .limit(1);
 
             if (existingAlert && existingAlert.length > 0) {
-                console.log(`[Alert-Dedup] Skipped duplicate ${category}/${severity} alert`);
+                // Gray color for noise reduction (\x1b[90m)
+                console.log(`\x1b[90m[Alert-Dedup] Skipped duplicate ${category}/${severity} alert\x1b[0m`);
                 return; // Avoid spamming DB with identical alerts
             }
         } catch (dedupError: any) {
