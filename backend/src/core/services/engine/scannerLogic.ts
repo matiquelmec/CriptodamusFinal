@@ -154,6 +154,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     const opportunities: AIOpportunity[] = [];
 
     // 3. CHUNKED PROCESSING (Robustness Fix)
+    const signalHistory: Record<string, any[]> = {}; // Placeholder if not fetched
     // Force Include Gold Asset for Pau Strategy even if low volume
     const goldSym = TradingConfig.pauStrategy.asset.replace('/', '').toUpperCase(); // 'PAXGUSDT'
     const goldTicker = market.find(m => m.id === goldSym || m.symbol.replace('/', '') === goldSym);
@@ -217,8 +218,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                 // 1.1 Atomic Integrity Check (The "Blind" Switch)
                 if (indicators.invalidated) {
-                    systemAlerts.logVeto(coin.symbol, `PIPELINE_INVALIDATED: ${indicators.technicalReasoning}`);
-                    return;
+                    // systemAlerts.logVeto(coin.symbol, `PIPELINE_INVALIDATED: ${indicators.technicalReasoning}`);
+                    // return; // DISABLED: Inform Only
+                    const warn = `⚠️ PROCESANDO CON DATOS PARCIALES: ${indicators.technicalReasoning}`;
+                    indicators.technicalReasoning = warn; // Override or append cause it's critical
+                    if (!globalWarning) globalWarning = warn; // Elevate to global if first error
                 }
 
                 // 1. Freshness Sentinel (Ensure data is LIVE)
@@ -228,20 +232,16 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const maxStaleMs = 45 * 60 * 1000; // 45m (3 candles)
 
                 if (msSinceLastCandle > maxStaleMs) {
-                    systemAlerts.logAlert({
-                        symbol: coin.symbol,
-                        severity: 'MEDIUM',
-                        category: 'DATA_INTEGRITY',
-                        message: `STALE_DATA: ${(msSinceLastCandle / 60000).toFixed(1)}m old`
-                    });
-                    return;
+                    /* systemAlerts.logAlert({ ... }); return; */ // DISABLED: Inform Only
+                    indicators.technicalReasoning += ` | ⚠️ DATOS ANTIGUOS (${(msSinceLastCandle / 60000).toFixed(0)}m)`;
                 }
 
                 // 2. Source Integrity
                 const isRealBinance = coin.id.toUpperCase().endsWith('USDT');
                 if (!isRealBinance) {
-                    console.warn(`[Sentinel] ${coin.symbol} using unreliable fallback. Rejecting signal.`);
-                    return;
+                    // console.warn(`[Sentinel] ${coin.symbol} using unreliable fallback. Rejecting signal.`);
+                    // return; // DISABLED: Inform Only
+                    indicators.technicalReasoning += ` | ⚠️ Fuente Alternativa (No-Binance)`;
                 }
 
                 // --- STAGE 2.2: EXPERT VOLUME & LIQUIDITY (God Tier) ---
@@ -252,8 +252,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     const realOI = await CEXConnector.getOpenInterest(coin.symbol);
 
                     if (realCVD.integrity < 1.0 || realOI.integrity < 1.0) {
-                        console.warn(`[Sentinel] ${coin.symbol}: Authenticated flow failed. Signal discarded to prevent phantom data.`);
-                        return; // HARD ABORT: No real data, no signal.
+                        // console.warn(`[Sentinel] ${coin.symbol}: Authenticated flow failed. Signal discarded to prevent phantom data.`);
+                        // return; // HARD ABORT: No real data, no signal. -> DISABLED: Inform Only
+                        indicators.technicalReasoning += ` | ⚠️ Flujo Institucional Limitado (API)`;
                     }
 
                     // Fetch base expert data (OI, Funding, CVD)
@@ -269,7 +270,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     }
                 } catch (e) {
                     console.error(`[Sentinel] Critical data failure for ${coin.symbol}`, e);
-                    return;
+                    indicators.technicalReasoning += ` | ❌ Error Análisis de Volumen`;
+                    // return; // DISABLED
                 }
 
                 // --- STAGE 2.5: ADVANCED ANALYSIS (Institutional) ---
@@ -386,8 +388,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                                 totalScore -= 25; // Heavy penalty for counter-trend
                                 reasoning.push(`⚠️ Counter-Trend: Macro trend mismatch (-25)`);
                             } else {
-                                console.log(`[Smart MTF] VETO ${coin.symbol}: ${signalSide} signal against 4H Trend alignment.`);
-                                return; // Hard Veto for normal signals against macro trend
+                                console.log(`[Smart MTF] WARNING ${coin.symbol}: ${signalSide} signal against 4H Trend alignment.`);
+                                totalScore -= 40; // EXTREME penalty instead of VETO
+                                reasoning.push(`⛔ Contra-Tendencia MACRO peligrosa (-40)`);
+                                // return; // DISABLED: Allow user to see it with low score (likely won't pass 75 threshold but exists)
                             }
                         }
                     }
@@ -706,7 +710,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     // If correlation is too high, we block or penalize
                     if (correlationRisk.recommendation === 'BLOCK') {
                         // console.log(`[Scanner] 🛡️ Blocking ${coin.symbol}: Portfolio Correlation too high (${correlationRisk.score.toFixed(2)})`);
-                        return; // Drop this opportunity
+                        // return; // Drop this opportunity -> DISABLED
+                        totalScore -= 50; // NUKE SCORE but let it pass if it's GOD tier (150 -> 100)
+                        reasoning.push(`⛔ ALTO RIESGO PORTAFOLIO: Correlación Excesiva (-50)`);
                     } else if (correlationRisk.recommendation === 'REDUCE') {
                         totalScore -= 15; // Penalty for high similarity
                         reasoning.push(`🛡️ Portfolio Heatmap: High correlation with open trades (${correlationRisk.score.toFixed(2)})`);
@@ -791,11 +797,38 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     }
 
                     // --- FINAL OUTPUT ---
-                    // Final Filters
+                    // 3. HARD FILTERS (The Iron Gate)
                     const filterResult = FilterEngine.shouldDiscard(opportunity, risk, style);
                     if (filterResult.discarded) {
-                        console.log(`[Filter] Rejected ${coin.symbol}: ${filterResult.reason}`);
-                        return;
+                        // NEW: "Inform, Don't Block" Policy
+                        // We only BLOCK if it's a hard blacklist or algorithm mismatch.
+                        // Risk/Technical reasons are converted to WARNINGS.
+                        const isSoftBlock =
+                            filterResult.reason?.includes('Risk Shield') ||
+                            filterResult.reason?.includes('Liquidity') ||
+                            filterResult.reason?.includes('Volume') ||
+                            filterResult.reason?.includes('RSI') ||
+                            filterResult.reason?.includes('Trend');
+
+                        if (isSoftBlock && filterResult.reason) {
+                            console.warn(`[Filter] FORCE PASS ${coin.symbol}: ${filterResult.reason}`);
+                            totalScore -= 20; // Penalize risk
+                            reasoning.push(`⚠️ FILTRO DE RIESGO: ${filterResult.reason} (-20)`);
+                        } else {
+                            // Hard Block (Score too low, Blacklisted, Wrong Algo)
+                            // console.log(`[Filter] Rejected ${coin.symbol}: ${filterResult.reason}`);
+                            return;
+                        }
+                    }
+
+                    // 4. APEX GUARD (Whipsaw Protection)
+                    const apexCheck = FilterEngine.checkApexSafety(opportunity, signalHistory[coin.symbol] || [], null);
+                    if (apexCheck.discarded) {
+                        // console.log(`[Apex] VETO ${coin.symbol}: ${apexCheck.reason}`);
+                        // return; // DISABLED: Convert to Warning
+                        console.warn(`[Apex] FORCE PASS ${coin.symbol}: ${apexCheck.reason}`);
+                        totalScore -= 30; // Large penalty implies dangerous reversal
+                        reasoning.push(`⚠️ PROTECCIÓN APEX: ${apexCheck.reason} (-30)`);
                     }
 
                     opportunities.push(opportunity);
