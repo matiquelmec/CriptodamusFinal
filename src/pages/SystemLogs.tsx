@@ -57,7 +57,7 @@ const SystemLogs: React.FC = () => {
                 engineStatus: systemStatus.status
             }));
         }
-    }, [systemStatus]);
+    }, [systemStatus, health]); // Fix: Add health dependency to handle race condition
 
     const getSeverityIcon = (severity: string) => {
         switch (severity) {
