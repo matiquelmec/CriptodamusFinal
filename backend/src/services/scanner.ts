@@ -156,19 +156,14 @@ class ScannerService extends EventEmitter {
 
             if (shield.isActive) {
                 if (shield.isImminent) {
-                    console.warn(`🛡️ [ScannerService] Sniper Shield Active (IMMINENT): ${shield.reason}`);
-                    const status = {
-                        status: 'PAUSED',
-                        reason: 'NUCLEAR_EVENT',
-                        message: shield.reason
-                    };
-                    this.currentStatus = status;
-                    this.emit('system_status', status);
-                    this.isScanning = false;
-                    return; // PAUSE SCAN
+                    // MODIFIED: Inform, Don't Block Policy.
+                    // We DO NOT pause the system. We proceed to scannerLogic which will inject warnings.
+                    console.warn(`🛡️ [ScannerService] Sniper Shield Active (IMMINENT): ${shield.reason} -> PROCEEDING WITH WARNINGS`);
+
+                    // We do NOT set status to PAUSED. We let the loop continue.
+                    // The scannerLogic will pick up the same shield status and inject the globalWarning.
                 } else {
                     console.log(`🛡️ [ScannerService] Nuclear Day Awareness: ${shield.reason}`);
-                    // We continue, but we'll have the warning in console
                 }
             }
 
