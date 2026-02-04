@@ -61,6 +61,7 @@ export const TradingConfig = {
 
     // --- RISK ENGINES ---
     risk: {
+        degraded_mode_penalty: 0.5, // NEW: Cut size by 50% if News Blind (Degraded Mode)
         whale_volume_ratio: 3.5, // Volume > 3.5x average triggers whale alert
         volatility_threshold_multiplier: 3.0, // Range > 3x average range triggers volatility alert
         max_slippage: 0.02,

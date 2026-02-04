@@ -127,90 +127,39 @@ router.get('/prices', async (req: Request, res: Response) => {
     }
 });
 
+// ALIGNED: Use the "God Mode" Scanner Service instead of basic logic
+import { scannerService } from '../services/scanner';
+
 /**
  * GET /api/v1/market/signals
- * Genera señales de trading básicas
+ * Retrieves the latest institutional-grade opportunities from the autonomous scanner.
+ * Normalized to match WebSocket 'ai_opportunities' event.
  */
 router.get('/signals', async (req: Request, res: Response) => {
     try {
-        const symbol = (req.query.symbol as string) || 'BTC';
-        const cacheKey = `signals:${symbol}`;
+        const opportunities = scannerService.getLatestOpportunities();
+        const status = scannerService.getLastStatus();
 
-        // Verificar caché
-        const cached = cache.get(cacheKey);
-        if (cached) {
-            return res.json({ data: cached, cached: true });
+        // If scanner is booting or empty, we return a helpful status
+        if (opportunities.length === 0) {
+            return res.json({
+                data: [],
+                status: status,
+                message: "Scanner is initializing or no high-confluence signals found.",
+                timestamp: Date.now()
+            });
         }
-
-        // Obtener datos de mercado
-        const [priceData, klines] = await Promise.all([
-            axios.get(`https://api.binance.com/api/v3/ticker/24hr`, {
-                params: { symbol: `${symbol}USDT` }
-            }),
-            axios.get(`https://api.binance.com/api/v3/klines`, {
-                params: {
-                    symbol: `${symbol}USDT`,
-                    interval: '1h',
-                    limit: 100
-                }
-            })
-        ]);
-
-        // Calcular indicadores básicos
-        const closes = klines.data.map((k: any[]) => parseFloat(k[4]));
-        const volumes = klines.data.map((k: any[]) => parseFloat(k[5]));
-
-        // RSI simple
-        const rsi = calculateRSI(closes, 14);
-
-        // Media móvil
-        const sma20 = closes.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20;
-        const sma50 = closes.slice(-50).reduce((a: number, b: number) => a + b, 0) / 50;
-
-        // Generar señal
-        const currentPrice = parseFloat(priceData.data.lastPrice);
-        let signal: 'BUY' | 'SELL' | 'NEUTRAL' = 'NEUTRAL';
-        let strength = 50;
-
-        if (rsi < 30 && currentPrice > sma20) {
-            signal = 'BUY';
-            strength = 80;
-        } else if (rsi > 70 && currentPrice < sma20) {
-            signal = 'SELL';
-            strength = 80;
-        } else if (currentPrice > sma20 && sma20 > sma50) {
-            signal = 'BUY';
-            strength = 60;
-        } else if (currentPrice < sma20 && sma20 < sma50) {
-            signal = 'SELL';
-            strength = 60;
-        }
-
-        const signalData: SignalData = {
-            symbol,
-            signal,
-            strength,
-            price: currentPrice,
-            indicators: {
-                rsi,
-                sma20,
-                sma50,
-                volume: volumes[volumes.length - 1]
-            },
-            timestamp: Date.now()
-        };
-
-        // Guardar en caché
-        cache.set(cacheKey, signalData, 60); // Cache por 1 minuto
 
         res.json({
-            data: signalData,
-            cached: false
+            data: opportunities,
+            count: opportunities.length,
+            system_status: status,
+            timestamp: Date.now()
         });
 
     } catch (error: any) {
-        console.error('Signals error:', error);
-        res.status(500).json({ error: 'Failed to generate signals' });
+        console.error('Signals API Error:', error);
+        res.status(500).json({ error: 'Failed to retrieve scanner data' });
     }
 });
 

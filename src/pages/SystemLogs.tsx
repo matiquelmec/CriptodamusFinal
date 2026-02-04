@@ -142,11 +142,23 @@ const SystemLogs: React.FC = () => {
                 </div>
 
                 <div className="overflow-x-auto overflow-y-auto max-h-[60vh] custom-scrollbar">
+                    {/* INTELLIGENT EMPTY STATE: Only show 100% Integrity IF connected and optimal */}
                     {alerts.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 opacity-30">
-                            <ShieldCheck size={64} className="text-success mb-4" />
-                            <p className="text-xl font-bold uppercase">No se han registrado fallos</p>
-                            <p className="text-sm mt-2">La integridad del sistema es del 100%</p>
+                        <div className="flex flex-col items-center justify-center py-20 opacity-80">
+                            {(!health || health.status === 'OFFLINE' || health.status === 'ERROR') ? (
+                                <>
+                                    <AlertOctagon size={64} className="text-danger mb-4 animate-pulse" />
+                                    <p className="text-xl font-bold uppercase text-danger">Conexión con Blindaje Perdida</p>
+                                    <p className="text-sm mt-2 font-mono text-secondary">No se puede verificar la integridad de los datos.</p>
+                                </>
+                            ) : (
+                                <>
+                                    <ShieldCheck size={64} className="text-success mb-4" />
+                                    <p className="text-xl font-bold uppercase text-success">Sistema Nominal</p>
+                                    <p className="text-sm mt-2 text-secondary">La integridad del sistema está verificada al 100%</p>
+                                    <p className="text-[10px] mt-1 opacity-50 font-mono">Sin alertas activas.</p>
+                                </>
+                            )}
                         </div>
                     ) : (
                         <table className="w-full text-left border-collapse">

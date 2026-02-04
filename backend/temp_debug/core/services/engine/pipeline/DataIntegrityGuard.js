@@ -1,34 +1,20 @@
-
+"use strict";
 /**
  * DATA INTEGRITY GUARD (DIG)
- * 
+ *
  * Centralized service to calculate "System Confidence" based on data freshness and reliability.
  * "Si hay duda, no hay duda."
  */
-
-export interface IntegrityReport {
-    score: number; // 0.0 to 1.0 (1.0 = All Primary sources active & fresh)
-    status: 'OPTIMAL' | 'DEGRADED' | 'HALTED' | 'DOUBTFUL';
-    staleSources: string[];
-    missingCritical: string[];
-}
-
-export class DataIntegrityGuard {
-
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DataIntegrityGuard = void 0;
+class DataIntegrityGuard {
     /**
      * Aggregates integrity across all subsystems to determine if signal generation is safe.
      */
-    static async getSystemIntegrityReport(context: {
-        candles?: any[], // Made optional for global pre-flights
-        globalData: any,
-        newsSentiment: any,
-        economicShield: any,
-        isPreFlight?: boolean // NEW: Explicitly signal if this is a global source check
-    }): Promise<IntegrityReport> {
-        const staleSources: string[] = [];
-        const missingCritical: string[] = [];
+    static async getSystemIntegrityReport(context) {
+        const staleSources = [];
+        const missingCritical = [];
         let score = 1.0;
-
         // 1. RAW CANDLE INTEGRITY (The Foundation)
         if (context.isPreFlight) {
             // In pre-flight, we just care if we HAVE global data (which implies APIs are up)
@@ -38,12 +24,14 @@ export class DataIntegrityGuard {
                 score -= 0.3;
                 staleSources.push('GLOBAL_CONNECTIVITY');
             }
-        } else {
+        }
+        else {
             // Depth check for signal generation (Per-coin)
             if (!context.candles || context.candles.length < 200) {
                 score -= 0.5;
                 missingCritical.push('CANDLES_INSUFFICIENT');
-            } else {
+            }
+            else {
                 const lastCandle = context.candles[context.candles.length - 1];
                 const msSinceLast = Date.now() - lastCandle.timestamp;
                 if (msSinceLast > 30 * 60 * 1000) { // > 30 mins stale
@@ -52,7 +40,6 @@ export class DataIntegrityGuard {
                 }
             }
         }
-
         // 2. GLOBAL MARKET INTEGRITY (Gold, DXY)
         // If Gold Price is 0 or 2000 (default fallback), it's doubtful.
         if (context.globalData.goldPrice === 0 || context.globalData.goldPrice === 2000) {
@@ -63,48 +50,34 @@ export class DataIntegrityGuard {
             score -= 0.1;
             staleSources.push('GLOBAL_DOMINANCE_DATA');
         }
-
-        // 3. ECONOMIC INTEGRITY (ROBUST / DEGRADED LOGIC)
+        // 3. ECONOMIC INTEGRITY
         const shield = context.economicShield;
-
-        // CASE A: Degraded Mode (Explicit from Service)
-        if (shield.reason.includes('DEGRADED_MODE')) {
-            score -= 0.15; // Small penalty only
-            staleSources.push('NEWS_FEED_BLIND_DEGRADED');
-        }
-        // CASE B: Offline/Unreachable (Legacy)
-        else if (shield.reason.includes('Calendar offline') || shield.reason.includes('Unreachable')) {
+        if (shield.reason.includes('Calendar offline') || shield.reason.includes('Unreachable') || shield.reason.includes('TOTAL_NEWS_BLINDNESS')) {
             if (shield.isCached) {
-                // We have a verified mirror. We don't HALT, but we warn.
-                score -= 0.1;
+                // We have a verified mirror. We don't HALT, but we warn (DEGRADED/DOUBTFUL).
+                score -= 0.25;
                 staleSources.push('ECONOMIC_CALENDAR_MIRROR');
-            } else {
-                // If it wasn't caught by Degraded Mode for some reason:
-                score -= 0.3;
-                staleSources.push('ECONOMIC_CALENDAR_MISSING');
+            }
+            else {
+                // Completely blind = HALT. No mirrors available.
+                score -= 0.6;
+                missingCritical.push('ECONOMIC_CALENDAR');
             }
         }
-        // CASE C: Total Blindness (Only if explicitly blocking)
-        else if (shield.reason.includes('TOTAL_NEWS_BLINDNESS')) {
-            // This branch should ideally be unreachable now with Degraded Mode, but keeping for safety
-            score -= 0.5;
-            missingCritical.push('ECONOMIC_CALENDAR_CRITICAL');
-        }
-
         // 4. NEWS/SENTIMENT INTEGRITY
         if (context.newsSentiment.summary === "Market data unavailable." || context.newsSentiment.headlineCount === 0) {
             score -= 0.15;
             staleSources.push('AI_SENTIMENT_DATA');
         }
-
         // FINAL EVALUATION
         score = Math.max(0, score);
-        let status: IntegrityReport['status'] = 'OPTIMAL';
-
-        if (score < 0.5 || missingCritical.length > 0) status = 'HALTED';
-        else if (score < 0.7) status = 'DEGRADED';
-        else if (score < 0.9) status = 'DOUBTFUL';
-
+        let status = 'OPTIMAL';
+        if (score < 0.5 || missingCritical.length > 0)
+            status = 'HALTED';
+        else if (score < 0.7)
+            status = 'DEGRADED';
+        else if (score < 0.9)
+            status = 'DOUBTFUL';
         return {
             score,
             status,
@@ -113,3 +86,4 @@ export class DataIntegrityGuard {
         };
     }
 }
+exports.DataIntegrityGuard = DataIntegrityGuard;
