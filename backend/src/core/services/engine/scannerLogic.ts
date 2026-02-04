@@ -384,14 +384,14 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                             const isHighConviction = totalScore > 85;
 
                             if (isHighConviction) {
-                                console.log(`[Smart MTF] PENALTY ${coin.symbol}: Counter-trend ${signalSide} has high conviction. Proceeding with penalty.`);
-                                totalScore -= 25; // Heavy penalty for counter-trend
-                                reasoning.push(`⚠️ Counter-Trend: Macro trend mismatch (-25)`);
+                                console.log(`[Smart MTF] PENALTY ${coin.symbol}: Counter-trend ${signalSide} has high conviction. Proceeding.`);
+                                // totalScore -= 25; // REMOVED: No Penalty
+                                reasoning.push(`⚠️ Counter-Trend: Macro trend mismatch (High Conviction)`);
                             } else {
                                 console.log(`[Smart MTF] WARNING ${coin.symbol}: ${signalSide} signal against 4H Trend alignment.`);
-                                totalScore -= 40; // EXTREME penalty instead of VETO
-                                reasoning.push(`⛔ Contra-Tendencia MACRO peligrosa (-40)`);
-                                // return; // DISABLED: Allow user to see it with low score (likely won't pass 75 threshold but exists)
+                                // totalScore -= 40; // REMOVED: No Penalty
+                                reasoning.push(`⛔ Contra-Tendencia MACRO peligrosa`);
+                                // return; // DISABLED: Allow user to see it
                             }
                         }
                     }
@@ -711,8 +711,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     if (correlationRisk.recommendation === 'BLOCK') {
                         // console.log(`[Scanner] 🛡️ Blocking ${coin.symbol}: Portfolio Correlation too high (${correlationRisk.score.toFixed(2)})`);
                         // return; // Drop this opportunity -> DISABLED
-                        totalScore -= 50; // NUKE SCORE but let it pass if it's GOD tier (150 -> 100)
-                        reasoning.push(`⛔ ALTO RIESGO PORTAFOLIO: Correlación Excesiva (-50)`);
+                        // totalScore -= 50; // REMOVED: No Penalty
+                        reasoning.push(`⛔ ALTO RIESGO PORTAFOLIO: Correlación Excesiva`);
                     } else if (correlationRisk.recommendation === 'REDUCE') {
                         totalScore -= 15; // Penalty for high similarity
                         reasoning.push(`🛡️ Portfolio Heatmap: High correlation with open trades (${correlationRisk.score.toFixed(2)})`);
@@ -801,8 +801,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     const filterResult = FilterEngine.shouldDiscard(opportunity, risk, style);
                     if (filterResult.discarded) {
                         // NEW: "Inform, Don't Block" Policy
-                        // We only BLOCK if it's a hard blacklist or algorithm mismatch.
-                        // Risk/Technical reasons are converted to WARNINGS.
+                        // Per User Request: DO NOT PENALIZE SCORE. Just Warn.
+                        // If we penalize, it might drop below visibility threshold.
                         const isSoftBlock =
                             filterResult.reason?.includes('Risk Shield') ||
                             filterResult.reason?.includes('Liquidity') ||
@@ -812,11 +812,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                         if (isSoftBlock && filterResult.reason) {
                             console.warn(`[Filter] FORCE PASS ${coin.symbol}: ${filterResult.reason}`);
-                            totalScore -= 20; // Penalize risk
-                            reasoning.push(`⚠️ FILTRO DE RIESGO: ${filterResult.reason} (-20)`);
+                            // totalScore -= 20; // REMOVED: No Penalty
+                            reasoning.push(`⚠️ FILTRO DE RIESGO: ${filterResult.reason}`);
                         } else {
                             // Hard Block (Score too low, Blacklisted, Wrong Algo)
-                            // console.log(`[Filter] Rejected ${coin.symbol}: ${filterResult.reason}`);
                             return;
                         }
                     }
@@ -824,13 +823,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     // 4. APEX GUARD (Whipsaw Protection)
                     const apexCheck = FilterEngine.checkApexSafety(opportunity, signalHistory[coin.symbol] || [], null);
                     if (apexCheck.discarded) {
-                        // console.log(`[Apex] VETO ${coin.symbol}: ${apexCheck.reason}`);
-                        // return; // DISABLED: Convert to Warning
                         console.warn(`[Apex] FORCE PASS ${coin.symbol}: ${apexCheck.reason}`);
-                        totalScore -= 30; // Large penalty implies dangerous reversal
-                        reasoning.push(`⚠️ PROTECCIÓN APEX: ${apexCheck.reason} (-30)`);
+                        // totalScore -= 30; // REMOVED: No Penalty
+                        reasoning.push(`⚠️ PROTECCIÓN APEX: ${apexCheck.reason}`);
                     }
-
                     opportunities.push(opportunity);
                     console.log(`[Scanner] [${coin.symbol}] ✅ ACCEPTED with Match Score ${opportunity.confidenceScore}`);
                 }
