@@ -86,8 +86,10 @@ const SystemLogs: React.FC = () => {
                                 "El sistema se está iniciando y sincronizando con las fuentes de datos globales. Espere un momento..."
                             ) : health.status === 'SCANNING' ? (
                                 "El motor está analizando activamente oportunidades en el mercado global. Integridad: 100%."
-                            ) : (
+                            ) : (health.status === 'DEGRADED' || health.status === 'CRITICAL' || health.status === 'ERROR') ? (
                                 health.reason || "Se han detectado irregularidades. El sistema está aplicando vetos preventivos para proteger el capital."
+                            ) : (
+                                "Sincronizando estado del sistema..."
                             )}
                         </p>
                     </div>
