@@ -166,7 +166,7 @@ export const TradingConfig = {
 
     // --- SCORING MATRIX ---
     scoring: {
-        min_score_entry: 75, // UPGRADED: Institutional Grade (Was 60)
+        min_score_entry: 65, // ADJUSTED: Was 75. Lowered to 65 to allow solid Trend setups without "God Mode" requirement.
         god_mode_threshold: 90,
         filters: { // NEW: Hard Filters
             min_adx: 20, // Avoid Chop
