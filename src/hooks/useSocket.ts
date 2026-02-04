@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { AIOpportunity } from '../types';
+import { API_CONFIG } from '../services/config';
 
-// Types representing the Real-Time Data from Backend
+// --- TYPES ---
 export interface RealTimeLiquidation {
     symbol: string;
-    side: 'SELL' | 'BUY'; // SELL = Long Liquidated, BUY = Short Liquidated
+    side: 'SELL' | 'BUY';
     price: number;
     qty: number;
     time: number;
@@ -22,155 +23,176 @@ export interface SocketState {
     liquidations: RealTimeLiquidation[];
     cvd: Record<string, RealTimeCVD>;
     aiOpportunities: AIOpportunity[];
-    activeTrades: any[]; // NEW: Live Trades from SignalAudit
+    activeTrades: any[];
+    systemStatus: any;
 }
 
-import { API_CONFIG } from '../services/config';
+// --- SINGLETON SOCKET MANAGER ---
+// This ensures only ONE WebSocket connection exists for the entire app.
+class SocketManager {
+    private socket: WebSocket | null = null;
+    private listeners: Set<(state: SocketState) => void> = new Set();
+    private pingInterval: NodeJS.Timeout | null = null;
+    private reconnectTimeout: NodeJS.Timeout | null = null;
 
-const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
+    // Global State Store
+    private state: SocketState = {
+        isConnected: false,
+        liquidations: [],
+        cvd: {},
+        aiOpportunities: [],
+        activeTrades: [],
+        systemStatus: null
+    };
 
-// Robust WS URL Detection
-const getWsUrl = () => {
-    if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
+    private static instance: SocketManager;
 
-    let base = (import.meta.env.VITE_BACKEND_URL || API_CONFIG.BASE_URL).replace('http', 'ws');
+    private constructor() {
+        this.connect();
+    }
 
-    // Ensure it doesn't end in /ws before adding it
-    if (base.endsWith('/ws')) return base;
-    if (base.endsWith('/ws/')) return base.slice(0, -1);
+    public static getInstance(): SocketManager {
+        if (!SocketManager.instance) {
+            SocketManager.instance = new SocketManager();
+        }
+        return SocketManager.instance;
+    }
 
-    return `${base.endsWith('/') ? base.slice(0, -1) : base}/ws`;
-};
+    // Subscribe a React Component to updates
+    public subscribe(listener: (state: SocketState) => void) {
+        this.listeners.add(listener);
+        listener(this.state); // Immediate initial update
+        return () => {
+            this.listeners.delete(listener);
+        };
+    }
 
-const WS_URL = getWsUrl();
+    // Robust URL Detection
+    private getWsUrl() {
+        if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
+        let base = (import.meta.env.VITE_BACKEND_URL || API_CONFIG.BASE_URL).replace('http', 'ws');
+        if (base.endsWith('/ws')) return base;
+        if (base.endsWith('/ws/')) return base.slice(0, -1);
+        return `${base.endsWith('/') ? base.slice(0, -1) : base}/ws`;
+    }
 
+    private connect = () => {
+        if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+            return; // Already connecting or connected
+        }
+
+        const url = this.getWsUrl();
+        this.socket = new WebSocket(url);
+
+        this.socket.onopen = () => {
+            console.log('🔌 [SocketManager] Connected to Backend WS');
+            this.updateState({ isConnected: true });
+
+            // Heartbeat
+            if (this.pingInterval) clearInterval(this.pingInterval);
+            this.pingInterval = setInterval(() => {
+                if (this.socket?.readyState === WebSocket.OPEN) {
+                    this.socket.send(JSON.stringify({ type: 'ping' }));
+                }
+            }, 30000);
+        };
+
+        this.socket.onclose = () => {
+            console.log('🔌 [SocketManager] Disconnected. Reconnecting in 3s...');
+            this.updateState({ isConnected: false });
+            if (this.pingInterval) clearInterval(this.pingInterval);
+
+            if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = setTimeout(this.connect, 3000);
+        };
+
+        this.socket.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                this.handleMessage(msg);
+            } catch (e) {
+                console.error('WS Parse Error', e);
+            }
+        };
+    }
+
+    private handleMessage(msg: any) {
+        switch (msg.type) {
+            case 'snapshot':
+                this.updateState({
+                    liquidations: msg.data.liquidations ? [...msg.data.liquidations, ...this.state.liquidations].slice(0, 50) : this.state.liquidations,
+                    cvd: msg.data.cvd || this.state.cvd,
+                    aiOpportunities: msg.data.ai_opportunities || this.state.aiOpportunities
+                });
+                break;
+            case 'liquidation':
+                const newLiqs = Array.isArray(msg.data) ? msg.data : [msg.data];
+                this.updateState({
+                    liquidations: [...newLiqs, ...this.state.liquidations].slice(0, 50)
+                });
+                break;
+            case 'cvd_update':
+                this.updateState({
+                    cvd: {
+                        ...this.state.cvd,
+                        [msg.data.symbol]: {
+                            delta: msg.data.delta,
+                            volume: msg.data.volume,
+                            price: msg.data.price
+                        }
+                    }
+                });
+                break;
+            case 'ai_opportunities':
+                if (Array.isArray(msg.data)) this.updateState({ aiOpportunities: msg.data });
+                break;
+            case 'golden_ticket_alert':
+                // Usually replaces opportunities or adds to them
+                this.updateState({ aiOpportunities: msg.data });
+                break;
+            case 'active_trades':
+                if (Array.isArray(msg.data)) this.updateState({ activeTrades: msg.data });
+                break;
+            case 'system_status':
+                // Avoid spamming logs if status hasn't changed
+                if (JSON.stringify(this.state.systemStatus) !== JSON.stringify(msg.data)) {
+                    console.log('🔌 [SocketManager] System Status:', msg.data);
+                    this.updateState({ systemStatus: msg.data });
+                }
+                break;
+        }
+    }
+
+    private updateState(partial: Partial<SocketState>) {
+        this.state = { ...this.state, ...partial };
+        this.notify();
+    }
+
+    private notify() {
+        this.listeners.forEach(l => l(this.state));
+    }
+
+    public send(msg: any) {
+        if (this.socket?.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify(msg));
+        }
+    }
+}
+
+// --- CONSUMER HOOK ---
+// Now useSocket is just a cheap subscriber to the Singleton Manager
 export const useSocket = () => {
-    const [isConnected, setIsConnected] = useState(false);
-    const [liquidations, setLiquidations] = useState<RealTimeLiquidation[]>([]);
-    const [cvd, setCvd] = useState<Record<string, RealTimeCVD>>({});
-    const [aiOpportunities, setAIOpportunities] = useState<AIOpportunity[]>([]);
-    const [activeTrades, setActiveTrades] = useState<any[]>([]); // NEW State
-    const [systemStatus, setSystemStatus] = useState<any>(null); // New State
-
-    const wsRef = useRef<WebSocket | null>(null);
-    const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-    // Keep only last 50 liquidations to avoid memory leaks in frontend
-    const addLiquidations = useCallback((newLiqs: RealTimeLiquidation | RealTimeLiquidation[]) => {
-        setLiquidations(prev => {
-            const list = Array.isArray(newLiqs) ? [...newLiqs, ...prev] : [newLiqs, ...prev];
-            return list.slice(0, 50);
-        });
-    }, []);
-
-    const updateCvd = useCallback((symbol: string, data: RealTimeCVD) => {
-        setCvd(prev => ({
-            ...prev,
-            [symbol]: data
-        }));
-    }, []);
+    const manager = SocketManager.getInstance();
+    const [state, setState] = useState<SocketState>(manager['state']); // Access initial state safely
 
     useEffect(() => {
-        const connect = () => {
-            const socket = new WebSocket(WS_URL);
-            wsRef.current = socket;
+        const unsubscribe = manager.subscribe(setState);
+        return unsubscribe;
+    }, []);
 
-            socket.onopen = () => {
-                console.log('[Frontend] Connected to Backend WS');
-                setIsConnected(true);
+    const subscribe = useCallback((symbols: string[]) => {
+        manager.send({ type: 'subscribe', symbols });
+    }, []);
 
-                // Heartbeat to keep connection alive
-                if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-                pingIntervalRef.current = setInterval(() => {
-                    if (socket.readyState === WebSocket.OPEN) {
-                        socket.send(JSON.stringify({ type: 'ping' }));
-                    }
-                }, 30000); // 30s Heartbeat
-            };
-
-            socket.onclose = () => {
-                console.log('[Frontend] Disconnected from Backend WS');
-                if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-                setIsConnected(false);
-                // Reconnect strategy
-                setTimeout(connect, 3000);
-            };
-
-            socket.onmessage = (event) => {
-                try {
-                    const msg = JSON.parse(event.data);
-
-                    switch (msg.type) {
-                        case 'snapshot':
-                            // Initial Load
-                            if (msg.data.liquidations) addLiquidations(msg.data.liquidations);
-                            if (msg.data.cvd) setCvd(msg.data.cvd);
-                            if (msg.data.ai_opportunities) setAIOpportunities(msg.data.ai_opportunities);
-                            break;
-
-                        case 'liquidation':
-                            addLiquidations(msg.data);
-                            break;
-
-                        case 'cvd_update':
-                            updateCvd(msg.data.symbol, {
-                                delta: msg.data.delta,
-                                volume: msg.data.volume,
-                                price: msg.data.price
-                            });
-                            break;
-
-                        case 'ai_opportunities':
-                            if (Array.isArray(msg.data)) setAIOpportunities(msg.data);
-                            break;
-
-                        case 'active_trades': // NEW LISTENER
-                            if (Array.isArray(msg.data)) setActiveTrades(msg.data);
-                            break;
-
-                        case 'system_status': // NEW LISTENER
-                            console.log('[Frontend] System Status Update:', msg.data);
-                            setSystemStatus(msg.data);
-                            break;
-
-                        case 'golden_ticket_alert':
-                            setAIOpportunities(msg.data);
-                            break;
-
-                        case 'pong':
-                            // Alive check
-                            break;
-                    }
-                } catch (e) {
-                    console.error('WS Parse Error:', e);
-                }
-            };
-        };
-
-        connect();
-
-        return () => {
-            if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-            wsRef.current?.close();
-        };
-    }, [addLiquidations, updateCvd]);
-
-    const subscribe = (symbols: string[]) => {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({
-                type: 'subscribe',
-                symbols
-            }));
-        }
-    };
-
-    return {
-        isConnected,
-        liquidations,
-        cvd,
-        aiOpportunities,
-        activeTrades, // EXPORTED
-        systemStatus, // EXPORTED
-        subscribe
-    };
+    return { ...state, subscribe };
 };

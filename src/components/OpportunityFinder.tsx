@@ -28,7 +28,8 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     const [cacheAge, setCacheAge] = useState<string | null>(null);
 
     // NEW: Socket Integration (Replaces local scanner)
-    const { aiOpportunities, isConnected } = useSocket();
+    // Single hook call gets all necessary state (Singleton safe)
+    const { aiOpportunities, isConnected, systemStatus } = useSocket();
 
     // Sync socket data to local state for display
     useEffect(() => {
@@ -71,7 +72,6 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
     });
 
     // 3. NUCLEAR SHIELD UI (System Paused)
-    const { systemStatus } = useSocket();
     const isNuclearPaused = systemStatus?.status === 'PAUSED';
 
     // If Paused, we can either return a blocked view or just show a big banner.
