@@ -156,39 +156,19 @@ const fetchCoinCapMarkets = async (mode: 'volume' | 'memes'): Promise<MarketData
 };
 
 // General subscription for the main scanner
+import { BinanceStreamManager } from './binanceStreamManager';
+
+// ... (existing imports)
+
 export const subscribeToLivePrices = (marketData: MarketData[], callback: (data: Record<string, number>) => void) => {
     const sampleId = marketData[0]?.id || '';
     const isBinance = sampleId === sampleId.toUpperCase() && sampleId.includes('USDT');
 
     if (isBinance) {
-        // "Safe Mode" WebSocket:
-        // 1. Strict Filter: Only connect to Top liquid assets to prevent "Invalid Symbol" disconnects
-        // 2. Stream Cap: Max 10 streams to prevent URL overflow (Binance Limit)
-        const MAX_STREAMS = 10;
-        const SAFE_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOGEUSDT', 'DOTUSDT', 'LINKUSDT', 'TRXUSDT', 'MATICUSDT', 'LTCUSDT', 'UNIUSDT', 'ATOMUSDT', 'SUIUSDT', 'NEARUSDT', 'APTUSDT'];
-
-        const validStreams = marketData
-            .map(m => m.id)
-            .filter(id => SAFE_SYMBOLS.includes(id))
-            .slice(0, MAX_STREAMS)
-            .map(id => id.toLowerCase() + '@miniTicker');
-
-        // Use Binance Mainnet endpoint (more robust)
-        const MAIN_WS = 'wss://stream.binance.com:9443/stream?streams=';
-        const url = `${MAIN_WS}${validStreams.join('/')}`;
-        const ws = new WebSocket(url);
-
-        ws.onmessage = (event) => {
-            try {
-                const msg = JSON.parse(event.data);
-                if (msg.data && msg.data.s && msg.data.c) {
-                    const displaySymbol = msg.data.s.replace('USDT', '/USDT');
-                    callback({ [displaySymbol]: parseFloat(msg.data.c) });
-                }
-            } catch (e) { }
-        };
-        return () => ws.close();
+        // Use the new Robust Singleton Manager
+        return BinanceStreamManager.getInstance().subscribe(marketData, callback);
     } else {
+        // CoinCap fallback remains simple (less prone to blocking, but could be upgraded later)
         const ids = marketData.map(m => m.id).join(',');
         const ws = new WebSocket(`wss://ws.coincap.io/prices?assets=${ids}`);
         ws.onmessage = (event) => {
