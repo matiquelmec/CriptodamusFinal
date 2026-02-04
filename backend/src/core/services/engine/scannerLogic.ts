@@ -47,6 +47,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
     // 0.5 NUCLEAR SHIELD (Tournament Defense)
     let shield = { isActive: false, isImminent: false, reason: 'OK' };
+    let globalWarning: string | null = null; // NEW: Global Warning for all signals
+
     if (TradingConfig.TOURNAMENT_MODE) {
         try {
             const { EconomicService } = await import('../economicService');
@@ -54,15 +56,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
             if (shield.isActive) {
                 if (shield.isImminent) {
                     console.warn(`[Scanner] ☢️ SNIPER SHIELD ACTIVE (IMMINENT EVENT): ${shield.reason}`);
-                    throw new Error(`SNIPER_SHIELD_PAUSE: ${shield.reason}`);
+                    // throw new Error(`SNIPER_SHIELD_PAUSE: ${shield.reason}`); // DISABLED: Inform Only
+                    globalWarning = `⚠️ **ALERTA NUCLEAR:** Evento Inminente -> ${shield.reason}`;
                 } else {
                     console.warn(`[Scanner] ☢️ NUCLEAR DAY DETECTED: ${shield.reason}`);
-                    console.log(`[Scanner] Institutional Sniper mode: Operational until 60m before event.`);
+                    globalWarning = `⚠️ **PRECAUCIÓN:** ${shield.reason}`;
+                    // console.log(`[Scanner] Institutional Sniper mode: Operational until 60m before event.`);
                 }
             }
         } catch (e: any) {
-            // If it's a pause error, rethrow it to stop the pipeline
-            if (e.message && (e.message.includes('NUCLEAR_WINTER') || e.message.includes('SNIPER_SHIELD'))) throw e;
             console.warn("[Scanner] Shield check failed (Fail Open):", e);
             shield = { isActive: false, isImminent: false, reason: 'Calendar offline (fail-open mode)' };
         }
@@ -112,21 +114,23 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
         isPreFlight: true,
         globalData,
         newsSentiment: globalSentiment,
-        economicShield: shield // Pass the actual shield with potentially 'Calendar offline' reason
+        economicShield: shield
     });
 
     if (integrityReport.status === 'HALTED') {
-        console.error(`[Scanner] 🚨 SYSTEM HALTED: Data Integrity Compromised. sources: ${integrityReport.missingCritical.join(', ')}`);
+        const msg = `Integrity HALTED: ${integrityReport.missingCritical.join(', ')}`;
+        console.error(`[Scanner] 🚨 ${msg}`);
+        // throw new Error("DATA_INTEGRITY_SHIELD_TRIGGERED"); // DISABLED: Inform Only
+        globalWarning = globalWarning ? `${globalWarning} | 🚨 ${msg}` : `🚨 **INTEGRIDAD CRÍTICA:** ${msg}`;
 
-        // Log critical alert to database
+        // Log critical alert to database but continue
         const { systemAlerts } = await import('../../../services/systemAlertService');
         await systemAlerts.logCritical(
-            `Data Integrity Shield Triggered: ${integrityReport.missingCritical.join(', ')}`,
+            `Data Integrity Shield Triggered (Non-Blocking): ${integrityReport.missingCritical.join(', ')}`,
             { score: integrityReport.score, staleSources: integrityReport.staleSources }
         );
-
-        throw new Error("DATA_INTEGRITY_SHIELD_TRIGGERED");
     }
+
 
     if (integrityReport.status === 'DEGRADED' || integrityReport.status === 'DOUBTFUL') {
         const warningMsg = `Integrity ${integrityReport.status}: Score ${integrityReport.score.toFixed(2)}. Stale: ${integrityReport.staleSources.join(', ')}`;
@@ -320,6 +324,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // Initial Score (Capped to baseline level before boosts)
                 let totalScore = Math.min(100, (baseScoreResult.score + (strategyResult.primaryStrategy?.score || 0) + strategyResult.scoreBoost) / 1.5);
                 let reasoning = [...baseScoreResult.reasoning, ...strategyResult.details];
+
+                // INJECT GLOBAL WARNING (If Exists)
+                if (globalWarning) {
+                    reasoning.unshift(globalWarning); // Put it at the TOP
+                }
 
                 // --- PHASE 0: MARKET SESSION & TIME AWARENESS ---
                 const sessionState = MarketSession.analyzeSession();
@@ -731,6 +740,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                             tp3: dcaPlan.takeProfits.tp3.price
                         },
                         technicalReasoning: reasoning.join(". "),
+                        reasoning: reasoning, // NEW: Pass array for Telegram Service
                         dcaPlan: dcaPlan,
                         metrics: {
                             adx: indicators.adx || 0,
