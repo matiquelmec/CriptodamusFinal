@@ -50,14 +50,19 @@ const SystemLogs: React.FC = () => {
     // Update health when WebSocket status changes
     useEffect(() => {
         if (systemStatus && health) {
-            setHealth((prev: any) => ({
-                ...prev,
-                status: systemStatus.status || prev?.status || 'BOOTING',
-                reason: systemStatus.message || systemStatus.reason || prev?.reason,
-                engineStatus: systemStatus.status
-            }));
+            // Prevent Infinite Loop: Only update if status implies a change
+            if (health.status !== systemStatus.status ||
+                (systemStatus.message && health.reason !== systemStatus.message)) {
+
+                setHealth((prev: any) => ({
+                    ...prev,
+                    status: systemStatus.status || prev?.status || 'BOOTING',
+                    reason: systemStatus.message || systemStatus.reason || prev?.reason,
+                    engineStatus: systemStatus.status
+                }));
+            }
         }
-    }, [systemStatus, health]); // Fix: Add health dependency to handle race condition
+    }, [systemStatus, health]); // health dependency is now safe due to the check above
 
     const getSeverityIcon = (severity: string) => {
         switch (severity) {
