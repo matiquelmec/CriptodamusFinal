@@ -17,18 +17,7 @@ export class SmartFetch {
     private static lastRequestTime = new Map<string, number>();
     private static MIN_DELAY_PER_DOMAIN = 2000;
 
-    // CIRCUIT BREAKER STATE
-    // CIRCUIT BREAKER STATE
-    private static isBifrostHealthy = true;
-    private static bifrostCooldownUntil = 0;
-    private static CIRCUIT_BREAKER_COOLDOWN_MS = 1 * 60 * 1000; // Reduced to 1 Minute for faster recovery
 
-    // Force Reset (Useful on startup)
-    public static resetCircuitBreaker() {
-        this.isBifrostHealthy = true;
-        this.bifrostCooldownUntil = 0;
-        console.log("[SmartFetch] 🔄 Circuit Breaker Manually Reset.");
-    }
 
     // IPv4 Agent
     private static ipv4Agent = new https.Agent({ family: 4 });
@@ -55,35 +44,9 @@ export class SmartFetch {
 
     private static async executeRequest<T>(url: string, config: AxiosRequestConfig, retriesLeft: number): Promise<T> {
         const domain = new URL(url).hostname;
-        const isBinance = domain.includes('binance.com') || domain.includes('binance.vision');
-        const isForex = domain.includes('forexfactory.com');
-        const isBifrostTarget = process.env.BIFROST_URL && url.includes(process.env.BIFROST_URL);
 
         // 2. Rate Limiting
         await this.enforceRateLimit(domain);
-
-        // 2.5 PROACTIVE PROXY SELECTION (Smart Routing)
-        // Check Circuit Breaker Status
-        if (!this.isBifrostHealthy && Date.now() > this.bifrostCooldownUntil) {
-            console.log(`[SmartFetch] 🔄 Circuit Breaker Cooldown Over. Retrying Bifrost...`);
-            this.isBifrostHealthy = true; // Half-Open State (Try once)
-        }
-
-        const useProxy = (isBinance || isForex) &&
-            process.env.BIFROST_URL &&
-            !isBifrostTarget &&
-            !config.headers?.['X-Bypass-Proxy'] &&
-            this.isBifrostHealthy;
-
-        // DEBUG PROXY DECISION
-        if (isBinance && !useProxy) {
-            console.warn(`[SmartFetch] ⚠️ Skipping Proxy for Binance! Reason: BIFROST_URL=${!!process.env.BIFROST_URL}, Target=${isBifrostTarget}, Healthy=${this.isBifrostHealthy}`);
-        }
-
-        if (useProxy) {
-            const bifrostUrl = `${process.env.BIFROST_URL}/api?target=${encodeURIComponent(url)}`;
-            return this.executeRequest<T>(bifrostUrl, config, retriesLeft);
-        }
 
         // --- STEALTH HEADERS ---
         const stealthHeaders = {
@@ -103,36 +66,6 @@ export class SmartFetch {
             this.lastRequestTime.set(domain, Date.now());
             return response.data;
         } catch (error: any) {
-
-            // --- FAILOVER LOGIC ---
-
-            // A. Handle Proxy Failure (Trip Circuit Breaker)
-            if (isBifrostTarget) {
-                const status = error.response?.status;
-                if (status === 404 || status >= 500 || error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-                    console.warn(`[SmartFetch] 🛡️ Proxy Failed (${status || error.code}). Tripping Circuit Breaker (5m)...`);
-
-                    // Trip the Breaker
-                    this.isBifrostHealthy = false;
-                    this.bifrostCooldownUntil = Date.now() + this.CIRCUIT_BREAKER_COOLDOWN_MS;
-
-                    // Fallback to Direct Connection immediately
-                    try {
-                        const originalUrl = decodeURIComponent(url.split('target=')[1]);
-                        return this.executeRequest<T>(originalUrl, {
-                            ...config,
-                            headers: { ...config.headers, 'X-Bypass-Proxy': 'true' }
-                        }, retriesLeft);
-                    } catch (e) { }
-                }
-            }
-
-            // B. Handle 403 Forbidden (Rotate TO Proxy if healthy)
-            if (error.response?.status === 403 && !isBifrostTarget && process.env.BIFROST_URL && this.isBifrostHealthy) {
-                console.log(`⚠️ [SmartFetch] 403 Challenge at ${domain}. Rotating to Bifrost Proxy...`);
-                const bifrostUrl = `${process.env.BIFROST_URL}/api?target=${encodeURIComponent(url)}`;
-                return this.executeRequest<T>(bifrostUrl, config, retriesLeft - 1);
-            }
 
             // C. General Retry Logic
             const shouldRetry = this.isRetryableError(error) && retriesLeft > 0;
