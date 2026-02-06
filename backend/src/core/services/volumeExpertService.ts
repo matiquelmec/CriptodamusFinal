@@ -134,11 +134,9 @@ export async function getDerivativesData(symbol: string): Promise<DerivativesDat
             };
         }
 
-        // Ratio blocked by CORS, defaulting to Neutral (1.0)
-        let buySellRatio = 1.0;
-        // if (ratioRes && Array.isArray(ratioRes) && ratioRes.length > 0) {
-        //     buySellRatio = parseFloat(ratioRes[0].longShortRatio);
-        // }
+        // Fetch LS Ratio from CEXConnector (Institutional High Fidelity)
+        const lsData = await CEXConnector.getGlobalLongShortRatio(fSymbol);
+        let buySellRatio = lsData.ratio !== null ? lsData.ratio : 1.0;
 
         const openInterest = parseFloat((oiData as any).openInterest); // En monedas
         const fundingRate = parseFloat((fundingData as any).lastFundingRate);
@@ -489,9 +487,10 @@ export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: Vo
         const pressure = totalAskVol > 0 ? totalBidVol / totalAskVol : 1.0;
 
         enriched.liquidity.orderBook = {
-            bidWall: bestBid ? { price: bestBid.price, volume: bestBid.volume, strength: bestBid.strength === 'WHALE' ? 100 : 80 } : undefined,
-            askWall: bestAsk ? { price: bestAsk.price, volume: bestAsk.volume, strength: bestAsk.strength === 'WHALE' ? 100 : 80 } : undefined,
-            buyingPressure: pressure
+            bidWall: bestBid ? { price: bestBid.price, volume: bestBid.volume, strength: bestBid.strength === 'WHALE' ? 100 : 80 } as any : null,
+            askWall: bestAsk ? { price: bestAsk.price, volume: bestAsk.volume, strength: bestAsk.strength === 'WHALE' ? 100 : 80 } as any : null,
+            buyingPressure: pressure,
+            spoofing: false // Placeholder for future spoofing detection
         };
 
         // Adjust Market Depth Score based on Wall presence

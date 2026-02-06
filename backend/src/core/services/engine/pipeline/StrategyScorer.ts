@@ -225,6 +225,28 @@ export class StrategyScorer {
             }
         }
 
+        // --- NEW: THE PSYCHOLOGIST'S HACK (Contrarian Rule) ---
+        const psychConfig = (TradingConfig as any).psychologistHack;
+        if (psychConfig?.enabled && indicators.volumeExpert?.derivatives?.buySellRatio && indicators.ema20) {
+            const lsRatio = indicators.volumeExpert.derivatives.buySellRatio;
+            const price = indicators.price;
+            const ema20 = indicators.ema20;
+            const distToEma20 = Math.abs(price - ema20) / ema20;
+
+            if (distToEma20 < psychConfig.ema20_proximity_threshold) {
+                const isOverLong = lsRatio > psychConfig.retail_long_extreme;
+                const isOverShort = lsRatio < psychConfig.retail_short_extreme;
+
+                if (isLong && isOverLong) {
+                    score -= psychConfig.penalty_score;
+                    reasoning.push(`🚨 Psicólogo: Minoristas sobre-apalancados en LONG en zona de valor. Esperando Stop Run (-${psychConfig.penalty_score})`);
+                } else if (isShort && isOverShort) {
+                    score -= psychConfig.penalty_score;
+                    reasoning.push(`🚨 Psicólogo: Minoristas sobre-apalancados en SHORT en zona de valor. Esperando Stop Run (-${psychConfig.penalty_score})`);
+                }
+            }
+        }
+
         // 12. Meta-Scoring (Dynamic Weights based on Global Performance)
         if (strategies.length > 0) {
             let combinedMultiplier = 1.0;

@@ -87,6 +87,14 @@ export const TradingConfig = {
             min_tp_distance_percent: 0.8, // 0.8% Min Target (Avoids Cent-Wins)
             max_sl_distance_percent: 2.5, // 2.5% Max Cap (Avoids Ruin)
             smart_sl_structure_lookback: true // Enable Structural Invalidation Search
+        },
+        // NEW: "The Psychologist's Hack" (Contrarian Sentiment Rule)
+        psychologistHack: {
+            enabled: true,
+            ema20_proximity_threshold: 0.003, // 0.3% distance from EMA 20
+            retail_long_extreme: 2.5,        // LS Ratio > 2.5 (Wait for Long Flush)
+            retail_short_extreme: 0.4,       // LS Ratio < 0.4 (Wait for Short Squeeze)
+            penalty_score: 45                // Penalty to prevent entry during retail euphoria
         }
     },
 

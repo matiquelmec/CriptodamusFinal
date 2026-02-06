@@ -130,4 +130,29 @@ export class CEXConnector {
             return { value: null, integrity: 0 };
         }
     }
+
+    /**
+     * Specialized: Fetch Global Long/Short Account Ratio
+     * Helps identify retail sentiment extremes (Contrarian Rule).
+     */
+    public static async getGlobalLongShortRatio(symbol: string): Promise<{ ratio: number | null; integrity: number }> {
+        const normalizedSymbol = symbol.replace('/', '').toUpperCase();
+
+        try {
+            // Using /futures/data/ endpoint which is public but tends to be geoblocked
+            const url = `${this.BINANCE_FUTURES_URL}/futures/data/globalLongShortAccountRatio?symbol=${normalizedSymbol}&period=5m&limit=1`;
+            const data = await SmartFetch.get<any[]>(url);
+
+            if (data && Array.isArray(data) && data.length > 0) {
+                return {
+                    ratio: parseFloat(data[0].longShortRatio),
+                    integrity: 1.0
+                };
+            }
+        } catch (e: any) {
+            console.error(`[CEXConnector] Failed to fetch Global LS Ratio: ${e.message}`);
+        }
+
+        return { ratio: null, integrity: 0 };
+    }
 }
