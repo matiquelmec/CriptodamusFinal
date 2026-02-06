@@ -18,9 +18,17 @@ export class SmartFetch {
     private static MIN_DELAY_PER_DOMAIN = 2000;
 
     // CIRCUIT BREAKER STATE
+    // CIRCUIT BREAKER STATE
     private static isBifrostHealthy = true;
     private static bifrostCooldownUntil = 0;
-    private static CIRCUIT_BREAKER_COOLDOWN_MS = 5 * 60 * 1000; // 5 Minutes
+    private static CIRCUIT_BREAKER_COOLDOWN_MS = 1 * 60 * 1000; // Reduced to 1 Minute for faster recovery
+
+    // Force Reset (Useful on startup)
+    public static resetCircuitBreaker() {
+        this.isBifrostHealthy = true;
+        this.bifrostCooldownUntil = 0;
+        console.log("[SmartFetch] 🔄 Circuit Breaker Manually Reset.");
+    }
 
     // IPv4 Agent
     private static ipv4Agent = new https.Agent({ family: 4 });
@@ -66,6 +74,11 @@ export class SmartFetch {
             !isBifrostTarget &&
             !config.headers?.['X-Bypass-Proxy'] &&
             this.isBifrostHealthy;
+
+        // DEBUG PROXY DECISION
+        if (isBinance && !useProxy) {
+            console.warn(`[SmartFetch] ⚠️ Skipping Proxy for Binance! Reason: BIFROST_URL=${!!process.env.BIFROST_URL}, Target=${isBifrostTarget}, Healthy=${this.isBifrostHealthy}`);
+        }
 
         if (useProxy) {
             const bifrostUrl = `${process.env.BIFROST_URL}/api?target=${encodeURIComponent(url)}`;
