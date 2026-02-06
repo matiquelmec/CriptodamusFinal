@@ -199,30 +199,30 @@ export const TradingConfig = {
         },
         // NEW: Advisor Specific Weights (Normalized to Scoring Impact)
         advisor: {
-            hidden_divergence: 15, // Was 5
-            sfp_sweep: 20,         // Was 4 (Institutional Signal)
-            order_block_retest: 15, // Was 2.5
-            volume_absorption: 20, // Was 4
-            fractal_alignment: 10, // Was 3
-            z_score_extreme: 20, // Was 4 (Mean Reversion Power)
-            pinball_setup: 15, // Was 3.5
+            hidden_divergence: 15,
+            sfp_sweep: 25,         // BOOST: Institutional Trap (+5)
+            order_block_retest: 20, // BOOST: Key Level (+5)
+            volume_absorption: 25, // BOOST: Hidden Accumulation (+5)
+            fractal_alignment: 10,
+            z_score_extreme: 20,
+            pinball_setup: 15,
             // NEW CENTRALIZED WEIGHTS
             trend_ema200: 10,
             trend_slope_boost: 5,
             trend_ema_cross: 5,
-            vwap_position: 10,
+            vwap_position: 15, // BOOST: Institutional Baseline (+5)
             momentum_macd: 5,
             momentum_rsi: 5,
             stoch_cross_extreme: 10,
             bollinger_zone: 5,
-            contrarian_sentiment: 15,
-            liquidation_cascade: 20, // Was 4
+            contrarian_sentiment: 10, // REDUCE: News < Real Money (-5)
+            liquidation_cascade: 25, // BOOST: Fuel (+5)
             fvg_proximity: 10,
             value_area_deviation: 10,
-            harmonic_pattern: 20, // Was 4
+            harmonic_pattern: 20,
             rsi_trendline_break: 15,
             funding_rate_extreme: 15,
-            coinbase_premium: 20, // Was 4 (Institutional Trust)
+            coinbase_premium: 25, // BOOST: Institutional Trust (+5)
             ttm_squeeze_bias: 10,
             fractal_tie_breaker: 10
         }

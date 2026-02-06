@@ -387,13 +387,13 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                             if (isHighConviction) {
                                 console.log(`[Smart MTF] PENALTY ${coin.symbol}: Counter-trend ${signalSide} has high conviction. Proceeding.`);
-                                // totalScore -= 25; // REMOVED: No Penalty
-                                reasoning.push(`⚠️ Counter-Trend: Macro trend mismatch (High Conviction)`);
+                                totalScore -= 15; // Caution Penalty even if High Conviction
+                                reasoning.push(`⚠️ Counter-Trend: Macro trend mismatch (-15)`);
                             } else {
                                 console.log(`[Smart MTF] WARNING ${coin.symbol}: ${signalSide} signal against 4H Trend alignment.`);
-                                // totalScore -= 40; // REMOVED: No Penalty
-                                reasoning.push(`⛔ Contra-Tendencia MACRO peligrosa`);
-                                // return; // DISABLED: Allow user to see it
+                                totalScore -= 40; // SEVERE Penalty
+                                reasoning.push(`⛔ Contra-Tendencia MACRO peligrosa (-40)`);
+                                // return; // DISABLED: Allow user to see it but with terrible score
                             }
                         }
                     }

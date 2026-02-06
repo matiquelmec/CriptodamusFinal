@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { TradingConfig } from '../core/config/tradingConfig';
 
 // ESM Polyfill for loading .env if needed (though usually loaded at app start)
 const __filename = fileURLToPath(import.meta.url);
@@ -20,12 +21,10 @@ interface BinanceLiquidationPayload {
     T: number; // Time
 }
 
-interface BinanceAggTradePayload {
+interface BinanceDepthPayload {
     s: string; // Symbol
-    p: string; // Price
-    q: string; // Quantity
-    m: boolean; // Is Buyer Maker (true = Sell Order, false = Buy Order)
-    T: number; // Timestamp
+    b: [string, string][]; // Bids [Price, Qty]
+    a: [string, string][]; // Asks [Price, Qty]
 }
 
 interface StreamMessage {
@@ -36,6 +35,8 @@ interface StreamMessage {
     q?: string; // Qty
     m?: boolean; // Buyer Maker
     T?: number; // Time
+    b?: [string, string][]; // For depthUpdate (Snapshot in this case)
+    a?: [string, string][];
 }
 
 export interface LiquidationEvent {
@@ -54,11 +55,10 @@ export interface CVDState {
     symbol?: string; // Added optional symbol for events
 }
 
-interface CVDPayload {
-    symbol: string;
-    volume: number;
-    delta: number;
-    price: number;
+export interface OrderBookState {
+    bids: { price: number; qty: number; total: number }[];
+    asks: { price: number; qty: number; total: number }[];
+    lastUpdate: number;
 }
 
 type SubscriberCallback = (event: { type: string; data: any }) => void;
@@ -66,6 +66,7 @@ type SubscriberCallback = (event: { type: string; data: any }) => void;
 /**
  * Binance Stream Service (TypeScript Edition)
  * Manages real-time connections to Binance Futures
+ * UPGRADE: Now supports Depth (Order Book) for God Mode Lite
  */
 class BinanceStreamService {
     private baseUrl: string;
@@ -78,6 +79,7 @@ class BinanceStreamService {
     // Data Buffers
     private recentLiquidations: LiquidationEvent[];
     private cvdState: Record<string, CVDState>;
+    private depthState: Record<string, OrderBookState>; // RAM Cache for Order Books
 
     // Real Data Accumulator (Supabase Integration)
     private supabase: any = null;
@@ -94,10 +96,21 @@ class BinanceStreamService {
 
         this.recentLiquidations = [];
         this.cvdState = {};
+        this.depthState = {};
 
-        // Initial streams: Global Liquidations + BTC AggTrade (Benchmark)
+        // 1. Core Streams: Liquidations
         this.addStream('!forceOrder@arr');
-        this.addStream('btcusdt@aggTrade');
+
+        // 2. Dynamic Subscription: Elite 9 Assets (Depth & AggTrade)
+        const eliteAssets = TradingConfig.assets.tournament_list; // e.g. ['BTCUSDT', 'ETHUSDT'...]
+
+        console.log(`[BinanceStream] Configuring streams for ${eliteAssets.length} Elite Assets...`);
+
+        eliteAssets.forEach(symbol => {
+            const s = symbol.toLowerCase();
+            this.addStream(`${s}@aggTrade`);          // For CVD
+            this.addStream(`${s}@depth20@100ms`);     // For God Mode (Order Book Walls)
+        });
 
         // Init Database Connection
         const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -117,7 +130,6 @@ class BinanceStreamService {
 
     private async flushLiquidations() {
         if (!this.supabase) {
-            // console.log('⚠️ [BinanceStream] Cannot flush: Supabase not initialized.');
             return;
         }
         if (this.liquidationBuffer.length === 0) return;
@@ -228,11 +240,6 @@ class BinanceStreamService {
     private handleMessage(msg: StreamMessage): void {
         // DEBUG: Active
         // console.log('RAW MSG:', msg.e);
-        if (!msg.e) {
-            // console.log('🔍 [BinanceStream] System Msg:', JSON.stringify(msg));
-        } else {
-            // console.log('📨 [BinanceStream] Event:', msg.e);
-        }
 
         // 1. Force Order (Liquidation)
         if (msg.e === 'forceOrder' && msg.o) {
@@ -244,8 +251,6 @@ class BinanceStreamService {
                 time: msg.o.T,
                 usdValue: parseFloat(msg.o.ap) * parseFloat(msg.o.q)
             };
-
-            // console.log(`🔥 [BinanceStream] LIQ Detected: ${liq.symbol} ${liq.side} | $${liq.usdValue.toFixed(0)}`);
 
             // Keep last 50 liquidations (RAM cache for immediate UI)
             this.recentLiquidations.unshift(liq);
@@ -271,15 +276,40 @@ class BinanceStreamService {
                 this.cvdState[symbol] = { delta: 0, volume: 0, price };
             }
 
-            // Delta Logic: BuyerMaker means the aggressor was a SELLER. 
-            // So if m=true, Delta decreases. If m=false, Delta increases.
             const deltaChange = isBuyerMaker ? -qty : qty;
-
             this.cvdState[symbol].delta += deltaChange;
             this.cvdState[symbol].volume += qty;
             this.cvdState[symbol].price = price;
 
             this.notifySubscribers({ type: 'cvd_update', data: { symbol, ...this.cvdState[symbol] } });
+        }
+
+        // 3. Depth Update (Order Book Walls) - GOD MODE LITE
+        else if (msg.e === 'depthUpdate' && msg.s && msg.b && msg.a) {
+            const symbol = msg.s;
+            // Process Depth Snapshot (Simple replacement for depth20)
+            // In depth20 stream, 'b' and 'a' are the full top 20 levels.
+
+            const bids = msg.b.map(level => {
+                const p = parseFloat(level[0]);
+                const q = parseFloat(level[1]);
+                return { price: p, qty: q, total: p * q };
+            });
+
+            const asks = msg.a.map(level => {
+                const p = parseFloat(level[0]);
+                const q = parseFloat(level[1]);
+                return { price: p, qty: q, total: p * q };
+            });
+
+            this.depthState[symbol] = {
+                bids,
+                asks,
+                lastUpdate: Date.now()
+            };
+
+            // Retransmit to UI (Heatmap)
+            this.notifySubscribers({ type: 'depth_update', data: { symbol, bids, asks } });
         }
     }
 
@@ -296,8 +326,33 @@ class BinanceStreamService {
     public getSnapshot() {
         return {
             liquidations: this.recentLiquidations,
-            cvd: this.cvdState
+            cvd: this.cvdState,
+            // Don't send full depth here to avoid massive payload, client should wait for stream
         };
+    }
+
+    // --- GOD MODE UTILS ---
+
+    public getDepth(symbol: string) {
+        return this.depthState[symbol] || null;
+    }
+
+    /**
+     * Get the "Wall Strength" for a symbol.
+     * Returns the volume ratio of Bid Walls vs Ask Walls.
+     * > 1.0 = Bullish Support Wall
+     * < 1.0 = Bearish Resistance Wall
+     */
+    public getWallStrength(symbol: string): number {
+        const book = this.depthState[symbol];
+        if (!book) return 1.0; // Neutral
+
+        // Sum top 10 levels volume
+        const bidVol = book.bids.slice(0, 10).reduce((acc, b) => acc + b.total, 0);
+        const askVol = book.asks.slice(0, 10).reduce((acc, a) => acc + a.total, 0);
+
+        if (askVol === 0) return 2.0; // Max Bullish (No sellers)
+        return bidVol / askVol;
     }
 }
 

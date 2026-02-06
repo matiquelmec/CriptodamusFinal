@@ -5,6 +5,7 @@ import Scanner from '../components/Scanner';
 import TradingViewWidget from '../components/TradingViewWidget';
 import AIChat from '../components/AIChat';
 import SystemAlertsBanner from '../components/SystemAlertsBanner';
+import OrderBookHeatmap from '../components/OrderBookHeatmap';
 
 const Dashboard: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -43,13 +44,22 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Right Column: Chart & AI */}
+                {/* Right Column: Chart & AI & Order Book */}
                 {/* Mobile: Stacked below scanner. Desktop: Right column */}
                 <div className="flex flex-col gap-4 flex-1 lg:h-full lg:w-3/4 min-h-[800px] lg:min-h-0">
-                    {/* Top: Chart */}
-                    <div className="h-[65vh] min-h-[550px] lg:h-auto lg:flex-[3] w-full lg:min-h-0">
-                        <TradingViewWidget symbol={selectedSymbol} />
+                    {/* Top: Chart & Order Book */}
+                    <div className="flex flex-col lg:flex-row h-[65vh] min-h-[550px] lg:h-auto lg:flex-[3] w-full lg:min-h-0 gap-4">
+                        {/* Chart (75%) */}
+                        <div className="flex-[3] h-full rounded-xl overflow-hidden border border-slate-700/50 shadow-sm">
+                            <TradingViewWidget symbol={selectedSymbol} />
+                        </div>
+
+                        {/* Order Book (25%) - God Mode Lite */}
+                        <div className="hidden lg:block lg:flex-1 h-full rounded-xl overflow-hidden shadow-sm">
+                            <OrderBookHeatmap symbol={selectedSymbol} />
+                        </div>
                     </div>
+
                     {/* Bottom: AI */}
                     {/* FIX: Added mb-24 on mobile to force scroll space above the fixed bottom nav */}
                     <div className="h-[500px] lg:flex-[2] w-full lg:min-h-0 mb-24 lg:mb-0">

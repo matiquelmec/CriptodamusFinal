@@ -458,6 +458,8 @@ export async function getExpertVolumeAnalysis(symbol: string): Promise<VolumeExp
     };
 }
 
+import { orderBookService, LiquidityWall } from '../../services/OrderBookService'; // Correct Path
+
 /**
  * ENRICHMENT: Add Depth & Liquidation Analysis (Heavy, Call only on High Score)
  */
@@ -467,21 +469,49 @@ export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: Vo
     // 1. Calculate Liquidation Clusters (Pure Math, Cheap)
     enriched.liquidity.liquidationClusters = estimateLiquidationClusters(highs, lows, currentPrice);
 
-    // 2. Fetch Orderbook (Heavy I/O)
-    // Map Symbol correctly (USDT only for now)
+    // 2. Fetch Orderbook (Priority: Real-Time RAM > REST API)
     const normalizedSymbol = symbol.replace('/', '').toUpperCase();
-    const orderBook = await fetchOrderBook(normalizedSymbol);
 
-    if (orderBook) {
-        enriched.liquidity.orderBook = analyzeOrderBook(orderBook.bids, orderBook.asks, currentPrice);
+    // TRY REAL-TIME SERVICE FIRST (God Mode Lite Integration)
+    const liveWalls = orderBookService.getWalls(normalizedSymbol);
+
+    if (liveWalls && liveWalls.length > 0) {
+        // Convert live walls to VolumeExpert format
+        const bidWalls = liveWalls.filter(w => w.type === 'BID').sort((a, b) => b.volume - a.volume);
+        const askWalls = liveWalls.filter(w => w.type === 'ASK').sort((a, b) => b.volume - a.volume);
+
+        const bestBid = bidWalls.length > 0 ? bidWalls[0] : null;
+        const bestAsk = askWalls.length > 0 ? askWalls[0] : null;
+
+        // Calculate pressure based on total wall volume
+        const totalBidVol = bidWalls.reduce((sum, w) => sum + w.volume, 0);
+        const totalAskVol = askWalls.reduce((sum, w) => sum + w.volume, 0);
+        const pressure = totalAskVol > 0 ? totalBidVol / totalAskVol : 1.0;
+
+        enriched.liquidity.orderBook = {
+            bidWall: bestBid ? { price: bestBid.price, volume: bestBid.volume, strength: bestBid.strength === 'WHALE' ? 100 : 80 } : undefined,
+            askWall: bestAsk ? { price: bestAsk.price, volume: bestAsk.volume, strength: bestAsk.strength === 'WHALE' ? 100 : 80 } : undefined,
+            buyingPressure: pressure
+        };
 
         // Adjust Market Depth Score based on Wall presence
         if (enriched.liquidity.orderBook.bidWall && enriched.liquidity.orderBook.bidWall.strength > 50) {
-            enriched.liquidity.marketDepthScore = Math.min(100, enriched.liquidity.marketDepthScore + 10);
+            enriched.liquidity.marketDepthScore = Math.min(100, enriched.liquidity.marketDepthScore + 15); // Boost for Live Data
         }
 
-        // NEW: Save historical snapshot (Wall Historian)
+        // Historian Save
         saveSnapshot(normalizedSymbol, enriched.liquidity.orderBook);
+
+    } else {
+        // FALLBACK: SLOW REST API
+        const orderBook = await fetchOrderBook(normalizedSymbol);
+        if (orderBook) {
+            enriched.liquidity.orderBook = analyzeOrderBook(orderBook.bids, orderBook.asks, currentPrice);
+            if (enriched.liquidity.orderBook.bidWall && enriched.liquidity.orderBook.bidWall.strength > 50) {
+                enriched.liquidity.marketDepthScore = Math.min(100, enriched.liquidity.marketDepthScore + 10);
+            }
+            saveSnapshot(normalizedSymbol, enriched.liquidity.orderBook);
+        }
     }
 
     return enriched;

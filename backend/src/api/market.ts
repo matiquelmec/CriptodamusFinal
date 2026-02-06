@@ -226,4 +226,26 @@ function calculateRSI(prices: number[], period: number = 14): number {
     return 100 - (100 / (1 + rs));
 }
 
+// --- GOD MODE ENDPOINTS ---
+
+import { binanceStream } from '../services/binanceStream';
+
+/**
+ * GET /api/v1/market/depth/:symbol
+ * Get Order Book Snapshot (God Mode Lite)
+ */
+router.get('/depth/:symbol', async (req: Request, res: Response) => {
+    try {
+        const symbol = req.params.symbol.toLowerCase();
+        // @ts-ignore - waiting for binanceStream update
+        const depth = binanceStream.getDepth(symbol);
+        if (!depth) {
+            return res.status(404).json({ error: 'No depth data. Stream might be initializing.' });
+        }
+        res.json(depth);
+    } catch (e) {
+        res.status(500).json({ error: 'Depth fetch error' });
+    }
+});
+
 export default router;
