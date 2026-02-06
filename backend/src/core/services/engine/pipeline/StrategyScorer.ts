@@ -132,6 +132,40 @@ export class StrategyScorer {
         }
 
         // 7. Liquidity Magnets (Side-Correct)
+        if (indicators.volumeExpert?.liquidity?.orderBook) {
+            const ob = indicators.volumeExpert.liquidity.orderBook;
+
+            // Support Wall (Long Confirmation)
+            if (isLong && ob.bidWall) {
+                const dist = Math.abs(indicators.price - ob.bidWall.price) / indicators.price;
+                if (dist < 0.01) {
+                    let boost = 10;
+                    let desc = `🧱 Support Wall: ${ob.bidWall.volume.toFixed(2)} BTC`;
+
+                    if (ob.bidWall.strength >= 80) { boost += 10; desc += ' (Whale)'; }
+                    if (ob.bidWall.isPersistent) { boost += 20; desc += ' (ARCHITECT APPROVED 🏛️)'; }
+
+                    score += boost;
+                    reasoning.push(`✅ ${desc} (+${boost})`);
+                }
+            }
+
+            // Resistance Wall (Short Confirmation)
+            else if (isShort && ob.askWall) {
+                const dist = Math.abs(indicators.price - ob.askWall.price) / indicators.price;
+                if (dist < 0.01) {
+                    let boost = 10;
+                    let desc = `🧱 Resistance Wall: ${ob.askWall.volume.toFixed(2)} BTC`;
+
+                    if (ob.askWall.strength >= 80) { boost += 10; desc += ' (Whale)'; }
+                    if (ob.askWall.isPersistent) { boost += 20; desc += ' (ARCHITECT APPROVED 🏛️)'; }
+
+                    score += boost;
+                    reasoning.push(`✅ ${desc} (+${boost})`);
+                }
+            }
+        }
+
         if (indicators.volumeExpert?.liquidity?.liquidationClusters) {
             const liqs = indicators.volumeExpert.liquidity.liquidationClusters;
             // For a LONG, we want to see SHORT liquidations above us (Magnets).

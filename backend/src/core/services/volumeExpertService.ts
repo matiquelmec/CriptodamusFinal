@@ -461,6 +461,39 @@ import { orderBookService, LiquidityWall } from '../../services/OrderBookService
 /**
  * ENRICHMENT: Add Depth & Liquidation Analysis (Heavy, Call only on High Score)
  */
+const PERSISTENCE_WINDOW_HOURS = 4;
+const PRICE_TOLERANCE_PERCENT = 0.005; // 0.5% tolerance for same wall
+
+/**
+ * NEW: GOD MODE VALIDATION
+ * Checks if a wall has existed in the DB for > X hours
+ */
+async function verifyWallPersistence(symbol: string, price: number, side: 'BID' | 'ASK'): Promise<boolean> {
+    if (!supabase) return false;
+
+    const startTime = Date.now() - (PERSISTENCE_WINDOW_HOURS * 60 * 60 * 1000);
+    const minPrice = price * (1 - PRICE_TOLERANCE_PERCENT);
+    const maxPrice = price * (1 + PRICE_TOLERANCE_PERCENT);
+
+    const { data, error } = await supabase
+        .from('orderbook_snapshots')
+        .select('timestamp')
+        .eq('symbol', symbol)
+        .eq('side', side)
+        .gte('wall_price', minPrice) // Filter by price range
+        .lte('wall_price', maxPrice)
+        .gte('timestamp', startTime)
+        .order('timestamp', { ascending: true }) // Oldest first
+        .limit(1);
+
+    if (error || !data || data.length === 0) return false;
+
+    // Check if the oldest record found is indeed old enough (close to start window)
+    const oldestTimestamp = data[0].timestamp;
+    // If oldest timestamp is older than (Now - 3 hours), we consider it persistent enough
+    return oldestTimestamp <= (Date.now() - (3 * 60 * 60 * 1000));
+}
+
 export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: VolumeExpertAnalysis, highs: number[], lows: number[], currentPrice: number): Promise<VolumeExpertAnalysis> {
     const enriched = { ...currentAnalysis };
 
@@ -473,6 +506,10 @@ export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: Vo
     // TRY REAL-TIME SERVICE FIRST (God Mode Lite Integration)
     const liveWalls = orderBookService.getWalls(normalizedSymbol);
 
+    let finalBidWall: any = null;
+    let finalAskWall: any = null;
+    let pressure = 1.0;
+
     if (liveWalls && liveWalls.length > 0) {
         // Convert live walls to VolumeExpert format
         const bidWalls = liveWalls.filter(w => w.type === 'BID').sort((a, b) => b.volume - a.volume);
@@ -484,34 +521,52 @@ export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: Vo
         // Calculate pressure based on total wall volume
         const totalBidVol = bidWalls.reduce((sum, w) => sum + w.volume, 0);
         const totalAskVol = askWalls.reduce((sum, w) => sum + w.volume, 0);
-        const pressure = totalAskVol > 0 ? totalBidVol / totalAskVol : 1.0;
+        pressure = totalAskVol > 0 ? totalBidVol / totalAskVol : 1.0;
 
-        enriched.liquidity.orderBook = {
-            bidWall: bestBid ? { price: bestBid.price, volume: bestBid.volume, strength: bestBid.strength === 'WHALE' ? 100 : 80 } as any : null,
-            askWall: bestAsk ? { price: bestAsk.price, volume: bestAsk.volume, strength: bestAsk.strength === 'WHALE' ? 100 : 80 } as any : null,
-            buyingPressure: pressure,
-            spoofing: false // Placeholder for future spoofing detection
-        };
+        finalBidWall = bestBid ? { price: bestBid.price, volume: bestBid.volume, strength: bestBid.strength === 'WHALE' ? 100 : 80 } as any : null;
+        finalAskWall = bestAsk ? { price: bestAsk.price, volume: bestAsk.volume, strength: bestAsk.strength === 'WHALE' ? 100 : 80 } as any : null;
 
-        // Adjust Market Depth Score based on Wall presence
-        if (enriched.liquidity.orderBook.bidWall && enriched.liquidity.orderBook.bidWall.strength > 50) {
-            enriched.liquidity.marketDepthScore = Math.min(100, enriched.liquidity.marketDepthScore + 15); // Boost for Live Data
-        }
-
-        // Historian Save
-        saveSnapshot(normalizedSymbol, enriched.liquidity.orderBook);
-
+        // Snapshots are saved automatically by OrderBookService? No, we save here if enriched.
     } else {
         // FALLBACK: SLOW REST API
         const orderBook = await fetchOrderBook(normalizedSymbol);
         if (orderBook) {
-            enriched.liquidity.orderBook = analyzeOrderBook(orderBook.bids, orderBook.asks, currentPrice);
-            if (enriched.liquidity.orderBook.bidWall && enriched.liquidity.orderBook.bidWall.strength > 50) {
-                enriched.liquidity.marketDepthScore = Math.min(100, enriched.liquidity.marketDepthScore + 10);
-            }
-            saveSnapshot(normalizedSymbol, enriched.liquidity.orderBook);
+            const analyzed = analyzeOrderBook(orderBook.bids, orderBook.asks, currentPrice);
+            finalBidWall = analyzed.bidWall;
+            finalAskWall = analyzed.askWall;
+            pressure = analyzed.buyingPressure;
         }
     }
+
+    // --- GOD MODE UPGRADE: Check Persistence ---
+    if (finalBidWall) {
+        const isPersistent = await verifyWallPersistence(normalizedSymbol, finalBidWall.price, 'BID');
+        finalBidWall.isPersistent = isPersistent;
+        if (isPersistent) {
+            finalBidWall.strength = 100; // Force Whale Status
+            enriched.liquidity.marketDepthScore = Math.min(100, enriched.liquidity.marketDepthScore + 20); // Bonus
+        }
+    }
+
+    if (finalAskWall) {
+        const isPersistent = await verifyWallPersistence(normalizedSymbol, finalAskWall.price, 'ASK');
+        finalAskWall.isPersistent = isPersistent;
+        if (isPersistent) {
+            finalAskWall.strength = 100; // Force Whale Status
+            enriched.liquidity.marketDepthScore = Math.min(100, enriched.liquidity.marketDepthScore + 20); // Bonus
+        }
+    }
+
+    enriched.liquidity.orderBook = {
+        bidWall: finalBidWall,
+        askWall: finalAskWall,
+        buyingPressure: pressure,
+        spoofing: false
+    };
+
+    // Save snapshot for future history (Write Logic)
+    if (finalBidWall && finalBidWall.strength > 50) saveSnapshot(normalizedSymbol, { bidWall: finalBidWall });
+    if (finalAskWall && finalAskWall.strength > 50) saveSnapshot(normalizedSymbol, { askWall: finalAskWall });
 
     return enriched;
 }

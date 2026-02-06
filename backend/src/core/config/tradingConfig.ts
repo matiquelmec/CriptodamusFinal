@@ -174,33 +174,33 @@ export const TradingConfig = {
 
     // --- SCORING MATRIX ---
     scoring: {
-        min_score_entry: 65, // ADJUSTED: Was 75. Lowered to 65 to allow solid Trend setups without "God Mode" requirement.
+        min_score_entry: 65,
         god_mode_threshold: 90,
         filters: { // NEW: Hard Filters
             min_adx: 20, // Avoid Chop
             min_volume_24h: 5000000 // $5M Liquidity Floor
         },
         weights: {
-            // Trend Following
-            ema_alignment_bullish: 15,
-            ema_alignment_bearish: 15,
+            // Trend Following (KING)
+            ema_alignment_bullish: 25, // UP from 15
+            ema_alignment_bearish: 25, // UP from 15
 
-            // Momentum
-            rsi_oversold: 10,
-            rsi_overbought: 10,
-            rsi_divergence: 20,
+            // Momentum (RETAIL NERF)
+            rsi_oversold: 5,   // DOWN from 10
+            rsi_overbought: 5, // DOWN from 10
+            rsi_divergence: 15, // DOWN from 20 (Strong but laggy)
 
-            // Volume / Institutional (BOOSTED)
-            volume_spike: 20,
-            order_block_retest: 20, // Institutional Pivot
-            liquidation_flutter: 20, // Fuel
-            cvd_divergence_boost: 25, // Smart Money Footprint
+            // Volume / Institutional (GOD MODE BUFFS)
+            volume_spike: 25, // UP from 20
+            order_block_retest: 25, // UP from 20
+            liquidation_flutter: 25, // UP from 20
+            cvd_divergence_boost: 30, // UP from 25
             ml_confidence_max: 30,
-            harmonic_pattern: 20, // NEW: Geometric Confluence
+            harmonic_pattern: 20,
 
             // Patterns
             chart_pattern_breakout: 15,
-            golden_ticket_pattern: 25,
+            golden_ticket_pattern: 30, // UP from 25
 
             // Strategic Overrides
             freeze_protocol_boost: 25
@@ -208,29 +208,29 @@ export const TradingConfig = {
         // NEW: Advisor Specific Weights (Normalized to Scoring Impact)
         advisor: {
             hidden_divergence: 15,
-            sfp_sweep: 25,         // BOOST: Institutional Trap (+5)
-            order_block_retest: 20, // BOOST: Key Level (+5)
-            volume_absorption: 25, // BOOST: Hidden Accumulation (+5)
+            sfp_sweep: 30,         // BOOST: Institutional Trap (+5)
+            order_block_retest: 25, // BOOST: Key Level (+5)
+            volume_absorption: 30, // BOOST: Hidden Accumulation (+5)
             fractal_alignment: 10,
             z_score_extreme: 20,
             pinball_setup: 15,
             // NEW CENTRALIZED WEIGHTS
-            trend_ema200: 10,
-            trend_slope_boost: 5,
+            trend_ema200: 15, // UP from 10
+            trend_slope_boost: 10, // UP from 5
             trend_ema_cross: 5,
-            vwap_position: 15, // BOOST: Institutional Baseline (+5)
-            momentum_macd: 5,
-            momentum_rsi: 5,
-            stoch_cross_extreme: 10,
+            vwap_position: 20, // BOOST: Institutional Baseline (+5)
+            momentum_macd: 4, // NERF from 5
+            momentum_rsi: 4,  // NERF from 5
+            stoch_cross_extreme: 5, // NERF from 10
             bollinger_zone: 5,
-            contrarian_sentiment: 10, // REDUCE: News < Real Money (-5)
-            liquidation_cascade: 25, // BOOST: Fuel (+5)
+            contrarian_sentiment: 10,
+            liquidation_cascade: 30, // BOOST: Fuel (+5)
             fvg_proximity: 10,
             value_area_deviation: 10,
             harmonic_pattern: 20,
             rsi_trendline_break: 15,
             funding_rate_extreme: 15,
-            coinbase_premium: 25, // BOOST: Institutional Trust (+5)
+            coinbase_premium: 30, // BOOST: Institutional Trust (+5)
             ttm_squeeze_bias: 10,
             fractal_tie_breaker: 10
         }

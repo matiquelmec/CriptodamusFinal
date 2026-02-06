@@ -176,8 +176,8 @@ export interface OrderBookLevel {
 }
 
 export interface OrderBookAnalysis {
-    bidWall: { price: number; volume: number; strength: number } | null;
-    askWall: { price: number; volume: number; strength: number } | null;
+    bidWall: { price: number; volume: number; strength: number; isPersistent: boolean } | null;
+    askWall: { price: number; volume: number; strength: number; isPersistent: boolean } | null;
     buyingPressure: number; // Bid/Ask Ratio
     spoofing: boolean; // Detected spoofing
 }
