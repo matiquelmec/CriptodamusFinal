@@ -324,7 +324,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 const baseScoreResult = StrategyScorer.score(coin.symbol, indicators, signalSide, coinSentiment, stratWeightsMap);
 
                 // Initial Score (Capped to baseline level before boosts)
-                let totalScore = Math.min(100, (baseScoreResult.score + (strategyResult.primaryStrategy?.score || 0) + strategyResult.scoreBoost) / 1.5);
+                let rawScore = (baseScoreResult.score + (strategyResult.primaryStrategy?.score || 0) + strategyResult.scoreBoost) / 1.5;
+                if (isNaN(rawScore)) rawScore = 0;
+                let totalScore = Math.min(100, rawScore);
                 let reasoning = [...baseScoreResult.reasoning, ...strategyResult.details];
 
                 // INJECT GLOBAL WARNING (If Exists)
@@ -929,7 +931,7 @@ function applyMacroFilters(
         if (goldStr > 2700 && signalSide === 'LONG') adjustedScore += 5; // Risk-off hedge
     }
 
-    return Math.round(adjustedScore);
+    return isNaN(adjustedScore) ? baseScore : Math.round(adjustedScore);
 }
 
 // --- HELPER: SMART ARCHITECT CHECK (MTF) ---

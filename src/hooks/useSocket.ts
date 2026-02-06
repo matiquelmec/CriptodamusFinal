@@ -117,7 +117,21 @@ class SocketManager {
     }
 
     private handleMessage(msg: any) {
+        // Dynamic Import to avoid side-effects in Class definition if possible, 
+        // but cleaner to just use the store instance directly since it's a singleton.
+        // We use import at top of file loop, but here valid too.
+
         switch (msg.type) {
+            case 'system_alert':
+                // AUTO-TOAST on Frontend
+                // We access the direct store API
+                import('../stores/useAppStore').then(({ useAppStore }) => {
+                    useAppStore.getState().addNotification({
+                        type: msg.data.severity === 'CRITICAL' ? 'error' : 'warning',
+                        message: `[SISTEMA] ${msg.data.message}`
+                    });
+                });
+                break;
             case 'snapshot':
                 this.updateState({
                     liquidations: msg.data.liquidations ? [...msg.data.liquidations, ...this.state.liquidations].slice(0, 50) : this.state.liquidations,

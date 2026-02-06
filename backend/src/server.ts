@@ -352,6 +352,22 @@ scannerService.on('golden_ticket', (opportunities: AIOpportunity[]) => {
     });
 });
 
+// 4. Critical System Alerts (Real-time Toasts)
+import { systemAlerts } from './services/systemAlertService';
+systemAlerts.on('system_alert', (alert: any) => {
+    const msg = JSON.stringify({
+        type: 'system_alert',
+        data: alert
+    });
+    console.log(`🚨 [WS] Broadcasting Critical Alert: ${alert.message}`);
+
+    clients.forEach((client) => {
+        if (client.ws.readyState === WebSocket.OPEN) {
+            client.ws.send(msg);
+        }
+    });
+});
+
 
 // WS Connection Logic
 wss.on('connection', (ws, req) => {

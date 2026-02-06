@@ -64,15 +64,15 @@ export const fetchGlobalMarketData = async (): Promise<GlobalMarketData> => {
         } catch (e) { }
 
         // Formula: 111.3 / Price (Inverse relationship)
-        const dxyProxy = 111.3 / eurUsdt;
+        const dxyProxy = eurUsdt !== 0 ? 111.3 / eurUsdt : 100;
 
         const finalData: GlobalMarketData = {
-            btcDominance: btcD,
-            usdtDominance: usdtD,
-            goldPrice,
-            dxyIndex: dxyProxy,
+            btcDominance: isNaN(btcD) ? 0 : btcD,
+            usdtDominance: isNaN(usdtD) ? 0 : usdtD,
+            goldPrice: isNaN(goldPrice) ? 0 : goldPrice,
+            dxyIndex: isNaN(dxyProxy) ? 0 : dxyProxy,
             timestamp: now,
-            isDataValid: true
+            isDataValid: !isNaN(btcD) && btcD > 0 // BTC Dominance is critical for Macro
         };
 
         cache = finalData;

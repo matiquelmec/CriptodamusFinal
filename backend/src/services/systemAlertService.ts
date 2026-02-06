@@ -11,10 +11,14 @@ const supabase = createClient(
 export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type AlertCategory = 'DATA_INTEGRITY' | 'API_FAILURE' | 'CALCULATION_ERROR' | 'HALT_PROTOCOL';
 
-export class SystemAlertService {
+import { EventEmitter } from 'events';
+
+export class SystemAlertService extends EventEmitter {
     private static instance: SystemAlertService;
 
-    private constructor() { }
+    private constructor() {
+        super();
+    }
 
     public static getInstance(): SystemAlertService {
         if (!SystemAlertService.instance) {
@@ -77,6 +81,21 @@ export class SystemAlertService {
         } catch (err: any) {
             console.error(`[SystemAlert] Failed to persist alert to Supabase: ${err.message}`);
         }
+
+        // 3. TELEGRAM PUSH & WEBSOCKET BROADCAST (For High Severity)
+        if (severity === 'CRITICAL' || severity === 'HIGH') {
+            // Lazy load to avoid circular dependency
+            const { telegramService } = await import('./telegramService');
+            await telegramService.sendSystemAlert(severity, message, JSON.stringify(metadata));
+
+            // WebSocket Broadcast
+            this.emit('system_alert', {
+                severity,
+                category,
+                message,
+                timestamp: new Date().toISOString()
+            });
+        }
     }
 
     /**
@@ -103,6 +122,7 @@ export class SystemAlertService {
             metadata: { error: error?.message || error }
         });
     }
+
 }
 
 export const systemAlerts = SystemAlertService.getInstance();

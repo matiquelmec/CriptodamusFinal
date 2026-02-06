@@ -53,15 +53,33 @@ export class DataIntegrityGuard {
             }
         }
 
-        // 2. GLOBAL MARKET INTEGRITY (Gold, DXY)
-        // If Gold Price is 0 or 2000 (default fallback), it's doubtful.
-        if (context.globalData.goldPrice === 0 || context.globalData.goldPrice === 2000) {
-            score -= 0.15;
-            staleSources.push('GLOBAL_GOLD_DATA');
+        // 2. GLOBAL MARKET INTEGRITY (Strict Type Validation)
+        // Guard against NaN/undefined which previously passed silently
+        const gData = context.globalData;
+
+        if (
+            typeof gData.btcDominance !== 'number' ||
+            isNaN(gData.btcDominance) ||
+            gData.btcDominance === 0 ||
+            gData.btcDominance === 55 // Check for hardcoded default
+        ) {
+            score -= 0.3; // Significant penalty
+            staleSources.push('GLOBAL_BTC_DOMINANCE_INVALID');
         }
-        if (context.globalData.btcDominance === 55) { // Hardcoded default check
-            score -= 0.1;
-            staleSources.push('GLOBAL_DOMINANCE_DATA');
+
+        if (
+            typeof gData.goldPrice !== 'number' ||
+            isNaN(gData.goldPrice) ||
+            gData.goldPrice === 0 ||
+            gData.goldPrice === 2000
+        ) {
+            score -= 0.15;
+            staleSources.push('GLOBAL_GOLD_DATA_INVALID');
+        }
+
+        if (gData.isDataValid === false) {
+            score -= 0.2;
+            staleSources.push('GLOBAL_DATA_FLAGGED_INVALID');
         }
 
         // 3. ECONOMIC INTEGRITY (ROBUST / DEGRADED LOGIC)

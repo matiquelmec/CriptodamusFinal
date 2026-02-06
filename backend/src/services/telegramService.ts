@@ -47,8 +47,27 @@ export class TelegramService {
     }
 
     /**
-     * Smart Filtering Logic
+     * CRITICAL SYSTEM ALERT (Push Notification)
      */
+    public async sendSystemAlert(severity: 'HIGH' | 'CRITICAL', message: string, details?: string) {
+        if (!this.bot || !TradingConfig.telegram.chatId) return;
+
+        const icon = severity === 'CRITICAL' ? '🚨' : '⚠️';
+        const title = severity === 'CRITICAL' ? 'HALLO CRÍTICO DE SISTEMA' : 'ADVERTENCIA DE SISTEMA';
+
+        let msg = `${icon} <b>${title}</b>\n\n`;
+        msg += `<b>Mensaje:</b> ${message}\n`;
+        if (details) msg += `<i>Detalle: ${details}</i>\n`;
+        msg += `\ntimestamp: ${new Date().toISOString()}`;
+
+        try {
+            await this.bot.sendMessage(TradingConfig.telegram.chatId, msg, { parse_mode: 'HTML' });
+            console.log(`[Telegram] Sent SYSTEM ALERT: ${message}`);
+        } catch (error: any) {
+            console.error(`[Telegram] Failed to send System Alert: ${error.message}`);
+        }
+    }
+
     private shouldAlert(opp: AIOpportunity): boolean {
         // 1. Minimum Score Filter
         const minScore = TradingConfig.telegram.minScoreAlert || 75;
