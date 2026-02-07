@@ -25,19 +25,7 @@ interface MarketPrice {
     message?: string;
 }
 
-interface SignalData {
-    symbol: string;
-    signal: 'BUY' | 'SELL' | 'NEUTRAL';
-    strength: number;
-    price: number;
-    indicators: {
-        rsi: number;
-        sma20: number;
-        sma50: number;
-        volume: number;
-    };
-    timestamp: number;
-}
+
 
 interface TrendingCoin {
     symbol: string;
@@ -204,27 +192,7 @@ router.get('/trending', async (req: Request, res: Response) => {
     }
 });
 
-// Función helper para calcular RSI
-function calculateRSI(prices: number[], period: number = 14): number {
-    if (prices.length < period + 1) return 50;
 
-    let gains = 0;
-    let losses = 0;
-
-    for (let i = 1; i <= period; i++) {
-        const diff = prices[i] - prices[i - 1];
-        if (diff > 0) gains += diff;
-        else losses -= diff;
-    }
-
-    const avgGain = gains / period;
-    const avgLoss = losses / period;
-
-    if (avgLoss === 0) return 100;
-
-    const rs = avgGain / avgLoss;
-    return 100 - (100 / (1 + rs));
-}
 
 // --- GOD MODE ENDPOINTS ---
 

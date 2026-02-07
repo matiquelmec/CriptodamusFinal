@@ -471,6 +471,22 @@ app.post('/api/admin/retrain', (req, res) => {
     res.json({ status: 'ok', message: 'Training process spawned in background' });
 });
 
+app.post('/api/admin/reload-brain', async (req, res) => {
+    const secret = req.headers['x-admin-secret'];
+    if (secret !== process.env.ADMIN_SECRET) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+        const { reloadModel } = await import('./ml/inference');
+        reloadModel();
+        console.log("⚡ [Admin] Manual Hot-Reload Triggered.");
+        res.json({ status: 'ok', message: 'Cerebro recargado en memoria.' });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Iniciar servidor
 server.listen(PORT, async () => {
     console.log(`

@@ -68,9 +68,20 @@ export function runTrainingJob() {
         console.log(`[AI Trainer]:`, msg);
     });
 
-    child.on('exit', (code) => {
+    child.on('exit', async (code) => {
         if (code === 0) {
             console.log('✅ [Scheduler] Entrenamiento Finalizado Exitosamente.');
+
+            // HOT-RELOAD LOGIC
+            // Importamos dinámicamente para no causar dependencias circulares al inicio
+            try {
+                const { reloadModel } = await import('./ml/inference');
+                reloadModel();
+                console.log('🔄 [Scheduler] Cerebro recargado automáticamente.');
+            } catch (e) {
+                console.error('⚠️ [Scheduler] Falló Hot-Reload:', e);
+            }
+
         } else {
             console.error(`❌ [Scheduler] Entrenamiento falló con código ${code}`);
         }

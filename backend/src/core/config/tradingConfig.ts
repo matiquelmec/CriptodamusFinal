@@ -183,6 +183,7 @@ export const TradingConfig = {
     // --- SCORING MATRIX ---
     scoring: {
         min_score_entry: 65,
+        min_score_to_list: 65, // Fix: Ensure visible threshold matches entry threshold
         god_mode_threshold: 90,
         filters: { // NEW: Hard Filters
             min_adx: 20, // Avoid Chop
