@@ -615,6 +615,29 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                             reasoning.push(`📰 Sentiment: Aligned with News (${sScore.toFixed(2)})`);
                         }
                     }
+
+                    // --- STAGE 4.9b: NARRATIVE DIVERGENCE (Phase 12 Elite) ---
+                    // "The Lie Detector": News says X, Price + Volume says Y.
+                    const { checkNarrativeDivergence } = await import('./NarrativeEngine');
+                    const narrative = checkNarrativeDivergence(globalSentiment, indicators);
+
+                    if (narrative.score !== 0) {
+                        // Apply Modifier (Positive for Absorption, Negative for Distribution)
+                        // If Absorption (+25) and we are LONG -> Boost
+                        // If Distribution (-25) and we are LONG -> Penalty
+
+                        if (signalSide === 'LONG') {
+                            totalScore += narrative.score;
+                        } else {
+                            // Short logic: If Distribution (-25 implied Bearish), Short should be boosted?
+                            // wait, narrative.score is directional "goodness for BULLS".
+                            // Absorption (+25) is Bullish. Distribution (-25) is Bearish.
+                            // So Short Score = totalScore - narrative.score (if narrative is -25, we add 25 to short)
+                            totalScore -= narrative.score;
+                        }
+
+                        if (narrative.reason) reasoning.push(narrative.reason);
+                    }
                 }
 
                 // --- STAGE 4.10: ADVANCED RISK SIZING (Kelly & Volatility) ---
