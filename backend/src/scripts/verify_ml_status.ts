@@ -2,13 +2,13 @@
 import * as tf from '@tensorflow/tfjs';
 import * as fs from 'fs';
 import path from 'path';
-import { predictNextMove } from './src/ml/inference';
+import { predictNextMove } from '../ml/inference';
 
 async function verify() {
     console.log("🔍 Verificando estado del Cerebro ML...");
 
     // 1. Check Artifacts
-    const modelPath = path.join(process.cwd(), 'cols_brain_v1');
+    const modelPath = path.join(process.cwd(), 'src', 'ml', 'temp_model');
     const modelFile = path.join(modelPath, 'model.json');
     const weightsFile = path.join(modelPath, 'weights.bin');
 

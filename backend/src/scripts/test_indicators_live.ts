@@ -1,6 +1,6 @@
-import { fetchCandles } from '../src/core/services/api/binanceApi';
-import { IndicatorCalculator } from '../src/core/services/engine/pipeline/IndicatorCalculator';
-import { systemAlerts } from '../src/services/systemAlertService';
+import { fetchCandles } from '../core/services/api/binanceApi';
+import { IndicatorCalculator } from '../core/services/engine/pipeline/IndicatorCalculator';
+import { systemAlerts } from '../services/systemAlertService';
 import dotenv from 'dotenv';
 
 dotenv.config();

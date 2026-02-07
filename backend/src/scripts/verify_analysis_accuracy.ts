@@ -1,10 +1,10 @@
 
-import { fetchCandles } from './src/core/services/api/binanceApi';
-import { IndicatorCalculator } from './src/core/services/engine/pipeline/IndicatorCalculator';
-import { AdvancedAnalyzer } from './src/core/services/engine/pipeline/AdvancedAnalyzer';
-import { StrategyRunner } from './src/core/services/engine/pipeline/StrategyRunner';
-import { StrategyScorer } from './src/core/services/engine/pipeline/StrategyScorer';
-import { getMarketRisk } from './src/core/services/engine/riskEngine';
+import { fetchCandles } from '../core/services/api/binanceApi';
+import { IndicatorCalculator } from '../core/services/engine/pipeline/IndicatorCalculator';
+import { AdvancedAnalyzer } from '../core/services/engine/pipeline/AdvancedAnalyzer';
+import { StrategyRunner } from '../core/services/engine/pipeline/StrategyRunner';
+import { StrategyScorer } from '../core/services/engine/pipeline/StrategyScorer';
+import { getMarketRisk } from '../core/services/engine/riskEngine';
 
 process.on('unhandledRejection', (reason, p) => {
     console.error('Unhandled Rejection at:', p, 'reason:', reason);

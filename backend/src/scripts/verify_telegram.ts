@@ -1,5 +1,5 @@
-import { telegramService } from './src/services/telegramService';
-import { AIOpportunity } from './src/core/types';
+import { telegramService } from '../services/telegramService';
+import { AIOpportunity } from '../core/types';
 
 // Mock High Quality Opportunity
 const mockOpp: AIOpportunity = {
