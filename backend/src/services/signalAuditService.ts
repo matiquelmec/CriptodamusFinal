@@ -650,6 +650,58 @@ class SignalAuditService extends EventEmitter {
 
     // ... (syncUpdates, checkExpirations, getRecentSignals, getPerformanceStats remain mostly same but updated headers)
 
+    // --- KERNEL SECURITY UTILS ---
+
+    /**
+     * Calculates the Net PnL (Realized + Floating) for the current UTC day.
+     * Used by RiskEngine to enforce the -5% Daily Stop Loss.
+     */
+    public async getDailyAccountPnL(initialBalance: number = 1000): Promise<number> {
+        if (!this.supabase) return 0;
+
+        const startOfDay = new Date();
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const startTimestamp = startOfDay.getTime();
+
+        // 1. Get closed trades for today
+        const { data: closed } = await this.supabase
+            .from('signals_audit')
+            .select('pnl_percent')
+            .gte('closed_at', startTimestamp); // trades closed today
+
+        let dailyRealizedPnL = 0;
+        if (closed) {
+            dailyRealizedPnL = closed.reduce((acc: number, curr: any) => acc + (curr.pnl_percent || 0), 0);
+        }
+
+        // 2. Get floating PnL from active trades
+        // We iterate memory activeSignals for speed
+        const floatingPnL = this.activeSignals.reduce((acc: number, curr: any) => acc + (curr.pnl_percent || 0), 0);
+
+        // Total Daily PnL
+        return dailyRealizedPnL + floatingPnL;
+    }
+
+    public async getTotalAccumulatedPnL(): Promise<number> {
+        if (!this.supabase) return 0;
+
+        // Sum of ALL closed trades forever
+        const { data: allClosed } = await this.supabase
+            .from('signals_audit')
+            .select('pnl_percent')
+            .not('closed_at', 'is', null);
+
+        let totalRealized = 0;
+        if (allClosed) {
+            totalRealized = allClosed.reduce((acc: number, curr: any) => acc + (curr.pnl_percent || 0), 0);
+        }
+
+        // Add current floating
+        const floatingPnL = this.activeSignals.reduce((acc: number, curr: any) => acc + (curr.pnl_percent || 0), 0);
+
+        return totalRealized + floatingPnL;
+    }
+
     private async syncUpdates(updates: any[]) {
         for (const upd of updates) {
             // PRO INTEGRITY GATE: Force WIN to LOSS if net PnL is negative (prevents accounting errors in UI)

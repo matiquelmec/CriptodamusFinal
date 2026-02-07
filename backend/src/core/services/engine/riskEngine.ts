@@ -174,3 +174,35 @@ export const calculatePortfolioCorrelation = async (
 
     return { score: finalScore, recommendation };
 };
+
+// --- KERNEL SECURITY (THE SAFETY NET) ---
+export const checkKernelSecurity = (
+    dailyPnLPercent: number,
+    marketRisk: MarketRisk
+): { status: 'OK' | 'HALTED'; reason: string | null } => {
+
+    const config = TradingConfig.kernel;
+
+    // 1. EQUITY CURVE PROTECTION (Daily Stop Loss)
+    // If PnL is below -5% (e.g. -6%), we HALT.
+    if (dailyPnLPercent <= -config.max_daily_loss_percent) {
+        return {
+            status: 'HALTED',
+            reason: `🛑 EQUITY PROTECTION: Daily Drawdown (${dailyPnLPercent.toFixed(2)}%) exceeds limit (-${config.max_daily_loss_percent}%). Trading Paused for 24h.`
+        };
+    }
+
+    // 2. ANTI-BLACK SWAN (Volatility Kill Switch)
+    // If Risk Type is VOLATILITY or MANIPULATION and Level is HIGH
+    if (marketRisk.level === 'HIGH' && (marketRisk.riskType === 'VOLATILITY' || marketRisk.riskType === 'MANIPULATION')) {
+        // Double check volatility multiplier logic if we want strict 300% or just trust getMarketRisk 'HIGH'
+        // getMarketRisk already uses > avgRange * 3 for HIGH VOLATILITY.
+        // So we trust the flag.
+        return {
+            status: 'HALTED',
+            reason: `🦢 BLACK SWAN DETECTED: ${marketRisk.note} (Volatility/Manipulation Spike). Systems protected.`
+        };
+    }
+
+    return { status: 'OK', reason: null };
+};

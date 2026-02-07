@@ -104,13 +104,13 @@ export class StrategyScorer {
             }
         }
 
-        // 5. Mean Reversion (Z-Score)
+        // 5. Mean Reversion (Z-Score) - "The Therapist"
         if (isLong && indicators.zScore < -2) {
             score += TradingConfig.scoring.advisor.z_score_extreme;
-            reasoning.push(`📉 Z-Score Extreme Oversold: Prime for Bounce (+${TradingConfig.scoring.advisor.z_score_extreme})`);
+            reasoning.push(`🧘 Terapia de Pánico (Z-Score < -2): El mercado está irracionalmente sobrevendido. Entrando con frialdad. (+${TradingConfig.scoring.advisor.z_score_extreme})`);
         } else if (isShort && indicators.zScore > 2) {
             score += TradingConfig.scoring.advisor.z_score_extreme;
-            reasoning.push(`📈 Z-Score Extreme Overbought: Prime for Rejection (+${TradingConfig.scoring.advisor.z_score_extreme})`);
+            reasoning.push(`🧘 Terapia de Euforia (Z-Score > 2): El mercado está irracionalmente sobrecomprado. Pinchando la burbuja. (+${TradingConfig.scoring.advisor.z_score_extreme})`);
         }
 
         // 6. Institutional Flow (CVD)

@@ -59,6 +59,14 @@ export const TradingConfig = {
         }
     },
 
+    // --- KERNEL SECURITY (THE SAFETY NET) ---
+    kernel: {
+        max_daily_loss_percent: 5.0,        // -5% Daily Stop Loss (Hard Lockout)
+        volatility_shutdown_multiplier: 3.0, // 3x Average Volatility = Black Swan (Kill Switch)
+        profit_skimming_threshold: 10.0,    // +10% Total PnL = Harvest Alert
+        max_consecutive_losses: 4           // Psychological Stop (Optional)
+    },
+
     // --- RISK ENGINES ---
     risk: {
         degraded_mode_penalty: 0.5, // NEW: Cut size by 50% if News Blind (Degraded Mode)
