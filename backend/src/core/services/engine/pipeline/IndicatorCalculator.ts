@@ -111,6 +111,12 @@ export class IndicatorCalculator {
                 rsiDivergence = { type: 'BEARISH', strength: 0.8, description: 'RSI Bearish Divergence' } as any;
             }
 
+            // FIX 1.4: Validate price for NaN/Infinity BEFORE creating indicators
+            const price = closes[closes.length - 1];
+            if (!price || isNaN(price) || !isFinite(price)) {
+                throw new Error(`INVALID_PRICE: price=${price} (NaN or Infinity detected)`);
+            }
+
             // 6. ORDER FLOW (CVD) & STRUCTURE
             const cvd = calculateCVD(volumes, takerBuyVolumes);
             const cvdDivergence = detectCVDDivergence(closes, cvd, lows, highs);
@@ -118,7 +124,7 @@ export class IndicatorCalculator {
 
             const finalIndicators: TechnicalIndicators = {
                 symbol,
-                price: closes[closes.length - 1],
+                price, // Already validated above
                 // --- Basic ---
                 rsi,
                 adx,
@@ -180,7 +186,8 @@ export class IndicatorCalculator {
                 rsiDivergence,
 
                 // --- Analysis Meta ---
-                rvol: calculateRVOL(volumes, 20),
+                // FIX 1.4: Cap RVOL to max 10x to prevent Infinity
+                rvol: Math.min(10, calculateRVOL(volumes, 20)),
                 rsiFreeze: calculateRSI(closes, 9),
                 stochRsi,
                 technicalReasoning: "Calculated via IndicatorCalculator",
