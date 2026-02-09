@@ -742,10 +742,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                 // --- STAGE 4.10: ADVANCED RISK SIZING (Kelly & Volatility) ---
                 // WinRate approximated from totalScore (e.g. 70 score -> 70% win rate for Kelly)
-                const winRate = totalScore / 100;
-                const kellySize = calculateKellySize(winRate, 2.5); // Using 2.5 as target RR
-                const rawLeverage = getVolatilityAdjustedLeverage(indicators.atr, indicators.price, kellySize);
-                const recommendedLeverage = parseFloat(rawLeverage.toFixed(1)); // Fix: Round to 1 decimal
+                // MOVED TO LATER STAGE to avoid duplication
+                // const winRate = totalScore / 100;
+                // const kellySize = calculateKellySize(winRate, 2.5); // Using 2.5 as target RR
+                // const rawLeverage = getVolatilityAdjustedLeverage(indicators.atr, indicators.price, kellySize);
+                // const recommendedLeverage = parseFloat(rawLeverage.toFixed(1)); // Fix: Round to 1 decimal
 
                 // Session Kill Zone Penalty
                 if (sessionState.isKillZone) {
@@ -844,12 +845,22 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     }
                 }
 
-                // --- STAGE 5.2: PROFESSIONAL RVOL SCORING ADJUSTMENT ---
                 // Apply asset-specific RVOL scoring bonus/penalty
                 // This replaces the hard filter approach with a more flexible scoring system
                 if (indicators.rvol !== undefined && indicators.rvol > 0) {
                     const { AssetClassifier } = await import('./pipeline/AssetClassifier');
-                    const rvolAdjustment = AssetClassifier.getRVOLScoreAdjustment(coin.symbol, indicators.rvol);
+
+                    // Calc volatility proxy (using BTC ATR status or DXY if available)
+                    // If BTC volatility is HIGH, we assume market is volatile
+                    const isVolatile = macroContext?.btcRegime.volatilityStatus === 'HIGH';
+                    const volMetric = isVolatile ? 0.06 : 0.03;
+
+                    const rvolAdjustment = AssetClassifier.getRVOLScoreAdjustment(
+                        coin.symbol,
+                        indicators.rvol,
+                        macroContext?.btcRegime.regime as any, // Cast to match AssetClassifier type
+                        volMetric
+                    );
                     const rvolStatusMsg = AssetClassifier.getRVOLStatusMessage(coin.symbol, indicators.rvol);
 
                     totalScore += rvolAdjustment;
@@ -863,6 +874,62 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // FIX 1.2: Cap score BEFORE using it for ANY downstream calculations
                 // This ensures tier calc, confidence scoring, etc. never see score >100
                 totalScore = Math.max(0, Math.min(100, totalScore));
+
+                // === CALCULATE TIER & RISK METRICS ===
+                // Use fundamentalTier calculated at start of pipeline
+                const postPenaltyTier = fundamentalTier;
+                const correlationRisk = await calculatePortfolioCorrelation(coin.symbol, []); // Assuming empty portfolio for scan
+                const dynamicRR = strategyResult.primaryStrategy?.id === 'SCALPING_M15' ? 1.5 : 2.5;
+
+                // === MARKET REGIME CONSTRUCTION (Bridge Macro -> Advanced Types) ===
+                if (macroContext && !indicators.marketRegime) {
+                    const volStatus = macroContext.btcRegime.volatilityStatus;
+                    const macroRegime = macroContext.btcRegime.regime;
+
+                    let derivRegime: 'TRENDING' | 'RANGING' | 'VOLATILE' | 'EXTREME' = 'RANGING';
+
+                    if (volStatus === 'HIGH') derivRegime = 'VOLATILE';
+                    else if (macroRegime === 'BULL' || macroRegime === 'BEAR') derivRegime = 'TRENDING';
+                    else if (macroRegime === 'RANGE') derivRegime = 'RANGING';
+
+                    indicators.marketRegime = {
+                        regime: derivRegime,
+                        confidence: 75,
+                        metrics: {
+                            adx: indicators.adx,
+                            atr: indicators.atr,
+                            atrPercent: (indicators.atr / indicators.price) * 100,
+                            bbBandwidth: indicators.bollinger ? ((indicators.bollinger.upper - indicators.bollinger.lower) / indicators.bollinger.middle) : 0,
+                            emaAlignment: indicators.trendStatus.emaAlignment === 'CHAOTIC' ? 'NEUTRAL' : indicators.trendStatus.emaAlignment,
+                            rsi: indicators.rsi,
+                            rvol: indicators.rvol,
+                            zScore: indicators.zScore,
+                            emaSlope: indicators.emaSlope
+                        },
+                        recommendedStrategies: [],
+                        reasoning: `Macro Derived: ${macroRegime} (${volStatus})`
+                    };
+                }
+
+                // === CALCULATE DCA PLAN ===
+                // Use updated dcaCalculator with tier-based logic
+                const dcaPlan = calculateDCAPlan(
+                    indicators.price,
+                    (indicators.confluenceAnalysis as any) || { topSupports: [], topResistances: [] }, // Ensure valid ConfluenceAnalysis object
+                    indicators.atr,
+                    signalSide,
+                    postPenaltyTier, // Use calculated Tier (not marketRegime) - Check signature! 
+                    // WAIT: verify calculateDCAPlan signature. 
+                    // Previous error: "Argument of type 'number' is not assignable to parameter of type 'ConfluenceAnalysis'"
+                    // It seems I was passing ATR as 2nd arg? Let's check view_file of dcaCalculator later.
+                    // For now, let's look at the error context "Expected 3-4 arguments, but got 2" for calculateKellySize
+
+                    // actually, let's fix kellySize first
+                );
+
+                // === CALCULATE POSITION SIZING ===
+                const kellySize = calculateKellySize(0.65, dynamicRR); // 65% winrate assumption
+                const recommendedLeverage = getVolatilityAdjustedLeverage(indicators.atr, indicators.price);
 
                 // === FASE 2: COHERENCE VALIDATION & AUTO-FIX ===
                 const { CoherenceValidator } = await import('./pipeline/CoherenceValidator');

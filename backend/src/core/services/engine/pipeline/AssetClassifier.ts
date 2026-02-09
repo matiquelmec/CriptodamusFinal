@@ -137,26 +137,60 @@ export class AssetClassifier {
      * Get RVOL scoring adjustment based on asset class and current RVOL
      * Returns a score adjustment (positive or negative)
      */
-    static getRVOLScoreAdjustment(symbol: string, rvol: number): number {
+    /**
+     * Get RVOL scoring adjustment based on asset class, current RVOL, and Market Regime
+     * Returns a score adjustment (positive or negative)
+     */
+    static getRVOLScoreAdjustment(
+        symbol: string,
+        rvol: number,
+        marketRegime?: 'BULL' | 'BEAR' | 'RANGE_BOUND' | 'NEUTRAL',
+        volatility?: number
+    ): number {
         const profile = this.classify(symbol);
 
+        // REGIME-BASED MULTIPLIER
+        // Adjust thresholds based on market conditions
+        let regimeMultiplier = 1.0;
+
+        if (marketRegime === 'RANGE_BOUND') {
+            // Lateral market: lower volume is expected, so we lower the bar
+            regimeMultiplier = 0.8; // -20% requirement
+        } else if (marketRegime === 'BULL' && volatility && volatility > 0.05) {
+            // High volatility Bull market: requires stronger confirmation
+            regimeMultiplier = 1.2; // +20% requirement
+        } else if (marketRegime === 'BEAR') {
+            // Bear market: low volume is common, but high volume is suspicious (capitulation?)
+            // We keep it standard or slightly lower
+            regimeMultiplier = 0.9;
+        }
+
+        // Apply multiplier to thresholds
+        const minRVOL = profile.minRVOLForSignal * regimeMultiplier;
+        const bonusRVOL = profile.rvolBonusThreshold * regimeMultiplier;
+
         // Extreme volume surge (very bullish)
-        if (rvol >= profile.rvolBonusThreshold * 1.5) return +15;
+        if (rvol >= bonusRVOL * 1.5) return +15;
 
         // High volume confirmation (bullish)
-        if (rvol >= profile.rvolBonusThreshold) return +10;
+        // High volume confirmation (bullish)
+        if (rvol >= bonusRVOL) return +10;
 
         // Above average volume (positive)
-        if (rvol >= profile.minRVOLForSignal * 1.2) return +5;
+        // Above average volume (positive)
+        if (rvol >= minRVOL * 1.2) return +5;
 
         // Normal volume (neutral)
-        if (rvol >= profile.minRVOLForSignal) return 0;
+        // Normal volume (neutral)
+        if (rvol >= minRVOL) return 0;
 
         // Below normal but not critical (slight penalty)
-        if (rvol >= profile.minRVOLForSignal * 0.7) return -5;
+        // Below normal but not critical (slight penalty)
+        if (rvol >= minRVOL * 0.7) return -5;
 
         // Low volume (penalty)
-        if (rvol >= profile.minRVOLForSignal * 0.5) return -10;
+        // Low volume (penalty)
+        if (rvol >= minRVOL * 0.5) return -10;
 
         // Dead volume (severe penalty)
         return -15;
