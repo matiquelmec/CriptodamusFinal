@@ -204,15 +204,23 @@ import { binanceStream } from '../services/binanceStream';
  */
 router.get('/depth/:symbol', async (req: Request, res: Response) => {
     try {
-        const symbol = req.params.symbol.toLowerCase();
-        // @ts-ignore - waiting for binanceStream update
+        // Normalize symbol: 'BTC' -> 'BTCUSDT'
+        let symbol = req.params.symbol.toUpperCase();
+        if (!symbol.endsWith('USDT')) {
+            symbol = `${symbol}USDT`;
+        }
+
         const depth = binanceStream.getDepth(symbol);
         if (!depth) {
-            return res.status(404).json({ error: 'No depth data. Stream might be initializing.' });
+            return res.status(404).json({
+                error: 'No depth data available',
+                message: 'Stream might be initializing or symbol not tracked',
+                symbol: symbol
+            });
         }
         res.json(depth);
-    } catch (e) {
-        res.status(500).json({ error: 'Depth fetch error' });
+    } catch (e: any) {
+        res.status(500).json({ error: 'Depth fetch error', message: e.message });
     }
 });
 
