@@ -19,7 +19,8 @@ export class FilterEngine {
     static shouldDiscard(
         opportunity: AIOpportunity,
         risk: MarketRisk,
-        style: TradingStyle
+        style: TradingStyle,
+        macro?: any // MacroContext
     ): { discarded: boolean; reason?: string } {
 
         // 1. RISK SHIELD (Global Kill Switch)
@@ -27,6 +28,28 @@ export class FilterEngine {
             // Only allow specialized strategies in high risk
             if (style !== 'SCALP_AGRESSIVE') {
                 return { discarded: true, reason: 'Risk Shield Active: Whale Manipulation Detected' };
+            }
+        }
+
+        // 1.5 MACRO REGIME ENFORCEMENT (The General's Order)
+        // If BTC Daily Regime is BEARISH, block all LONGs except Scalps/Pau(Gold)
+        // If BTC Daily Regime is BULLISH, block all SHORTs except Scalps/Hedge
+        if (macro && macro.btcRegime) {
+            const regime = macro.btcRegime.regime; // BULL, BEAR, RANGE
+            const isScalp = style === 'SCALP_AGRESSIVE' || style === 'MEME_SCALP';
+            const isGold = opportunity.symbol.includes('XAU') || opportunity.symbol.includes('PAXG');
+
+            // Allow Scalps (quick in/out) and Gold (safe haven) to ignore regime to some extent
+            // But for Swing/Breakout, we must obey the General.
+            if (!isScalp && !isGold) {
+                if (regime === 'BEAR' && opportunity.side === 'LONG') {
+                    // STRICT FILTER: No Longs in Bear Market for Swings
+                    return { discarded: true, reason: `General's Order: No SWING LONGs in Bear Market (BTC Daily Bearish)` };
+                }
+                if (regime === 'BULL' && opportunity.side === 'SHORT') {
+                    // STRICT FILTER: No Shorts in Bull Market for Swings
+                    return { discarded: true, reason: `General's Order: No SWING SHORTs in Bull Market (BTC Daily Bullish)` };
+                }
             }
         }
 

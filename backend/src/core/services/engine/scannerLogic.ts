@@ -157,6 +157,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
     // 3. CHUNKED PROCESSING (Robustness Fix)
     const signalHistory: Record<string, any[]> = {}; // Placeholder if not fetched
+    console.log(`[Diagnostic] Starting Chunk Processing for ${market.length} assets...`);
+
     // Force Include Gold Asset for Pau Strategy even if low volume
     const goldSym = TradingConfig.pauStrategy.asset.replace('/', '').toUpperCase(); // 'PAXGUSDT'
     const goldTicker = market.find(m => m.id === goldSym || m.symbol.replace('/', '') === goldSym);
@@ -887,9 +889,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 totalScore = Math.max(0, Math.min(100, totalScore));
 
                 // === CALCULATE TIER & RISK METRICS ===
+                // === CALCULATE TIER & RISK METRICS ===
                 // Use fundamentalTier calculated at start of pipeline
                 const postPenaltyTier = fundamentalTier;
-                const correlationRisk = await calculatePortfolioCorrelation(coin.symbol, []); // Assuming empty portfolio for scan
+
+                // Calculate isMeme for Risk Engine
+                const isMeme = (TradingConfig.assets.tiers.c_tier_patterns as unknown as string[]).some(p => coin.symbol.includes(p)) ||
+                    (TradingConfig.assets.meme_list as unknown as string[]).includes(coin.symbol);
+
+                const correlationRisk = await calculatePortfolioCorrelation(coin.symbol, [], isMeme); // Fixed Args
                 const dynamicRR = strategyResult.primaryStrategy?.id === 'SCALPING_M15' ? 1.5 : 2.5;
 
                 // === MARKET REGIME CONSTRUCTION (Bridge Macro -> Advanced Types) ===
@@ -929,13 +937,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                     (indicators.confluenceAnalysis as any) || { topSupports: [], topResistances: [] }, // Ensure valid ConfluenceAnalysis object
                     indicators.atr,
                     signalSide,
-                    postPenaltyTier, // Use calculated Tier (not marketRegime) - Check signature! 
-                    // WAIT: verify calculateDCAPlan signature. 
-                    // Previous error: "Argument of type 'number' is not assignable to parameter of type 'ConfluenceAnalysis'"
-                    // It seems I was passing ATR as 2nd arg? Let's check view_file of dcaCalculator later.
-                    // For now, let's look at the error context "Expected 3-4 arguments, but got 2" for calculateKellySize
-
-                    // actually, let's fix kellySize first
+                    indicators.marketRegime, // Arg 5: Market Regime
+                    indicators.fibonacci,    // Arg 6: Fibs
+                    postPenaltyTier          // Arg 7: Tier
                 );
 
                 // === CALCULATE POSITION SIZING ===
@@ -1053,8 +1057,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
 
                 // --- FINAL OUTPUT ---
-                // 3. HARD FILTERS (The Iron Gate)
-                const filterResult = FilterEngine.shouldDiscard(opportunity, risk, style);
+                // 4. FILTER ENGINE (The Gatekeeper)
+                const filterResult = FilterEngine.shouldDiscard(opportunity, risk, style, macroContext);
                 if (filterResult.discarded) {
                     // NEW: "Inform, Don't Block" Policy
                     // Per User Request: DO NOT PENALIZE SCORE. Just Warn.
@@ -1272,43 +1276,61 @@ async function updateActiveSignalsContext() {
                 if (signal.pnl_percent && signal.pnl_percent > 0.5) {
                     let volAnalysis = await getExpertVolumeAnalysis(signal.symbol);
 
-                    // Fetch candles for enrichment
-                    const candles = await fetchCandles(signal.symbol, '15m');
-                    if (candles && candles.length > 50) {
-                        const highs = candles.map((c: any) => c.high);
-                        const lows = candles.map((c: any) => c.low);
-                        const currentPrice = candles[candles.length - 1].close;
+                    // Fetch candles for enrichment with Timeout
+                    const fetchWithTimeout = (promise: Promise<any>, ms: number) => {
+                        return Promise.race([
+                            promise,
+                            new Promise((_, reject) => setTimeout(() => reject(new Error("Fetch Timeout")), ms))
+                        ]);
+                    };
 
-                        // ENRICH (Fetch Order Book)
-                        // Note: enrichWithDepthAndLiqs handles pure math + Order Book fetch if available
-                        volAnalysis = await enrichWithDepthAndLiqs(signal.symbol, volAnalysis, highs, lows, currentPrice);
+                    let rawCandles;
+                    try {
+                        rawCandles = await fetchWithTimeout(fetchCandles(signal.symbol, '15m'), 5000) as any[];
+                    } catch (e) {
+                        console.warn(`[Diagnostic] ⚠️ Timeout fetching candles for ${signal.symbol}`);
+                        return;
+                    }
 
-                        // CHECK FOR OPPOSING WALLS (Front-run logic)
-                        if (signal.side === 'LONG' && volAnalysis.liquidity.orderBook?.askWall) {
-                            const wall = volAnalysis.liquidity.orderBook.askWall;
-                            // If wall is huge (>50 strength) and below our TP, we must respect it.
-                            if (wall.strength > 50) {
-                                await signalAuditService.updateSignalContext(signal.symbol, {
-                                    new_tp: wall.price * 0.999, // Front-run 0.1%
-                                    reason: `Sell Wall Detected @ $${wall.price}`
-                                });
-                            }
-                        } else if (signal.side === 'SHORT' && volAnalysis.liquidity.orderBook?.bidWall) {
-                            const wall = volAnalysis.liquidity.orderBook.bidWall;
-                            if (wall.strength > 50) {
-                                await signalAuditService.updateSignalContext(signal.symbol, {
-                                    new_tp: wall.price * 1.001, // Front-run 0.1%
-                                    reason: `Buy Wall Detected @ $${wall.price}`
-                                });
-                            }
+                    if (!rawCandles || rawCandles.length < 50) {
+                        console.warn(`[Diagnostic] ⚠️ Not enough candles for ${signal.symbol}`);
+                        return;
+                    }
+
+                    console.log(`[Diagnostic] Processing ${signal.symbol}: Candles ${rawCandles.length}`);
+
+                    const candles = rawCandles.map(c => ({ ...c, time: c.timestamp / 1000 })); // Fix timestamp format
+                    const highs = candles.map((c: any) => c.high);
+                    const lows = candles.map((c: any) => c.low);
+                    const currentPrice = candles[candles.length - 1].close;
+
+                    // ENRICH (Fetch Order Book)
+                    // Note: enrichWithDepthAndLiqs handles pure math + Order Book fetch if available
+                    volAnalysis = await enrichWithDepthAndLiqs(signal.symbol, volAnalysis, highs, lows, currentPrice);
+
+                    // CHECK FOR OPPOSING WALLS (Front-run logic)
+                    if (signal.side === 'LONG' && volAnalysis.liquidity.orderBook?.askWall) {
+                        const wall = volAnalysis.liquidity.orderBook.askWall;
+                        // If wall is huge (>50 strength) and below our TP, we must respect it.
+                        if (wall.strength > 50) {
+                            await signalAuditService.updateSignalContext(signal.symbol, {
+                                new_tp: wall.price * 0.999, // Front-run 0.1%
+                                reason: `Sell Wall Detected @ $${wall.price}`
+                            });
+                        }
+                    } else if (signal.side === 'SHORT' && volAnalysis.liquidity.orderBook?.bidWall) {
+                        const wall = volAnalysis.liquidity.orderBook.bidWall;
+                        if (wall.strength > 50) {
+                            await signalAuditService.updateSignalContext(signal.symbol, {
+                                new_tp: wall.price * 1.001, // Front-run 0.1%
+                                reason: `Buy Wall Detected @ $${wall.price}`
+                            });
                         }
                     }
                 }
-            } catch (innerE) {
-                // Skip individual failure
-            }
+            } catch (innerError) { /* ignore single signal error */ }
         }
     } catch (e) {
-        // Silent fail, this is auxiliary
+        console.warn("[Scanner] Context Audit Error:", e);
     }
 }
