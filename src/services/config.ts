@@ -5,8 +5,8 @@
 
 const IS_PROD = import.meta.env.PROD || window.location.hostname !== 'localhost';
 const BACKEND_BASE_URL = IS_PROD
-  ? `${window.location.protocol}//${window.location.host}`
-  : 'http://localhost:3001';
+  ? 'https://criptodamusfinal.onrender.com' // Backend en Render
+  : 'http://localhost:3001'; // Backend local
 
 export const API_CONFIG = {
   // Backend URL - Solo se activa si existe la variable de entorno
