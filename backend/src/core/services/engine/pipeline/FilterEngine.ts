@@ -9,6 +9,7 @@
 
 import { AIOpportunity, MarketRisk, TradingStyle } from '../../../types';
 import { TradingConfig } from '../../../config/tradingConfig';
+import { AssetClassifier } from './AssetClassifier';
 
 export class FilterEngine {
 
@@ -45,12 +46,22 @@ export class FilterEngine {
 
             // A. Liquidity Check
             if (volume24h && volume24h < filters.min_volume_24h) {
-                return { discarded: true, reason: `Low Liquidity ($${(volume24h / 1000000).toFixed(1)}M < $5M)` };
+                const volumeFormatted = (volume24h && !isNaN(volume24h)) ? (volume24h / 1000000).toFixed(1) : '???';
+                return { discarded: true, reason: `Low Liquidity ($${volumeFormatted}M < $5M)` };
             }
 
-            // B. Volume Integrity (RVOL) - Mandatory for Trend/Breakout
-            if (!isReversionStrategy && rvol && rvol < 1.8) {
-                return { discarded: true, reason: `Insufficient Volume Confirmation (RVOL ${rvol.toFixed(2)} < 1.8). Bull Trap Risk.` };
+            // B. Volume Integrity (RVOL) - Professional Asset-Differentiated Approach
+            // Now uses AssetClassifier for intelligent filtering
+            if (!isReversionStrategy && rvol) {
+                // HARD FILTER: Only block if critically low (dead market)
+                if (AssetClassifier.isRVOLCriticallyLow(opportunity.symbol, rvol)) {
+                    const statusMsg = AssetClassifier.getRVOLStatusMessage(opportunity.symbol, rvol);
+                    return { discarded: true, reason: `${statusMsg} - Market likely dead/manipulated` };
+                }
+
+                // SOFT FILTER: Apply score adjustment instead of hard block
+                // This is handled in the scoring phase, not here
+                // Low RVOL will reduce score but not automatically discard
             }
 
             // C. RSI Exhaustion Guard (Buying the Top / Selling the Bottom)
@@ -63,9 +74,13 @@ export class FilterEngine {
                 }
             }
 
-            // D. Trend Strength Check (Higher Threshold: 25)
-            if (!isReversionStrategy && adx && adx < 25) {
-                return { discarded: true, reason: `Weak Structural Trend (ADX ${adx.toFixed(1)} < 25)` };
+            // D. Trend Strength Check (Adjusted: 20 for Pau Perdices compatibility)
+            // Gold and commodities can have smooth trends with lower ADX
+            const assetProfile = AssetClassifier.classify(opportunity.symbol);
+            const minADX = assetProfile.class === 'COMMODITY' ? 18 : 20; // Gentler for gold
+
+            if (!isReversionStrategy && adx && adx < minADX) {
+                return { discarded: true, reason: `Weak Structural Trend (ADX ${adx.toFixed(1)} < ${minADX})` };
             }
         }
 

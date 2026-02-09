@@ -514,12 +514,16 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         const avgPrice = (nearest.priceMin + nearest.priceMax) / 2;
                         const dist = Math.abs(indicators.price - avgPrice) / indicators.price;
                         if (dist < 0.015) {
+                            const volFormatted = (nearest.totalVolume && !isNaN(nearest.totalVolume))
+                                ? (nearest.totalVolume / 1e6).toFixed(1)
+                                : '???';
+
                             if (nearest.type === 'LONG_LIQ' && signalSide === 'SHORT') {
                                 totalScore += 20;
-                                reasoning.push(`🎯 Liq Magnet: Hunting $${(nearest.totalVolume / 1e6).toFixed(1)}M Long Exits (+20)`);
+                                reasoning.push(`🎯 Liq Magnet: Hunting $${volFormatted}M Long Exits (+20)`);
                             } else if (nearest.type === 'SHORT_LIQ' && signalSide === 'LONG') {
                                 totalScore += 20;
-                                reasoning.push(`🎯 Liq Magnet: Hunting $${(nearest.totalVolume / 1e6).toFixed(1)}M Short Squeezes (+20)`);
+                                reasoning.push(`🎯 Liq Magnet: Hunting $${volFormatted}M Short Squeezes (+20)`);
                             }
                         }
                     }
@@ -742,119 +746,135 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         totalScore -= 15; // Penalty for high similarity
                         reasoning.push(`🛡️ Portfolio Heatmap: High correlation with open trades (${correlationRisk.score.toFixed(2)})`);
                     }
-
-                    const opportunity: AIOpportunity = {
-                        id: coin.id,
-                        symbol: coin.symbol,
-                        timestamp: Date.now(),
-                        timeframe: interval,
-                        session: sessionLabel,
-                        riskRewardRatio: dynamicRR,
-                        strategy: strategyResult.primaryStrategy?.id || baseScoreResult.strategies[0] || 'hybrid_algo',
-                        side: signalSide,
-                        confidenceScore: Math.round(Math.min(100, totalScore)),
-                        debugLog: `Base: ${baseScoreResult.score} + Strat: ${strategyResult.primaryStrategy?.score || 0} + Boost: ${strategyResult.scoreBoost}.`,
-                        mlPrediction: mlResult ? {
-                            probability: mlResult.probabilityUp * 100,
-                            signal: mlResult.signal as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
-                            confidence: mlResult.confidence * 100
-                        } : undefined,
-                        entryZone: {
-                            min: indicators.price * 0.995,
-                            max: indicators.price * 1.005,
-                            currentPrice: indicators.price
-                        },
-                        stopLoss: dcaPlan.stopLoss,
-                        takeProfits: {
-                            tp1: dcaPlan.takeProfits.tp1.price,
-                            tp2: dcaPlan.takeProfits.tp2.price,
-                            tp3: dcaPlan.takeProfits.tp3.price
-                        },
-                        technicalReasoning: reasoning.join(". "),
-                        reasoning: reasoning, // NEW: Pass array for Telegram Service
-                        dcaPlan: dcaPlan,
-                        metrics: {
-                            adx: indicators.adx || 0,
-                            volume24h: coin.rawVolume || 0,
-                            rvol: indicators.rvol || 0,
-                            rsi: indicators.rsi || 50,
-                            vwapDist: indicators.vwap ? ((indicators.price - indicators.vwap) / indicators.vwap) * 100 : 0,
-                            structure: indicators.trendStatus.emaAlignment,
-                            specificTrigger: strategyResult.primaryStrategy?.reason || "Technical Setup",
-                            zScore: indicators.zScore || 0,
-                            emaSlope: indicators.emaSlope || 0,
-                            isSqueeze: !!(indicators as any).isSqueeze,
-                            volumeExpert: veSafe,
-                            macdDivergence: (indicators as any).macdDivergence?.type || undefined,
-                            rsiDivergence: (indicators as any).rsiDivergence?.type || undefined,
-                            chartPatterns: ((indicators as any).chartPatterns && (indicators as any).chartPatterns.length > 0) ? (indicators as any).chartPatterns : undefined,
-                            harmonics: ((indicators as any).harmonics && (indicators as any).harmonics.length > 0) ? (indicators as any).harmonics : undefined,
-
-                            // God Mode Metrics
-                            cvdDivergence: ((indicators as any).cvdDivergence && (indicators as any).cvdDivergence !== 'NONE') ? {
-                                type: (indicators as any).cvdDivergence,
-                                strength: 0.8
-                            } : undefined,
-
-                            // Macro Context
-                            macroContext: macroContext ? {
-                                btcRegime: macroContext.btcRegime.regime,
-                                dxyIndex: parseFloat(globalData.dxyIndex.toFixed(2)),
-                                goldPrice: parseFloat(globalData.goldPrice.toFixed(0)),
-                                btcDominance: parseFloat(macroContext.btcDominance.current.toFixed(2))
-                            } : undefined
-                        },
-                        invalidated: false,
-                        tier: postPenaltyTier,
-                        kellySize,
-                        recommendedLeverage,
-                        correlationRisk
-                    };
-
-                    // --- STAGE 6: FOMO PREVENTION (The Sniper Check) ---
-                    const isFresh = strategyResult.primaryStrategy?.isFresh ?? true;
-                    const bestEntryDist = Math.abs(dcaPlan.entries[0].distanceFromCurrent);
-                    const fomoThreshold = interval === '4h' ? 2.5 : 0.6;
-
-                    if (!isFresh && bestEntryDist > fomoThreshold) {
-                        console.log(`[Sniper] Rejected ${coin.symbol}: Stale signal + Bad Entry (${bestEntryDist.toFixed(2)}% > ${fomoThreshold}%).`);
-                        return; // Continue to next coin
-                    }
-
-                    // --- FINAL OUTPUT ---
-                    // 3. HARD FILTERS (The Iron Gate)
-                    const filterResult = FilterEngine.shouldDiscard(opportunity, risk, style);
-                    if (filterResult.discarded) {
-                        // NEW: "Inform, Don't Block" Policy
-                        // Per User Request: DO NOT PENALIZE SCORE. Just Warn.
-                        // If we penalize, it might drop below visibility threshold.
-                        const isSoftBlock =
-                            filterResult.reason?.includes('Risk Shield') ||
-                            filterResult.reason?.includes('Liquidity') ||
-                            filterResult.reason?.includes('Volume') ||
-                            filterResult.reason?.includes('RSI') ||
-                            filterResult.reason?.includes('Trend');
-
-                        if (isSoftBlock && filterResult.reason) {
-                            console.warn(`[Filter] FORCE PASS ${coin.symbol}: ${filterResult.reason}`);
-                            // totalScore -= 20; // REMOVED: No Penalty
-                            reasoning.push(`⚠️ FILTRO DE RIESGO: ${filterResult.reason}`);
-                        } else {
-                            // Hard Block (Score too low, Blacklisted, Wrong Algo)
-                            return;
-                        }
-                    }
-
-                    // 4. APEX GUARD (Whipsaw Protection)
-                    const apexCheck = FilterEngine.checkApexSafety(opportunity, signalHistory[coin.symbol] || [], null);
-                    if (apexCheck.discarded) {
-                        console.warn(`[Apex] FORCE PASS ${coin.symbol}: ${apexCheck.reason}`);
-                        // totalScore -= 30; // REMOVED: No Penalty
-                        reasoning.push(`⚠️ PROTECCIÓN APEX: ${apexCheck.reason}`);
-                    }
-                    opportunities.push(opportunity);
-                    console.log(`[Scanner] [${coin.symbol}] ✅ ACCEPTED with Match Score ${opportunity.confidenceScore}`);
                 }
+
+                // --- STAGE 5.2: PROFESSIONAL RVOL SCORING ADJUSTMENT ---
+                // Apply asset-specific RVOL scoring bonus/penalty
+                // This replaces the hard filter approach with a more flexible scoring system
+                if (indicators.rvol !== undefined && indicators.rvol > 0) {
+                    const { AssetClassifier } = await import('./pipeline/AssetClassifier');
+                    const rvolAdjustment = AssetClassifier.getRVOLScoreAdjustment(coin.symbol, indicators.rvol);
+                    const rvolStatusMsg = AssetClassifier.getRVOLStatusMessage(coin.symbol, indicators.rvol);
+
+                    totalScore += rvolAdjustment;
+
+                    // Only log if significant adjustment
+                    if (Math.abs(rvolAdjustment) >= 5) {
+                        reasoning.push(`📊 ${rvolStatusMsg}`);
+                    }
+                }
+
+                const opportunity: AIOpportunity = {
+                    id: coin.id,
+                    symbol: coin.symbol,
+                    timestamp: Date.now(),
+                    timeframe: interval,
+                    session: sessionLabel,
+                    riskRewardRatio: dynamicRR,
+                    strategy: strategyResult.primaryStrategy?.id || baseScoreResult.strategies[0] || 'hybrid_algo',
+                    side: signalSide,
+                    confidenceScore: Math.round(Math.min(100, totalScore)),
+                    debugLog: `Base: ${baseScoreResult.score} + Strat: ${strategyResult.primaryStrategy?.score || 0} + Boost: ${strategyResult.scoreBoost}.`,
+                    mlPrediction: mlResult ? {
+                        probability: mlResult.probabilityUp * 100,
+                        signal: mlResult.signal as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
+                        confidence: mlResult.confidence * 100
+                    } : undefined,
+                    entryZone: {
+                        min: indicators.price * 0.995,
+                        max: indicators.price * 1.005,
+                        currentPrice: indicators.price
+                    },
+                    stopLoss: dcaPlan.stopLoss,
+                    takeProfits: {
+                        tp1: dcaPlan.takeProfits.tp1.price,
+                        tp2: dcaPlan.takeProfits.tp2.price,
+                        tp3: dcaPlan.takeProfits.tp3.price
+                    },
+                    technicalReasoning: reasoning.join(". "),
+                    reasoning: reasoning, // NEW: Pass array for Telegram Service
+                    dcaPlan: dcaPlan,
+                    metrics: {
+                        adx: indicators.adx || 0,
+                        volume24h: coin.rawVolume || 0,
+                        rvol: indicators.rvol || 0,
+                        rsi: indicators.rsi || 50,
+                        vwapDist: indicators.vwap ? ((indicators.price - indicators.vwap) / indicators.vwap) * 100 : 0,
+                        structure: indicators.trendStatus.emaAlignment,
+                        specificTrigger: strategyResult.primaryStrategy?.reason || "Technical Setup",
+                        zScore: indicators.zScore || 0,
+                        emaSlope: indicators.emaSlope || 0,
+                        isSqueeze: !!(indicators as any).isSqueeze,
+                        volumeExpert: veSafe,
+                        macdDivergence: (indicators as any).macdDivergence?.type || undefined,
+                        rsiDivergence: (indicators as any).rsiDivergence?.type || undefined,
+                        chartPatterns: ((indicators as any).chartPatterns && (indicators as any).chartPatterns.length > 0) ? (indicators as any).chartPatterns : undefined,
+                        harmonics: ((indicators as any).harmonics && (indicators as any).harmonics.length > 0) ? (indicators as any).harmonics : undefined,
+
+                        // God Mode Metrics
+                        cvdDivergence: ((indicators as any).cvdDivergence && (indicators as any).cvdDivergence !== 'NONE') ? {
+                            type: (indicators as any).cvdDivergence,
+                            strength: 0.8
+                        } : undefined,
+
+                        // Macro Context
+                        macroContext: macroContext ? {
+                            btcRegime: macroContext.btcRegime.regime,
+                            dxyIndex: parseFloat(globalData.dxyIndex.toFixed(2)),
+                            goldPrice: parseFloat(globalData.goldPrice.toFixed(0)),
+                            btcDominance: parseFloat(macroContext.btcDominance.current.toFixed(2))
+                        } : undefined
+                    },
+                    invalidated: false,
+                    tier: postPenaltyTier,
+                    kellySize,
+                    recommendedLeverage,
+                    correlationRisk
+                };
+
+                // --- STAGE 6: FOMO PREVENTION (The Sniper Check) ---
+                const isFresh = strategyResult.primaryStrategy?.isFresh ?? true;
+                const bestEntryDist = Math.abs(dcaPlan.entries[0].distanceFromCurrent);
+                const fomoThreshold = interval === '4h' ? 2.5 : 0.6;
+
+                if (!isFresh && bestEntryDist > fomoThreshold) {
+                    console.log(`[Sniper] Rejected ${coin.symbol}: Stale signal + Bad Entry (${bestEntryDist.toFixed(2)}% > ${fomoThreshold}%).`);
+                    return; // Continue to next coin
+                }
+
+                // --- FINAL OUTPUT ---
+                // 3. HARD FILTERS (The Iron Gate)
+                const filterResult = FilterEngine.shouldDiscard(opportunity, risk, style);
+                if (filterResult.discarded) {
+                    // NEW: "Inform, Don't Block" Policy
+                    // Per User Request: DO NOT PENALIZE SCORE. Just Warn.
+                    // If we penalize, it might drop below visibility threshold.
+                    const isSoftBlock =
+                        filterResult.reason?.includes('Risk Shield') ||
+                        filterResult.reason?.includes('Liquidity') ||
+                        filterResult.reason?.includes('Volume') ||
+                        filterResult.reason?.includes('RSI') ||
+                        filterResult.reason?.includes('Trend');
+
+                    if (isSoftBlock && filterResult.reason) {
+                        console.warn(`[Filter] FORCE PASS ${coin.symbol}: ${filterResult.reason}`);
+                        // totalScore -= 20; // REMOVED: No Penalty
+                        reasoning.push(`⚠️ FILTRO DE RIESGO: ${filterResult.reason}`);
+                    } else {
+                        // Hard Block (Score too low, Blacklisted, Wrong Algo)
+                        return;
+                    }
+                }
+
+                // 4. APEX GUARD (Whipsaw Protection)
+                const apexCheck = FilterEngine.checkApexSafety(opportunity, signalHistory[coin.symbol] || [], null);
+                if (apexCheck.discarded) {
+                    console.warn(`[Apex] FORCE PASS ${coin.symbol}: ${apexCheck.reason}`);
+                    // totalScore -= 30; // REMOVED: No Penalty
+                    reasoning.push(`⚠️ PROTECCIÓN APEX: ${apexCheck.reason}`);
+                }
+                opportunities.push(opportunity);
+                console.log(`[Scanner] [${coin.symbol}] ✅ ACCEPTED with Match Score ${opportunity.confidenceScore}`);
             } catch (err) {
                 // Individual coin failure is acceptable, but we log it clearly
                 // console.warn(`[Scanner] Skipped ${coin.symbol}:`, err); 
