@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { ArrowDown, ArrowUp, Activity, Layers } from 'lucide-react';
+import { API_CONFIG } from '../services/config';
 
 interface OrderLevel {
     price: number;
@@ -34,10 +35,8 @@ const OrderBookHeatmap: React.FC<OrderBookHeatmapProps> = ({ symbol }) => {
 
         const fetchSnapshot = async () => {
             try {
-                // Determine API URL based on environment (Vite default)
-                // Assuming backend is on same host or proxied via Vite
-                const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-                const res = await fetch(`${API_URL}/api/market/depth/${symbol}`);
+                // Use centralized config
+                const res = await fetch(`${API_CONFIG.BASE_URL}/api/market/depth/${symbol}`);
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.bids) {
