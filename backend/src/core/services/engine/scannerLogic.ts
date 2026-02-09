@@ -864,6 +864,38 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // This ensures tier calc, confidence scoring, etc. never see score >100
                 totalScore = Math.max(0, Math.min(100, totalScore));
 
+                // === FASE 2: COHERENCE VALIDATION & AUTO-FIX ===
+                const { CoherenceValidator } = await import('./pipeline/CoherenceValidator');
+                const coherenceCheck = CoherenceValidator.validate(
+                    {
+                        side: signalSide,
+                        strategy: strategyResult.primaryStrategy?.id,
+                        globalSentiment: globalSentiment
+                    },
+                    indicators,
+                    indicators.volumeExpert, // Use from indicators instead of 've' (different scope)
+                    totalScore,
+                    reasoning
+                );
+
+                // Log contradictions for debugging
+                if (!coherenceCheck.isCoherent) {
+                    console.warn(`[Coherence] ${coin.symbol}: ${coherenceCheck.contradictions.length} issues found`);
+                    coherenceCheck.contradictions.forEach(c => {
+                        console.warn(`  - [${c.severity}] ${c.type}: ${c.description} → ${c.action}`);
+                    });
+                }
+
+                // Apply fixes
+                totalScore = coherenceCheck.fixedScore;
+                reasoning = coherenceCheck.fixedReasoning;
+
+                // DISCARD signal if CRITICAL contradiction detected
+                if (coherenceCheck.shouldDiscard) {
+                    console.log(`[Coherence] ❌ DISCARDING ${coin.symbol}: Critical contradiction detected`);
+                    return; // Skip this signal entirely
+                }
+
                 const opportunity: AIOpportunity = {
                     id: coin.id,
                     symbol: coin.symbol,
