@@ -339,6 +339,156 @@ const EducationalModal: React.FC<EducationalModalProps> = ({ selectedSignal, onC
                             </div>
                         </div>
                     )}
+
+                    {/* 3.6 INSTITUTIONAL ORDERBOOK ANALYSIS (NEW) */}
+                    {selectedSignal.metrics?.volumeExpert?.liquidity?.orderBook?.advanced && (
+                        <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-xl p-5 border border-purple-500/30 col-span-2">
+                            <h4 className="text-xs font-bold text-purple-400 uppercase mb-3 flex items-center gap-2">
+                                <Layers size={14} /> Análisis Institucional OrderBook
+                            </h4>
+
+                            {(() => {
+                                const adv = selectedSignal.metrics.volumeExpert.liquidity.orderBook.advanced;
+                                return (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {/* Fake Wall Detection */}
+                                        <div className={`p-3 rounded border ${adv.fakeWallRisk === 'HIGH' ? 'bg-red-500/20 border-red-500/40' :
+                                                adv.fakeWallRisk === 'MEDIUM' ? 'bg-yellow-500/20 border-yellow-500/40' :
+                                                    'bg-green-500/20 border-green-500/40'
+                                            }`}>
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className="text-[10px] text-secondary uppercase font-bold">Detección Fake Walls</span>
+                                                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${adv.fakeWallRisk === 'HIGH' ? 'bg-red-500 text-white' :
+                                                        adv.fakeWallRisk === 'MEDIUM' ? 'bg-yellow-500 text-black' :
+                                                            'bg-green-500 text-white'
+                                                    }`}>
+                                                    {adv.fakeWallRisk}
+                                                </span>
+                                            </div>
+                                            <div className="text-xs text-gray-300">
+                                                Estabilidad: <span className="font-bold text-white">{adv.wallStability}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Absorption Analysis */}
+                                        {adv.wasAbsorbed !== undefined && (
+                                            <div className={`p-3 rounded border ${adv.wasAbsorbed && adv.absorptionScore > 70 ? 'bg-blue-500/20 border-blue-500/40' :
+                                                    'bg-gray-500/20 border-gray-500/40'
+                                                }`}>
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className="text-[10px] text-secondary uppercase font-bold">Absorción de Volumen</span>
+                                                    <span className="text-xs font-mono font-bold text-white">
+                                                        {adv.absorptionScore}/100
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs text-gray-300">
+                                                    {adv.wasAbsorbed ? (
+                                                        <span className="text-blue-400 font-bold">💎 Wall Absorbido</span>
+                                                    ) : (
+                                                        <span className="text-gray-400">Sin absorción detectada</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Deep Imbalance */}
+                                        {adv.depthImbalance && (
+                                            <div className="p-3 rounded border bg-cyan-500/20 border-cyan-500/40">
+                                                <span className="block text-[10px] text-secondary uppercase font-bold mb-2">Presión Profunda (Levels 6-20)</span>
+                                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                                    <div>
+                                                        <span className="text-gray-400">Surface:</span>
+                                                        <span className="ml-1 font-mono font-bold text-white">{adv.depthImbalance.surface.toFixed(2)}x</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-gray-400">Deep:</span>
+                                                        <span className={`ml-1 font-mono font-bold ${adv.depthImbalance.deep > 2 ? 'text-green-400' :
+                                                                adv.depthImbalance.deep < 0.5 ? 'text-red-400' :
+                                                                    'text-white'
+                                                            }`}>{adv.depthImbalance.deep.toFixed(2)}x</span>
+                                                    </div>
+                                                </div>
+                                                {adv.depthImbalance.divergence && (
+                                                    <div className="mt-2 text-[10px] text-yellow-400 font-bold animate-pulse">
+                                                        🪤 DIVERGENCIA: Posible Trampa
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Spread Volatility */}
+                                        {adv.spreadAnalysis && (
+                                            <div className={`p-3 rounded border ${adv.spreadAnalysis.isPanic ? 'bg-orange-500/20 border-orange-500/40' :
+                                                    adv.spreadAnalysis.isTight ? 'bg-green-500/20 border-green-500/40' :
+                                                        'bg-gray-500/20 border-gray-500/40'
+                                                }`}>
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className="text-[10px] text-secondary uppercase font-bold">Spread Analysis</span>
+                                                    <span className="text-xs font-mono font-bold text-white">
+                                                        {(adv.spreadAnalysis.currentSpread * 100).toFixed(3)}%
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs">
+                                                    {adv.spreadAnalysis.isPanic && (
+                                                        <span className="text-orange-400 font-bold">🔥 PANIC DETECTED</span>
+                                                    )}
+                                                    {adv.spreadAnalysis.isTight && (
+                                                        <span className="text-green-400 font-bold">✅ Alta Liquidez</span>
+                                                    )}
+                                                    {adv.spreadAnalysis.isWidening && !adv.spreadAnalysis.isPanic && (
+                                                        <span className="text-yellow-400 font-bold">📊 Expandiéndose</span>
+                                                    )}
+                                                    {!adv.spreadAnalysis.isPanic && !adv.spreadAnalysis.isTight && !adv.spreadAnalysis.isWidening && (
+                                                        <span className="text-gray-400">Normal</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Iceberg Detection */}
+                                        {adv.icebergZones && adv.icebergZones.length > 0 && (
+                                            <div className="p-3 rounded border bg-indigo-500/20 border-indigo-500/40 col-span-2">
+                                                <span className="block text-[10px] text-secondary uppercase font-bold mb-2">
+                                                    🧊 Liquidez Oculta Detectada ({adv.icebergZones.length} zona{adv.icebergZones.length > 1 ? 's' : ''})
+                                                </span>
+                                                <div className="space-y-1">
+                                                    {adv.icebergZones.slice(0, 2).map((zone: any, i: number) => (
+                                                        <div key={i} className="flex justify-between items-center text-xs bg-background/50 p-2 rounded">
+                                                            <span className="text-gray-300">
+                                                                {zone.bounceCount} bounces @ ${formatPrice(zone.price)}
+                                                            </span>
+                                                            <span className="font-mono font-bold text-indigo-400">
+                                                                {zone.confidence}/100
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Overall Confidence */}
+                                        <div className="col-span-2 mt-2 p-3 rounded border border-purple-500/40 bg-purple-500/10">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs text-secondary uppercase font-bold">Confianza General OrderBook</span>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-32 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full transition-all ${adv.confidence > 70 ? 'bg-green-500' :
+                                                                    adv.confidence > 40 ? 'bg-yellow-500' :
+                                                                        'bg-red-500'
+                                                                }`}
+                                                            style={{ width: `${adv.confidence}%` }}
+                                                        />
+                                                    </div>
+                                                    <span className="text-sm font-mono font-bold text-white">{adv.confidence}/100</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    )}
                 </div>
 
                 {/* 4. RISK MANAGEMENT */}
