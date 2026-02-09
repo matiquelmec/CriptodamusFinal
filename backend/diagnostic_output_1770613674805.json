@@ -1,0 +1,113 @@
+{
+  "timestamp": "2026-02-09T05:05:44.634Z",
+  "apiHealth": {
+    "binance": true,
+    "coincap": false,
+    "coingecko": true
+  },
+  "liveData": [
+    {
+      "symbol": "BTC/USDT",
+      "price": 70879.9,
+      "rvol": 0.4204474086704979,
+      "blockedBy": [
+        "RVOL 0.42 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "ETH/USDT",
+      "price": 2086.21,
+      "rvol": 0.31846565329207954,
+      "blockedBy": [
+        "RVOL 0.32 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "SOL/USDT",
+      "price": 87.09,
+      "rvol": 0.32719894388796367,
+      "blockedBy": [
+        "RVOL 0.33 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "XRP/USDT",
+      "price": 1.4439,
+      "rvol": 0.38714538969839535,
+      "blockedBy": [
+        "RVOL 0.39 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "DOGE/USDT",
+      "price": 0.09631,
+      "rvol": 0.34256017370459196,
+      "blockedBy": [
+        "RVOL 0.34 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "BNB/USDT",
+      "price": 641.88,
+      "rvol": 0.3897057472457826,
+      "blockedBy": [
+        "RVOL 0.39 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "PAXG/USDT",
+      "price": 5018.72,
+      "rvol": 0.2841383019775734,
+      "blockedBy": [
+        "RVOL 0.28 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "SUI/USDT",
+      "price": 0.9802,
+      "rvol": 0.3916773730572105,
+      "blockedBy": [
+        "RVOL 0.39 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "NEAR/USDT",
+      "price": 1.038,
+      "rvol": 0.9026998026804525,
+      "blockedBy": [
+        "RVOL 0.90 < 1.8"
+      ],
+      "wouldPass": false
+    }
+  ],
+  "historicalRVOL": {
+    "btc": {
+      "avg": 1,
+      "max": 1,
+      "min": 1,
+      "above18": 0
+    },
+    "eth": {
+      "avg": 1,
+      "max": 1,
+      "min": 1,
+      "above18": 0
+    }
+  },
+  "pipelineSimulation": {
+    "potentialSignals": 0,
+    "afterFilters": 0,
+    "blockedByRVOL": 0,
+    "blockedByADX": 0,
+    "blockedByScore": 0,
+    "blockedByRSI": 0
+  }
+}

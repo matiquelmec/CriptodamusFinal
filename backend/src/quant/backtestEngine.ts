@@ -91,7 +91,8 @@ export class BacktestEngine {
             let mlSignal = 'NEUTRAL';
             try {
                 // Removed ADX guard
-                const prediction = await predictNextMove(SYMBOL, contextCandles);
+                // Pass persist=false to avoid polluting DB with simulation data
+                const prediction = await predictNextMove(SYMBOL, contextCandles, false);
                 if (prediction) {
                     mlSignal = prediction.signal;
                     mlScore = prediction.confidence;

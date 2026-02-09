@@ -532,14 +532,26 @@ export function calculatePivotPoints(highs: number[], lows: number[], closes: nu
 export function formatVolume(vol: number) { return vol >= 1e9 ? (vol / 1e9).toFixed(1) + 'B' : (vol / 1e6).toFixed(1) + 'M'; }
 
 // NEW: RVOL Calculation
+// NEW: RVOL Calculation (Fixed: Uses Last Closed Candle to avoid 'Fresh Candle' 0.01 error)
 export function calculateRVOL(volumes: number[], period: number = 20): number {
-    if (volumes.length < period + 1) return 1; // Not enough data
-    const currentVol = volumes[volumes.length - 1];
-    // Calculate SMA of PAST periods (excluding current) for baseline
-    const pastVolumes = volumes.slice(0, -1);
-    const avgVol = calculateSMA(pastVolumes, period);
+    if (volumes.length < period + 2) return 1; // Not enough data
 
-    return avgVol > 0 ? currentVol / avgVol : 0;
+    // We use index -2 (Last Closed) because index -1 is the current Live candle (incomplete volume)
+    const lastClosedVol = volumes[volumes.length - 2];
+
+    // Calculate SMA of PAST periods (excluding current and last closed) for proper baseline
+    // slice(0, -2) gets everything up to the closed candle
+    // Actually, usually RVOL compares Last Closed vs Average of Previous 20.
+    // So if Length is 100. Live is 99. Closed is 98.
+    // We want Average of [78...97].
+
+    const startIdx = Math.max(0, volumes.length - 2 - period);
+    const endIdx = volumes.length - 2;
+    const historyVolumes = volumes.slice(startIdx, endIdx);
+
+    const avgVol = historyVolumes.reduce((a, b) => a + b, 0) / historyVolumes.length;
+
+    return avgVol > 0 ? lastClosedVol / avgVol : 0;
 }
 
 

@@ -1,0 +1,122 @@
+{
+  "timestamp": "2026-02-09T05:34:09.158Z",
+  "apiHealth": {
+    "binance": true,
+    "coincap": false,
+    "coingecko": true
+  },
+  "liveData": [
+    {
+      "symbol": "BTC/USDT",
+      "price": 70944.1,
+      "rawVolume": 12553279819.48,
+      "rvol": 0.4575065047508332,
+      "blockedBy": [
+        "RVOL 0.46 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "ETH/USDT",
+      "price": 2090.19,
+      "rawVolume": 10381782527.64,
+      "rvol": 0.38145603243394155,
+      "blockedBy": [
+        "RVOL 0.38 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "SOL/USDT",
+      "price": 87.13,
+      "rawVolume": 2128264396.848,
+      "rvol": 0.41787907165187116,
+      "blockedBy": [
+        "RVOL 0.42 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "XRP/USDT",
+      "price": 1.4482,
+      "rawVolume": 1167774823.8991,
+      "rvol": 0.46278369137371983,
+      "blockedBy": [
+        "RVOL 0.46 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "DOGE/USDT",
+      "price": 0.0963,
+      "rawVolume": 424251327.0843,
+      "rvol": 0.5123885514367481,
+      "blockedBy": [
+        "RVOL 0.51 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "BNB/USDT",
+      "price": 641.18,
+      "rawVolume": 420499289.37,
+      "rvol": 0.4680533562803605,
+      "blockedBy": [
+        "RVOL 0.47 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "PAXG/USDT",
+      "price": 5032.16,
+      "rawVolume": 240193092.3904,
+      "rvol": 0.2604832901851411,
+      "blockedBy": [
+        "RVOL 0.26 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "SUI/USDT",
+      "price": 0.9834,
+      "rawVolume": 163277320.37985,
+      "rvol": 0.3979523180779403,
+      "blockedBy": [
+        "RVOL 0.40 < 1.8"
+      ],
+      "wouldPass": false
+    },
+    {
+      "symbol": "NEAR/USDT",
+      "price": 1.04,
+      "rawVolume": 48890900.197,
+      "rvol": 0.9657059670652327,
+      "blockedBy": [
+        "RVOL 0.97 < 1.8"
+      ],
+      "wouldPass": false
+    }
+  ],
+  "historicalRVOL": {
+    "btc": {
+      "avg": 1,
+      "max": 1,
+      "min": 1,
+      "above18": 0
+    },
+    "eth": {
+      "avg": 1,
+      "max": 1,
+      "min": 1,
+      "above18": 0
+    }
+  },
+  "pipelineSimulation": {
+    "potentialSignals": 0,
+    "afterFilters": 0,
+    "blockedByRVOL": 0,
+    "blockedByADX": 0,
+    "blockedByScore": 0,
+    "blockedByRSI": 0
+  }
+}

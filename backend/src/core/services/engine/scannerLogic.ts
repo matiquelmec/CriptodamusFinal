@@ -476,7 +476,95 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                     // 3. Liquidity Walls & Imbalance
                     const orderBook = ve.liquidity.orderBook;
-                    if (orderBook) {
+
+                    // --- INSTITUTIONAL ORDERBOOK ANALYSIS ---
+                    if (orderBook && orderBook.advanced) {
+                        const adv = orderBook.advanced;
+
+                        // IMPROVEMENT 1: Fake Wall Detection (Anti-Manipulation)
+                        if (adv.fakeWallRisk === 'HIGH') {
+                            totalScore -= 30;
+                            reasoning.push("🚨 FAKE WALL DETECTED: High manipulation risk");
+                        } else if (adv.fakeWallRisk === 'MEDIUM') {
+                            totalScore -= 10;
+                            reasoning.push("⚠️ Wall Stability Questionable");
+                        } else if (adv.wallStability === 'STABLE') {
+                            totalScore += 10;
+                            reasoning.push("✅ Wall Stability Verified");
+                        }
+
+                        // IMPROVEMENT 2: Absorption Analysis (Tape Reading)
+                        if (adv.wasAbsorbed && adv.absorptionScore > 80) {
+                            const boost = signalSide === 'LONG' ? 25 : 20;
+                            totalScore += boost;
+                            reasoning.push(`💎 WALL ABSORBED & HELD: Inst. support (${adv.absorptionScore}/100) (+${boost})`);
+                        } else if (adv.wasAbsorbed && adv.absorptionScore > 60) {
+                            totalScore += 15;
+                            reasoning.push(`💎 Wall Holding: Score ${adv.absorptionScore}/100 (+15)`);
+                        }
+
+                        // IMPROVEMENT 3: Deep Imbalance Analysis (Smart Money)
+                        const depthIm = adv.depthImbalance;
+                        if (depthIm) {
+                            // Bullish Deep Pressure
+                            if (depthIm.deep > 2.5 && signalSide === 'LONG') {
+                                totalScore += 30;
+                                reasoning.push(`🌊 DEEP BID PRESSURE: ${depthIm.deep.toFixed(1)}x institutional accumulation (+30)`);
+                            } else if (depthIm.deep < 0.4 && signalSide === 'SHORT') {
+                                totalScore += 30;
+                                reasoning.push(`🌊 DEEP ASK PRESSURE: ${(1 / depthIm.deep).toFixed(1)}x distribution (+30)`);
+                            }
+
+                            // Divergence Detection (Trap Warning)
+                            if (depthIm.divergence) {
+                                totalScore -= 15;
+                                reasoning.push("🪤 LIQUIDITY TRAP: Surface/Deep divergence detected");
+                            }
+
+                            // Surface-only pressure (weaker than deep)
+                            if (depthIm.surface > 3 && depthIm.deep < 1 && signalSide === 'LONG') {
+                                totalScore -= 10;
+                                reasoning.push("🪤 SHALLOW LIQUIDITY: Retail" + " trap suspected");
+                            }
+                        }
+
+                        // IMPROVEMENT 4: Spread Volatility (Panic/Confidence Indicator)
+                        const spread = adv.spreadAnalysis;
+                        if (spread) {
+                            if (spread.isPanic && signalSide === 'LONG') {
+                                totalScore += 20;
+                                reasoning.push(`🔥 PANIC SPREAD: ${spread.currentSpread.toFixed(3)}% - Capitulation entry (+20)`);
+                            } else if (spread.isTight) {
+                                totalScore += 10;
+                                reasoning.push(`✅ TIGHT SPREAD: ${spread.currentSpread.toFixed(3)}% - High liquidity`);
+                            } else if (spread.isWidening && signalSide === 'SHORT') {
+                                totalScore += 10;
+                                reasoning.push("📊 Widening Spread: Fear building");
+                            }
+                        }
+
+                        // IMPROVEMENT 5: Iceberg Detection (Hidden Liquidity)
+                        if (adv.icebergZones && adv.icebergZones.length > 0) {
+                            const nearest = adv.icebergZones[0];
+                            const distancePct = Math.abs(nearest.price - indicators.price) / indicators.price;
+
+                            if (distancePct < 0.01) { // Within 1%
+                                totalScore += 25;
+                                reasoning.push(`🧊 ICEBERG DETECTED at $${nearest.price.toFixed(2)}: Hidden institutional wall (+25)`);
+                            } else if (distancePct < 0.02) {
+                                totalScore += 15;
+                                reasoning.push(`🧊 Iceberg nearby: ${nearest.bounceCount} bounces`);
+                            }
+                        }
+
+                        // Overall Confidence Boost
+                        if (adv.confidence > 70) {
+                            totalScore += 5;
+                            reasoning.push(`🎯 OrderBook Confidence: ${adv.confidence}/100`);
+                        }
+
+                    } else if (orderBook) {
+                        // FALLBACK: Basic OrderBook Analysis (for when advanced isn't available)
                         if (signalSide === 'LONG' && orderBook.bidWall && orderBook.bidWall.strength > 70) {
                             totalScore += 15;
                             reasoning.push(`🧱 Muro Confirmado: Soporte real en $${orderBook.bidWall.price.toFixed(2)} (+15)`);

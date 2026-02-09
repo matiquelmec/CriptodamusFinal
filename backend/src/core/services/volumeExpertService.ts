@@ -509,6 +509,8 @@ export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: Vo
     let finalBidWall: any = null;
     let finalAskWall: any = null;
     let pressure = 1.0;
+    let fullBids: any[] = [];
+    let fullAsks: any[] = [];
 
     if (liveWalls && liveWalls.length > 0) {
         // Convert live walls to VolumeExpert format
@@ -526,7 +528,7 @@ export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: Vo
         finalBidWall = bestBid ? { price: bestBid.price, volume: bestBid.volume, strength: bestBid.strength === 'WHALE' ? 100 : 80 } as any : null;
         finalAskWall = bestAsk ? { price: bestAsk.price, volume: bestAsk.volume, strength: bestAsk.strength === 'WHALE' ? 100 : 80 } as any : null;
 
-        // Snapshots are saved automatically by OrderBookService? No, we save here if enriched.
+        // For advanced analysis, we need full depth - try to get from binanceStream
     } else {
         // FALLBACK: SLOW REST API
         const orderBook = await fetchOrderBook(normalizedSymbol);
@@ -535,6 +537,18 @@ export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: Vo
             finalBidWall = analyzed.bidWall;
             finalAskWall = analyzed.askWall;
             pressure = analyzed.buyingPressure;
+
+            // Store full depth for advanced analysis
+            fullBids = orderBook.bids.slice(0, 20).map((b: any) => ({
+                price: parseFloat(b[0]),
+                qty: parseFloat(b[1]),
+                total: parseFloat(b[0]) * parseFloat(b[1])
+            }));
+            fullAsks = orderBook.asks.slice(0, 20).map((a: any) => ({
+                price: parseFloat(a[0]),
+                qty: parseFloat(a[1]),
+                total: parseFloat(a[0]) * parseFloat(a[1])
+            }));
         }
     }
 
@@ -557,11 +571,73 @@ export async function enrichWithDepthAndLiqs(symbol: string, currentAnalysis: Vo
         }
     }
 
+    // --- INSTITUTIONAL UPGRADE: Advanced OrderBook Analysis ---
+    let advancedAnalysis: any = null;
+
+    if (fullBids.length >= 20 && fullAsks.length >= 20) {
+        try {
+            const { OrderBookAnalyzer } = await import('./engine/pipeline/OrderBookAnalyzer');
+
+            // Get wall history from database
+            let wallHistory: any[] = [];
+            if (supabase) {
+                const { data } = await supabase
+                    .from('orderbook_snapshots')
+                    .select('*')
+                    .eq('symbol', normalizedSymbol)
+                    .gte('timestamp', Date.now() - (24 * 60 * 60 * 1000)) // Last 24h
+                    .order('timestamp', { ascending: false })
+                    .limit(100);
+
+                if (data) {
+                    wallHistory = data.map((d: any) => ({
+                        symbol: d.symbol,
+                        price: d.wall_price,
+                        volume: d.wall_volume,
+                        side: d.side,
+                        firstSeen: d.timestamp,
+                        lastSeen: d.timestamp,
+                        cancelCount: 0, // Will be calculated by analyzer
+                        lifespan: 0
+                    }));
+                }
+            }
+
+            // Prepare price history (simplified - ideally from real-time stream)
+            const priceHistory = highs.slice(-20).map((h, i) => ({
+                price: (h + lows[Math.max(0, lows.length - 20 + i)]) / 2,
+                time: Date.now() - (20 - i) * 60000, // Mock 1-min intervals
+                volume: 0 // Would need real volume data
+            }));
+
+            // Run institutional analysis
+            advancedAnalysis = OrderBookAnalyzer.analyzeOrderBook(
+                fullBids,
+                fullAsks,
+                wallHistory,
+                [], // spread history - would be tracked in binanceStream
+                priceHistory,
+                currentPrice,
+                0 // recent volume - would come from real-time data
+            );
+
+            // console.log(`[VolumeExpert] Advanced Analysis for ${symbol}:`, {
+            //     fakeWallRisk: advancedAnalysis.fakeWallRisk,
+            //     stability: advancedAnalysis.wallStability,
+            //     confidence: advancedAnalysis.confidence
+            // });
+
+        } catch (e) {
+            console.warn(`[VolumeExpert] Advanced analysis failed for ${symbol}:`, e);
+        }
+    }
+
     enriched.liquidity.orderBook = {
         bidWall: finalBidWall,
         askWall: finalAskWall,
         buyingPressure: pressure,
-        spoofing: false
+        spoofing: false,
+        advanced: advancedAnalysis // NEW: Attach advanced analysis
     };
 
     // Save snapshot for future history (Write Logic)

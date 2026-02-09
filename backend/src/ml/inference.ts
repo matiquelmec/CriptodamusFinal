@@ -111,7 +111,7 @@ export function reloadModel() {
     console.log("✅ [ML] Modelo liberado de RAM. Listo para actualizar.");
 }
 
-export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandles?: any[]) {
+export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandles?: any[], persist: boolean = true) {
     try {
         if (!symbol.toUpperCase().endsWith('USDT')) symbol = `${symbol.toUpperCase()}USDT`;
 
@@ -207,7 +207,11 @@ export async function predictNextMove(symbol: string = 'BTCUSDT', existingCandle
 
         // 🛡️ PERSISTENCE CHECK (Saving to DB)
         const signal = probability > 0.55 ? 'BULLISH' : probability < 0.45 ? 'BEARISH' : 'NEUTRAL';
-        await savePrediction(symbol, probability, signal, 'LIVE_INFERENCE', features === 4 ? 'v2_advanced' : 'v1_legacy');
+
+        // Only save if persist=true (Live Mode)
+        if (persist) {
+            await savePrediction(symbol, probability, signal, 'LIVE_INFERENCE', features === 4 ? 'v2_advanced' : 'v1_legacy');
+        }
 
         input.dispose();
         predictionTensor.dispose();

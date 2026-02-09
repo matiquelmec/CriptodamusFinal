@@ -180,6 +180,7 @@ export interface OrderBookAnalysis {
     askWall: { price: number; volume: number; strength: number; isPersistent: boolean } | null;
     buyingPressure: number; // Bid/Ask Ratio
     spoofing: boolean; // Detected spoofing
+    advanced?: any; // OrderBookAdvanced from orderbook-advanced.ts (institutional analysis)
 }
 
 // --- EXPERT VOLUME ANALYSIS (NEW) ---

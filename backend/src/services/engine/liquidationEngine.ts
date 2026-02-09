@@ -212,8 +212,8 @@ export function analyzeOrderBook(
     if (maxAskBlock.volume > avgVol * 3) maxAskBlock.strength = 100;
 
     return {
-        bidWall: maxBidBlock.strength > 0 ? maxBidBlock : null,
-        askWall: maxAskBlock.strength > 0 ? maxAskBlock : null,
+        bidWall: maxBidBlock.strength > 0 ? { ...maxBidBlock, isPersistent: false } : null,
+        askWall: maxAskBlock.strength > 0 ? { ...maxAskBlock, isPersistent: false } : null,
         buyingPressure: askVol > 0 ? bidVol / askVol : 1, // > 1 Bullish, < 1 Bearish
         spoofing: false // Requires history to detect (flickering), unavailable in snapshot
     };

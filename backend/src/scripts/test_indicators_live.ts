@@ -7,15 +7,15 @@ dotenv.config();
 
 async function runDiagnostic() {
     const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'];
-    console.log('🔍 [Diagnostic] Starting systematic integrity audit for:', symbols.join(', '));
+    console.log('🔍 [Diagnóstico] Iniciando auditoría sistemática de integridad para:', symbols.join(', '));
 
     for (const symbol of symbols) {
         try {
-            console.log(`\n--- Auditing ${symbol} ---`);
+            console.log(`\n--- Auditando ${symbol} ---`);
             const candles = await fetchCandles(symbol, '15m');
 
             if (!candles || candles.length < 150) {
-                console.error(`❌ ${symbol}: Insufficient candles (${candles?.length || 0}/150)`);
+                console.error(`❌ ${symbol}: Velas insuficientes (${candles?.length || 0}/150)`);
                 continue;
             }
 
@@ -23,21 +23,21 @@ async function runDiagnostic() {
             const now = Date.now();
             const staleness = (now - lastCandle.timestamp) / 60000;
 
-            console.log(`📊 Freshness: ${staleness.toFixed(1)}m old`);
+            console.log(`📊 Frescura: ${staleness.toFixed(1)}m de antigüedad`);
             if (staleness > 45) {
-                console.warn(`⚠️ ${symbol}: Data is STALE (> 45m)`);
+                console.warn(`⚠️ ${symbol}: Datos OBSOLETOS (> 45m)`);
             }
 
             const indicators = IndicatorCalculator.compute(symbol, candles);
 
             if (indicators.invalidated) {
-                console.error(`❌ ${symbol}: SHIELD REJECTED - ${indicators.technicalReasoning}`);
+                console.error(`❌ ${symbol}: ESCUDO RECHAZADO - ${indicators.technicalReasoning}`);
             } else {
-                console.log(`✅ ${symbol}: SHIELD PASSED (Price: ${indicators.price}, RSI: ${indicators.rsi.toFixed(2)})`);
+                console.log(`✅ ${symbol}: ESCUDO APROBADO (Precio: ${indicators.price}, RSI: ${indicators.rsi.toFixed(2)})`);
             }
 
         } catch (err: any) {
-            console.error(`💥 ${symbol}: Audit crashed - ${err.message}`);
+            console.error(`💥 ${symbol}: Auditoría falló - ${err.message}`);
         }
     }
 }
