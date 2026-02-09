@@ -1,6 +1,7 @@
 
 import { calculateEMA, calculateATR } from './mathUtils';
 import { SmartFetch } from './SmartFetch';
+import { fetchGlobalMarketData } from '../../services/globalMarketService';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -71,7 +72,7 @@ async function analyzeBTCRegime(interval: string = '1d'): Promise<BTCRegimeAnaly
     try {
         // Parametrizamos el intervalo en la URL
         const candles = await SmartFetch.get<any[]>(
-            `https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=200`
+            `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=200`
         );
         const closes = candles.map((c: any[]) => parseFloat(c[4]));
 
@@ -151,35 +152,7 @@ async function analyzeBTCRegime(interval: string = '1d'): Promise<BTCRegimeAnaly
     }
 }
 
-/**
- * Obtiene datos globales de CoinGecko (Dominancia BTC, USDT, etc.)
- * Fuente más confiable que CoinCap
- */
-async function fetchCoinGeckoGlobal(): Promise<any> {
-    return SmartFetch.get<any>('https://api.coingecko.com/api/v3/global');
-}
-
-/**
- * Obtiene BTC Dominance y calcula tendencia
- * @returns Datos de dominancia con tendencia calculada
- */
-async function getBTCDominance(): Promise<BTCDominanceData> {
-    // CoinGecko blocked by CORS in browser. Returning static clean data to prevent console errors.
-    return {
-        current: 54.5, // Approx real value
-        trend: 'STABLE',
-        changePercent: 0
-    };
-}
-
-/**
- * Obtiene USDT Dominance (Correlación Inversa)
- * @returns Datos de dominancia USDT
- */
-async function getUSDTDominance(): Promise<USDTDominanceData> {
-    // CoinGecko blocked. Returning static fallback.
-    return { current: 5.2, trend: 'STABLE' };
-}
+// Fallback functions removed as we now use globalMarketService
 
 // ============================================================================
 // PUBLIC API
@@ -200,13 +173,24 @@ export async function getMacroContext(): Promise<MacroContext> {
         };
     }
 
-    // Fetch paralelo de ambos datos para optimizar latencia
-    const [btcRegime, btcWeeklyRegime, btcDominance, usdtDominance] = await Promise.all([
+    // Fetch paralelo de régimen y datos globales
+    const [btcRegime, btcWeeklyRegime, globalData] = await Promise.all([
         analyzeBTCRegime('1d'),
         analyzeBTCRegime('1w'),
-        getBTCDominance(),
-        getUSDTDominance()
+        fetchGlobalMarketData()
     ]);
+
+    // Construct Dominance Objects from Global Data
+    const btcDominance: BTCDominanceData = {
+        current: globalData.btcDominance,
+        trend: 'STABLE', // Could infer trend if we had history, keeping simple for now
+        changePercent: 0
+    };
+
+    const usdtDominance: USDTDominanceData = {
+        current: globalData.usdtDominance,
+        trend: 'STABLE'
+    };
 
     const context: MacroContext = {
         btcRegime,
