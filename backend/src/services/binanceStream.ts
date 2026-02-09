@@ -354,6 +354,12 @@ class BinanceStreamService {
         if (askVol === 0) return 2.0; // Max Bullish (No sellers)
         return bidVol / askVol;
     }
+    public getPrice(symbol: string): number {
+        // Normalize symbol
+        const s = symbol.toLowerCase().replace('/', '');
+        // Check CVD state (most up-to-date price from aggTrade)
+        return this.cvdState[s]?.price || 0;
+    }
 }
 
 // Singleton Instance

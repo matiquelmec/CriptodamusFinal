@@ -62,6 +62,10 @@ class SignalAuditService extends EventEmitter {
         // 4. HYBRID WATCHDOG (Cada 30s)
         // Detects partial connection failure (Ghost WS) and switches to Polling
         this.healthCheckInterval = setInterval(() => this.checkHealthAndPoll(), 30 * 1000);
+
+        // 5. PRICE CONSENSUS (Every 3 min)
+        // Fetches a random active signal's price via REST to verify stream integrity
+        setInterval(() => this.runConsensusCheck(), 3 * 60 * 1000);
     }
 
     private async reloadActiveSignals() {
@@ -1585,6 +1589,42 @@ class SignalAuditService extends EventEmitter {
             }
         }
         return { success: true, status: 'No pass needed' };
+    }
+
+    // --- PRICE CONSENSUS (The Pulse) ---
+    private async runConsensusCheck() {
+        if (this.activeSignals.length === 0) return;
+
+        // Pick one random signal to audit
+        const randomSignal = this.activeSignals[Math.floor(Math.random() * this.activeSignals.length)];
+        const symbol = randomSignal.symbol;
+        const streamPrice = randomSignal.last_price || binanceStream.getPrice(symbol);
+
+        if (!streamPrice || streamPrice <= 0) return;
+
+        try {
+            // Using direct fetch to avoid circular dependency if SmartFetch is problematic, 
+            // but SmartFetch is imported at top.
+            const url = `https://api.binance.com/api/v3/ticker/price?symbol=${symbol.replace('/', '')}`;
+            const data: any = await SmartFetch.get(url);
+
+            if (data && data.price) {
+                const restPrice = parseFloat(data.price);
+                const diff = Math.abs(streamPrice - restPrice);
+                const diffPercent = (diff / restPrice) * 100;
+
+                if (diffPercent > 1.0) {
+                    const msg = `🚨 CRITICAL PRICE DEVIATION for ${symbol}: Stream=${streamPrice}, REST=${restPrice} (Diff: ${diffPercent.toFixed(2)}%)`;
+                    console.error(`[SignalAudit] ${msg}`);
+                    // Only log critical, don't auto-kill yet to avoid false positives during high volatility
+                    systemAlerts.logCritical(msg, { symbol, streamPrice, restPrice });
+                } else {
+                    // console.log(`✅ [SignalAudit] Consensus OK for ${symbol} (Diff: ${diffPercent.toFixed(4)}%)`);
+                }
+            }
+        } catch (e) {
+            // console.warn(`[SignalAudit] Consensus check failed for ${symbol}`, e);
+        }
     }
 }
 

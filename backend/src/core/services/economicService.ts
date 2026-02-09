@@ -147,52 +147,36 @@ export class EconomicService {
 
     private static async fetchEvents(): Promise<EconomicEvent[]> {
         const now = Date.now();
+        const { EconomicProviderFactory } = await import('./economic/EconomicProviderFactory');
 
-        // 1. Live Fetch Priority (PRIMARY)
+        // 1. Live Fetch (Multi-Provider Failover)
         try {
-            const csvData = await SmartFetch.get<string>(this.CSV_URL_PRIMARY);
-            if (csvData && csvData.includes('Title')) {
-                const events = this.parseLineToEvents(csvData);
-                if (events.length > 0) {
-                    this.cachedEvents = events;
-                    this.lastUpdate = now;
-                    this.sourceStatus = 'LIVE';
+            const { events, source } = await EconomicProviderFactory.fetchEvents();
 
-                    // Mirror to DB as background task
-                    this.persistMirror(csvData).catch(() => { });
+            this.cachedEvents = events;
+            this.lastUpdate = now;
+            this.sourceStatus = 'LIVE';
 
-                    return events;
-                }
-            }
-        } catch (e) {
-            console.warn("[EconomicService] 📡 Primary source offline. Trying Backup...");
-        }
+            // Mirror to DB as background task
+            this.persistMirror(JSON.stringify(events)).catch(() => { });
 
-        // 1.5. Live Fetch Priority (BACKUP - Explicit Failover)
-        try {
-            // NOTE: Using Primary URL again as placeholder for backup if real backup not available
-            // In prod, this would be a different robust endpoint
-            if (process.env.ECONOMIC_BACKUP_URL) {
-                const backupData = await SmartFetch.get<string>(process.env.ECONOMIC_BACKUP_URL);
-                if (backupData && backupData.includes('Title')) {
-                    const events = this.parseLineToEvents(backupData);
-                    this.cachedEvents = events;
-                    this.sourceStatus = 'BACKUP';
-                    console.log("[EconomicService] ⚠️ Using BACKUP News Feed.");
-                    return events;
-                }
-            }
-        } catch (e) {
-            console.warn("[EconomicService] 📡 Backup source offline. Falling back to mirrors...");
+            return events;
+
+        } catch (e: any) {
+            console.warn(`[EconomicService] 📡 All Live Providers Failed: ${e.message}`);
         }
 
         // 2. Database Mirror (if memory is empty or web failed)
         if (this.cachedEvents.length === 0) {
             const mirror = await this.recoverMirror();
             if (mirror) {
-                this.cachedEvents = this.parseLineToEvents(mirror);
-                this.sourceStatus = 'CACHE';
-                console.log("[EconomicService] 🔄 Recovered economic data from DB Mirror.");
+                try {
+                    this.cachedEvents = JSON.parse(mirror); // New format is JSON
+                    this.sourceStatus = 'CACHE';
+                    console.log("[EconomicService] 🔄 Recovered economic data from DB Mirror.");
+                } catch (e) {
+                    console.warn("[EconomicService] Mirror corrupted.");
+                }
             }
         }
 

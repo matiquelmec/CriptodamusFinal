@@ -120,15 +120,17 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     if (integrityReport.status === 'HALTED') {
         const msg = `Integrity HALTED: ${integrityReport.missingCritical.join(', ')}`;
         console.error(`[Scanner] 🚨 ${msg}`);
-        // throw new Error("DATA_INTEGRITY_SHIELD_TRIGGERED"); // DISABLED: Inform Only
-        globalWarning = globalWarning ? `${globalWarning} | 🚨 ${msg}` : `🚨 **INTEGRIDAD CRÍTICA:** ${msg}`;
 
-        // Log critical alert to database but continue
+        // CRITICAL: ABORT ON INTEGRITY FAILURE
+        // "Bad data is worse than no data."
+
         const { systemAlerts } = await import('../../../services/systemAlertService');
         await systemAlerts.logCritical(
-            `Data Integrity Shield Triggered (Non-Blocking): ${integrityReport.missingCritical.join(', ')}`,
+            `Data Integrity Shield Triggered (BLOCKING): ${integrityReport.missingCritical.join(', ')}`,
             { score: integrityReport.score, staleSources: integrityReport.staleSources }
         );
+
+        throw new Error(`DATA_INTEGRITY_SHIELD_TRIGGERED: ${msg}`);
     }
 
 
@@ -410,9 +412,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                 let mlResult = null;
                 try {
+                    // CIRCUIT BREAKER CHECK
+                    const { MLCircuitBreaker } = await import('./ml/MLCircuitBreaker');
+                    const circuitStatus = await MLCircuitBreaker.checkStatus();
+
                     // Only run ML for strong candidates to save CPU, or run for all if capable
                     // Running for all > 50 score
-                    if (totalScore > 50) {
+                    if (circuitStatus.isOpen) {
+                        reasoning.push(`🧠 IA Silenced: ${circuitStatus.reason}`);
+                    } else if (totalScore > 50) {
                         mlResult = await predictNextMove(coin.symbol, candles);
                         if (mlResult) {
                             // PERSISTENCE: Log to model_predictions table (Robust Audit)
@@ -432,12 +440,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                                 // ML says Long, Daily says Bear -> Ignore ML (Noise)
                                 reasoning.push(`🧠 IA Ignored: Bullish prediction clashes with Daily Bear Trend`);
                             } else {
+                                // Fix Type Mismatch: Map ML(BULLISH/BEARISH) to Strategy(LONG/SHORT)
+                                const mlSide = mlResult.signal === 'BULLISH' ? 'LONG' : (mlResult.signal === 'BEARISH' ? 'SHORT' : 'NEUTRAL');
+
                                 // Normal Logic
-                                if (mlResult.signal === signalSide) {
+                                if (mlSide === signalSide) {
                                     const boost = Math.round(mlResult.confidence * 30); // 0-30 points (Scaled for 75k candle brain)
                                     totalScore += boost;
                                     reasoning.push(`🧠 IA Confluence: ${(mlResult.probabilityUp * 100).toFixed(2)}% probability`);
-                                } else if (mlResult.signal !== 'NEUTRAL' && mlResult.signal !== signalSide) {
+                                } else if (mlResult.signal !== 'NEUTRAL' && mlSide !== signalSide) {
                                     // ML contradicts Strategy (Divergence)
                                     totalScore -= 15; // Penalty
                                     reasoning.push(`🧠 IA Divergence: Brain expects ${mlResult.signal}`);

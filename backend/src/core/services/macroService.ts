@@ -70,15 +70,20 @@ let macroCache: CachedMacroData | null = null;
  */
 async function analyzeBTCRegime(interval: string = '1d'): Promise<BTCRegimeAnalysis> {
     try {
-        // Parametrizamos el intervalo en la URL
-        const candles = await SmartFetch.get<any[]>(
-            `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=200`
-        );
+        const url = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=200`;
+        console.log(`[Macro Debug] Fetching: ${url}`);
+
+        const candles = await SmartFetch.get<any[]>(url);
+
+        const lastCandle = candles[candles.length - 1];
+        const lastTime = new Date(lastCandle[0]).toISOString();
         const closes = candles.map((c: any[]) => parseFloat(c[4]));
+        const currentPrice = closes[closes.length - 1];
+
+        console.log(`[Macro Debug] Last Candle Time: ${lastTime} | Price: ${currentPrice}`);
 
         const ema50 = calculateEMA(closes, 50);
         const ema200 = calculateEMA(closes, 200);
-        const currentPrice = closes[closes.length - 1];
 
         // Calcular Volatilidad (ATR 14)
         const highs = candles.map((c: any[]) => parseFloat(c[2]));
