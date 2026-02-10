@@ -48,7 +48,8 @@ class SignalAuditService extends EventEmitter {
 
         // 2. Suscribirse al stream binance
         binanceStream.subscribe((event) => {
-            if (event.type === 'cvd_update') {
+            // TRACKING RECOVERY: Listen to any event with symbol and price for real-time tracking
+            if (event.data && event.data.symbol && event.data.price) {
                 this.processPriceTick(event.data.symbol, event.data.price);
             }
         });
