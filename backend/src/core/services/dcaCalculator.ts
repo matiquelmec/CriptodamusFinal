@@ -466,7 +466,20 @@ export function calculateDCAPlan(
         }
     }
 
-    // Final Sort for TPs
+    // 🔒 CRITICAL FIX: Directional Validation (Financial Hacker Protocol)
+    // Filter TPs to ensure they're in the CORRECT direction for the trade
+    // LONG: TPs must be ABOVE entry (price > entry)
+    // SHORT: TPs must be BELOW entry (price < entry)
+    const isLong = side === 'LONG';
+    uniqueTargets = uniqueTargets.filter(t => {
+        if (isLong) {
+            return t.price > averageEntry; // LONG: only targets above entry
+        } else {
+            return t.price < averageEntry; // SHORT: only targets below entry
+        }
+    });
+
+    // Final Sort for TPs (by distance from entry, closest first)
     uniqueTargets.sort((a, b) => Math.abs(a.price - averageEntry) - Math.abs(b.price - averageEntry));
 
     // Fill TPs
