@@ -317,10 +317,11 @@ export function analyzePauPerdicesStrategy(
     }
 
     // --- DECISION ---
-    // Relaxed Trigger: Allow if Golden Zone OR Hidden Div OR Super Strong Trend (Score > 80)
-    const triggerValid = inGoldenZone || hasHiddenDiv || score >= 80;
+    // Relaxed Trigger: Allow if Golden Zone OR Hidden Div OR Strong Trend (Score >= 70)
+    // SYNC: Trigger threshold matches Entry threshold (70) to prevent "Zombie Signals" (Valid Score, No Trigger)
+    const triggerValid = inGoldenZone || hasHiddenDiv || score >= 70;
 
-    // Reliability Check: Lower threshold to 70 to allow Off-Session signals (max score 75 without session bonus)
+    // Reliability Check: Lower threshold to 70 to allow Off-Session signals
     if (score >= 70 && triggerValid) {
         // Risk Calc
         const finalATR = (indicators.atr && indicators.atr > 0) ? indicators.atr : calculateATR_Internal(highs, lows, prices, 14);
@@ -363,7 +364,9 @@ export function analyzePauPerdicesStrategy(
         };
     }
 
-    return createNeutralResult("Conditions not met", { isGold, sessionValid: isActiveSession, trendValid: true, rsiValid: true, divergenceDetected: hasHiddenDiv });
+    // DIAGNOSTIC FAILURE REASON
+    const failDetails = `Score: ${score}/70, Trigger: ${triggerValid} (Zone:${inGoldenZone} Div:${hasHiddenDiv} ScoreMatch:${score >= 70})`;
+    return createNeutralResult(`Conditions not met [${failDetails}]`, { isGold, sessionValid: isActiveSession, trendValid: true, rsiValid: true, divergenceDetected: hasHiddenDiv });
 }
 
 function createNeutralResult(reason: string, metadata: any): PauStrategyResult {
