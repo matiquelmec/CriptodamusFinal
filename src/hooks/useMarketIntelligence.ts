@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getApiUrl } from '../services/config';
 
 export interface Rotation {
     asset: string;
@@ -30,7 +31,16 @@ export function useMarketIntelligence(refreshInterval = 60000) {
 
     const fetchIntelligence = async () => {
         try {
-            const response = await fetch('/api/advanced/market-intelligence');
+            const url = getApiUrl('/api/advanced/market-intelligence');
+            const response = await fetch(url);
+
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                console.error('Market Intelligence: Expected JSON but got', contentType);
+                throw new Error(`API returned ${contentType || 'unknown'} instead of JSON`);
+            }
+
             const data = await response.json();
 
             if (data.success) {
@@ -41,7 +51,7 @@ export function useMarketIntelligence(refreshInterval = 60000) {
             }
         } catch (err) {
             console.error('Market Intelligence fetch error:', err);
-            setError('Network error');
+            setError(err instanceof Error ? err.message : 'Network error');
         } finally {
             setLoading(false);
         }
