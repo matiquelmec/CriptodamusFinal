@@ -22,6 +22,7 @@ import marketRoutes from './api/market';
 import donationRoutes from './api/donation';
 import proxyRoutes from './api/proxy';
 import systemRoutes from './api/system';
+import advancedRoutes from './api/advanced';
 
 // Import Services
 import { binanceStream } from './services/binanceStream';
@@ -51,6 +52,7 @@ app.use('/api/market', marketRoutes);
 app.use('/api/donation', donationRoutes);
 app.use('/api/proxy', proxyRoutes);
 app.use('/api/system', systemRoutes);
+app.use('/api/advanced', advancedRoutes);
 
 // ... (Rate Limits)
 

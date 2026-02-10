@@ -67,6 +67,24 @@ async function hardReset() {
     if (err5) console.warn("⚠️ Failed to clear ml_learning_state:", err5.message);
     else console.log("✅ ml_learning_state cleared.");
 
+    // 6. Clear Liquidation Heatmap
+    const { error: err6 } = await supabase
+        .from('liquidation_heatmap')
+        .delete()
+        .gte('timestamp', 0);
+
+    if (err6) console.warn("⚠️ Failed to clear liquidation_heatmap:", err6.message);
+    else console.log("✅ liquidation_heatmap cleared.");
+
+    // 7. Clear System Alerts
+    const { error: err7 } = await supabase
+        .from('system_alerts')
+        .delete()
+        .gte('timestamp', 0);
+
+    if (err7) console.warn("⚠️ Failed to clear system_alerts:", err7.message);
+    else console.log("✅ system_alerts cleared.");
+
     console.log("✨ [DB-Reset] Database is now clean.");
 }
 

@@ -86,10 +86,10 @@ router.get('/health-check', async (req, res) => {
 router.get('/market-intelligence', async (req, res) => {
     try {
         const { correlationAnalyzer } = await import('../core/services/risk/CorrelationAnalyzer');
+        const { scannerService } = await import('../services/scanner'); // Lazy import service
 
         // Obtener oportunidades actuales (si están disponibles en caché)
-        // Por ahora enviamos array vacío, se puede integrar con scanner cache
-        const opportunities: any[] = [];
+        const opportunities = scannerService.getLatestOpportunities();
 
         const intelligence = correlationAnalyzer.analyze(opportunities);
 
