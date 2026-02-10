@@ -1,6 +1,6 @@
 
 import { fetchCandles } from '../api/binanceApi';
-import { TradingConfig } from '../../../config/tradingConfig';
+import { TradingConfig } from '../../config/tradingConfig';
 
 interface MatrixData {
     matrix: Record<string, Record<string, number>>;
@@ -138,7 +138,7 @@ export class CorrelationMatrixService {
     }
 
     public getTrackedAssets(): string[] {
-        return TradingConfig.assets.tournament_list;
+        return [...TradingConfig.assets.tournament_list];
     }
 }
 
