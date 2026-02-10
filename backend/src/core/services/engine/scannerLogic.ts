@@ -208,7 +208,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     const BATCH_SIZE = 5;
     for (let i = 0; i < topCandidates.length; i += BATCH_SIZE) {
         const batch = topCandidates.slice(i, i + BATCH_SIZE);
-        // console.log(`[Scanner] Processing batch ${Math.floor(i / BATCH_SIZE) + 1} / ${Math.ceil(topCandidates.length / BATCH_SIZE)}`);
+        console.log(`[Scanner] Processing batch ${Math.floor(i / BATCH_SIZE) + 1} / ${Math.ceil(topCandidates.length / BATCH_SIZE)}`);
 
         await Promise.all(batch.map(async (coin: any) => {
             try {
@@ -1132,6 +1132,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         reasoning.push(`⚠️ FILTRO DE RIESGO: ${filterResult.reason}`);
                     } else {
                         // Hard Block (Score too low, Blacklisted, Wrong Algo)
+                        if (TradingConfig.TOURNAMENT_MODE) {
+                            console.log(`[Diagnostic] ${coin.symbol}: HARD BLOCKED by FilterEngine. Reason: ${filterResult.reason}`);
+                        }
                         return;
                     }
                 }
@@ -1145,9 +1148,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
                 opportunities.push(opportunity);
                 console.log(`[Scanner] [${coin.symbol}] ✅ ACCEPTED with Match Score ${opportunity.confidenceScore}`);
-            } catch (err) {
+            } catch (err: any) {
                 // Individual coin failure is acceptable, but we log it clearly
-                // console.warn(`[Scanner] Skipped ${coin.symbol}:`, err); 
+                console.error(`[Scanner] CRITICAL ERROR processing ${coin.symbol}:`, err.message, err.stack);
             }
         }));
     }
