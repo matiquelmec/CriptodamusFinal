@@ -91,7 +91,7 @@ router.get('/market-intelligence', async (req, res) => {
         // Obtener oportunidades actuales (si están disponibles en caché)
         const opportunities = scannerService.getLatestOpportunities();
 
-        const intelligence = correlationAnalyzer.analyze(opportunities);
+        const intelligence = await correlationAnalyzer.analyze(opportunities);
 
         res.json({
             success: true,

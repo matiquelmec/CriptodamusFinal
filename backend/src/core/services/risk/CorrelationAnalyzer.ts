@@ -52,8 +52,8 @@ export class CorrelationAnalyzer {
     /**
      * Analiza el estado actual del mercado y genera insights
      */
-    analyze(opportunities: any[], btcData?: any): MarketIntelligence {
-        const matrixData = correlationMatrix.generateMatrix();
+    async analyze(opportunities: any[], btcData?: any): Promise<MarketIntelligence> {
+        const matrixData = await correlationMatrix.generateMatrix();
         const assets = [...TradingConfig.assets.tournament_list];
 
         // 1. Detectar rotaciones activas
