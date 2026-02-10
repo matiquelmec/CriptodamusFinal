@@ -790,12 +790,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // --- STAGE 4.12: MARKET INTELLIGENCE CHECK (Skill Override) ---
                 if (intelligenceState.state === 'systemic_risk') {
                     // "If everything moves together, edge is zero."
-                    totalScore -= 15;
-                    reasoning.push(`🧠 Intelligence: RIESGO SISTÉMICO (${(intelligenceState.highCorrRatio * 100).toFixed(0)}% Corr) (-15)`);
+                    // TOURNAMENT MODE ADJUSTMENT:
+                    // In Tournament Mode (Elite 9), high correlation is expected. We reduce penalty to avoid false negatives.
+                    const penalty = TradingConfig.TOURNAMENT_MODE ? 5 : 15;
+                    totalScore -= penalty;
+                    reasoning.push(`🧠 Intelligence: RIESGO SISTÉMICO (${(intelligenceState.highCorrRatio * 100).toFixed(0)}% Corr) (-${penalty})`);
 
                     // Force Higher Threshold in Systemic Risk
-                    // If score was 65, now it's 50 -> Filtered out.
-                    // If score was 90, now it's 75 -> Still passes as "Alpha".
+                    // If score was 65, now it's 60 (Tournament) -> Passes!
+                    // If score was 70, now it's 55 (Global) -> Filtered out.
                 } else if (intelligenceState.state === 'rotation_active') {
                     // Rotation context could be added here if we identified specific rotation assets
                     // For now, we just acknowledge the active environment

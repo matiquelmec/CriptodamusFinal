@@ -39,7 +39,24 @@ async function runAudit() {
     console.log(`✅ Analyzing ${assets.length} Selected Assets...\n`);
 
     const risk = await getMarketRisk();
-    console.log(`🛡️ Market Risk Level: ${risk.level} (${risk.riskType})\n`);
+    // 1.5 Analyze Market Intelligence (Systemic Risk)
+    console.log("🧠 Analyzing Market Intelligence...");
+    const { correlationAnalyzer } = await import('../core/services/risk/CorrelationAnalyzer');
+    let intelligenceState = { state: 'normal', highCorrRatio: 0 };
+    try {
+        const intelligence = await correlationAnalyzer.analyze([], { price: 0, change24h: 0 }); // Mock BTC data for speed
+        intelligenceState = {
+            state: intelligence.state,
+            highCorrRatio: intelligence.metrics ? (intelligence.metrics.highCorrPairs / intelligence.metrics.totalPairs) : 0
+        };
+        console.log(`🧠 Intelligence State: ${intelligence.state.toUpperCase()} (High Corr: ${(intelligenceState.highCorrRatio * 100).toFixed(1)}%)`);
+        if (intelligence.state === 'systemic_risk') {
+            console.log("⚠️ SYSTEMIC RISK ACTIVE: -15 Point Penalty will be applied.");
+        }
+    } catch (e) {
+        console.warn("⚠️ Market Intelligence Failed", e);
+    }
+    console.log("---------------------------------------------------\n");
 
     // 2. Analyze Each Asset
     for (const symbol of assets) {
@@ -69,12 +86,20 @@ async function runAudit() {
             }
 
             // D. Scoring (Pre-Filter)
-            const longScore = StrategyScorer.score(symbol, indicators, 'LONG');
-            const shortScore = StrategyScorer.score(symbol, indicators, 'SHORT');
+            let longResult = StrategyScorer.score(symbol, indicators, 'LONG');
+            let shortResult = StrategyScorer.score(symbol, indicators, 'SHORT');
+
+            // Apply Systemic Risk Penalty (Mirroring ScannerLogic.ts)
+            if (intelligenceState.state === 'systemic_risk') {
+                longResult.score -= 15;
+                longResult.reasoning.push(`🧠 RESGO SISTÉMICO (-15)`);
+                shortResult.score -= 15;
+                shortResult.reasoning.push(`🧠 RESGO SISTÉMICO (-15)`);
+            }
 
             // Determine best side
-            const bestSide = longScore.score > shortScore.score ? 'LONG' : 'SHORT';
-            const bestResult = longScore.score > shortScore.score ? longScore : shortScore;
+            const bestSide = longResult.score > shortResult.score ? 'LONG' : 'SHORT';
+            const bestResult = longResult.score > shortResult.score ? longResult : shortResult;
 
             // E. Filter Check
             const mockOpp: any = {
