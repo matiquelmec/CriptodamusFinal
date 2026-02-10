@@ -6,19 +6,18 @@ export function MarketIntelligencePanel() {
     const { intelligence, loading, error } = useMarketIntelligence(60000);
     const [isCollapsed, setIsCollapsed] = useState(false);
 
-    if (loading && !intelligence) {
-        return (
-            <div className="market-intelligence-panel loading">
-                <div className="panel-header">
-                    <span>📊 MARKET INTELLIGENCE</span>
-                    <span className="loading-spinner">⟳</span>
-                </div>
-            </div>
-        );
+    // Graceful degradation: Si el backend no tiene el endpoint, ocultar panel silenciosamente
+    if (error) {
+        console.warn('[MarketIntelligence] Backend endpoint not available:', error);
+        return null; // No mostrar nada si el endpoint no existe (backend antiguo)
     }
 
-    if (error || !intelligence) {
-        return null; // Fail silently
+    if (loading && !intelligence) {
+        return null; // No mostrar loading spinner inicial, solo mostrar cuando haya datos
+    }
+
+    if (!intelligence) {
+        return null; // No hay datos disponibles
     }
 
     const getStateIcon = (state: string) => {
