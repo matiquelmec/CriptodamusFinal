@@ -835,6 +835,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // --- STAGE 5: BUILD OPPORTUNITY (If Threshold Met) ---
                 const minScore = (TradingConfig.scoring as any).min_score_to_list || 75;
 
+                // DIAGNOSTIC CHECK (Tournament Mode)
+                if (TradingConfig.TOURNAMENT_MODE && totalScore < minScore) {
+                    console.log(`[Diagnostic] ${coin.symbol}: REJECTED (Score ${totalScore.toFixed(0)} < ${minScore}). Reasons: ${reasoning.join(', ')}`);
+                }
+
                 if (totalScore >= minScore) {
                     const finalScore = Math.min(100, Math.round(totalScore));
 
@@ -1020,7 +1025,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                 // DISCARD signal if CRITICAL contradiction detected
                 if (coherenceCheck.shouldDiscard) {
-                    console.log(`[Coherence] ❌ DISCARDING ${coin.symbol}: Critical contradiction detected`);
+                    if (TradingConfig.TOURNAMENT_MODE) {
+                        console.log(`[Diagnostic] ${coin.symbol}: REJECTED by Coherence Check. Reasons:`);
+                        coherenceCheck.contradictions.forEach(c => console.log(`  - ${c.description}`));
+                    } else {
+                        console.log(`[Coherence] ❌ DISCARDING ${coin.symbol}: Critical contradiction detected`);
+                    }
                     return; // Skip this signal entirely
                 }
 
