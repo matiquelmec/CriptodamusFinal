@@ -109,6 +109,26 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
     const allWeights = strategyPerformanceService.getAllWeights();
     Object.keys(allWeights).forEach(k => { stratWeightsMap[k] = allWeights[k].weight; });
 
+    // NEW: MARKET INTELLIGENCE INTEGRATION (The "Skill" Connection)
+    // We check the correlation matrix state BEFORE processing individual coins.
+    const { correlationAnalyzer } = await import('../risk/CorrelationAnalyzer');
+    let intelligenceState = { state: 'normal', highCorrRatio: 0 };
+    try {
+        // Find BTC data for context
+        const btcTicker = market.find(m => m.symbol === 'BTC/USDT' || m.id === 'BTCUSDT');
+        const btcData = btcTicker ? { price: btcTicker.price, change24h: btcTicker.percentage } : undefined;
+
+        // Analyze Market Structure (passing empty ops just to get state)
+        const intelligence = await correlationAnalyzer.analyze([], btcData);
+        intelligenceState = {
+            state: intelligence.state,
+            highCorrRatio: intelligence.metrics ? (intelligence.metrics.highCorrPairs / intelligence.metrics.totalPairs) : 0
+        };
+        console.log(`[Scanner] 🧠 Market Intelligence: ${intelligence.state.toUpperCase()} (Corr: ${(intelligenceState.highCorrRatio * 100).toFixed(1)}%)`);
+    } catch (e) {
+        console.warn("[Scanner] Failed to consult Market Intelligence:", e);
+    }
+
     // --- STAGE 0.9: HOLISTIC INTEGRITY GUARD (Fail-Fast Logic) ---
     const integrityReport = await DataIntegrityGuard.getSystemIntegrityReport({
         isPreFlight: true,
@@ -765,6 +785,21 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 if (sessionState.isKillZone) {
                     totalScore -= 20; // Reduce confidence significantly
                     reasoning.push(`⚠️ Reduced Confidence: ${sessionState.killZoneReason} (-20)`);
+                }
+
+                // --- STAGE 4.12: MARKET INTELLIGENCE CHECK (Skill Override) ---
+                if (intelligenceState.state === 'systemic_risk') {
+                    // "If everything moves together, edge is zero."
+                    totalScore -= 15;
+                    reasoning.push(`🧠 Intelligence: RIESGO SISTÉMICO (${(intelligenceState.highCorrRatio * 100).toFixed(0)}% Corr) (-15)`);
+
+                    // Force Higher Threshold in Systemic Risk
+                    // If score was 65, now it's 50 -> Filtered out.
+                    // If score was 90, now it's 75 -> Still passes as "Alpha".
+                } else if (intelligenceState.state === 'rotation_active') {
+                    // Rotation context could be added here if we identified specific rotation assets
+                    // For now, we just acknowledge the active environment
+                    reasoning.push(`🧠 Intelligence: Rotación de Capital Activa`);
                 }
 
                 // --- STAGE 4.11: DORMANT ENGINES ACTIVATION ---

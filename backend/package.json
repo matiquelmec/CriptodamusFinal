@@ -5,7 +5,8 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "tsx src/server.ts",
+    "start": "node dist/server.js",
+    "debug-audit": ".\\node_modules\\.bin\\tsx src/scripts/debug_scanner.ts",
     "dev": "tsx watch src/server.ts",
     "monitor": "tsx src/scripts/monitor.ts",
     "build": "tsc"

@@ -182,11 +182,11 @@ export const TradingConfig = {
 
     // --- SCORING MATRIX ---
     scoring: {
-        min_score_entry: 65,
-        min_score_to_list: 65, // Fix: Ensure visible threshold matches entry threshold
+        min_score_entry: 60, // DIAGNOSTIC MODE: Reduced from 75 to 60
+        min_score_to_list: 60, // DIAGNOSTIC MODE: Match entry
         god_mode_threshold: 90,
         filters: { // NEW: Hard Filters
-            min_adx: 20, // Avoid Chop
+            min_adx: 15, // DIAGNOSTIC MODE: Reduced from 20 to 15 (Allow weaker trends)
             min_volume_24h: 5000000 // $5M Liquidity Floor
         },
         weights: {
