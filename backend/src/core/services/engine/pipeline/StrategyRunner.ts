@@ -35,6 +35,7 @@ export class StrategyRunner {
         // 0. SPECIAL OVERRIDE: PAU PERDICES (TOURNAMENT MODE / GOLD SNIPER)
         const symbol = indicators.symbol || 'UNKNOWN';
         const isTarget = TradingConfig.TOURNAMENT_MODE || symbol.includes('XAU') || symbol.includes('GOLD') || symbol.includes('PAXG');
+        let pauFailReason: string | null = null;
 
         if (isTarget) {
             // Pass contextCandles (4h) as the last argument
@@ -53,6 +54,8 @@ export class StrategyRunner {
                     scoreBoost: 50, // Massive priority boost
                     marketRegime: detectMarketRegime(indicators) // Still return regime for context
                 };
+            } else {
+                pauFailReason = pauResult.reason.join(", ");
             }
         }
 
@@ -218,12 +221,22 @@ export class StrategyRunner {
             }
         }
 
+        // Default Fallback (If Pau Failed and no other strategy matched)
+        if (!bestStrategyResult && pauFailReason) {
+            bestStrategyResult = {
+                id: 'pau_perdices_gold',
+                score: 0,
+                signal: 'NEUTRAL',
+                reason: `Pau Ignored: ${pauFailReason}`,
+                isFresh: false
+            };
+        }
+
         return {
             primaryStrategy: bestStrategyResult,
             details: strategyDetails,
             scoreBoost: Math.min(100, totalScoreBoost), // Cap valid boost
             marketRegime
         };
-
     }
 }
