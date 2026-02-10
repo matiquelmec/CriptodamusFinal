@@ -376,7 +376,9 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // Apply Macro Filters (Context Awareness)
                 // ✅ SYMMETRIC & ENHANCED: Applied Macro context (BTC, USDT.D, Global)
                 if (macroContext) {
-                    totalScore = applyMacroFilters(totalScore, coin.symbol, signalSide, macroContext, indicators, globalData);
+                    const macroResult = applyMacroFilters(totalScore, coin.symbol, signalSide, macroContext, indicators, globalData);
+                    totalScore = macroResult.score;
+                    if (macroResult.reason) reasoning.push(macroResult.reason);
                 }
 
                 // NEW: News Sentiment Integration moved to StrategyScorer for granular logic
@@ -1184,31 +1186,43 @@ function applyMacroFilters(
     macro: MacroContext,
     indicators: TechnicalIndicators,
     globalData?: any
-): number {
+): { score: number; reason?: string } {
     let adjustedScore = baseScore;
+    let reasonLog: string | undefined;
     const isBTC = symbol.includes('BTC');
 
     // 1. BTC REGIME PENALTY (Symmetric)
     // Exception: If signal is a Reversal (Oversold/Overbought), bypass penalty to catch bottoms/tops
+    // Exception 2: Gold/Pau Strategy - Institutional Hedge (Don't penalize Gold for BTC Bearishness)
+    const isGold = symbol.includes('PAXG') || symbol.includes('XAU') || symbol.includes('GOLD');
     const isReversalLONG = signalSide === 'LONG' && indicators.rsi < 30;
     const isReversalSHORT = signalSide === 'SHORT' && indicators.rsi > 70;
 
-    if (!isBTC && signalSide === 'LONG' && !isReversalLONG) {
-        if (macro.btcRegime.regime === 'BEAR') adjustedScore *= 0.7; // -30%
-        else if (macro.btcRegime.regime === 'RANGE') adjustedScore *= 0.9;
+    if (!isBTC && !isGold && signalSide === 'LONG' && !isReversalLONG) {
+        if (macro.btcRegime.regime === 'BEAR') {
+            adjustedScore *= 0.7; // -30%
+            reasonLog = `⚠️ Macro: BTC Bearish Penalty (-30%)`;
+        }
+        else if (macro.btcRegime.regime === 'RANGE') {
+            adjustedScore *= 0.9;
+            reasonLog = `⚠️ Macro: BTC Range Penalty (-10%)`;
+        }
     }
 
-    if (!isBTC && signalSide === 'SHORT' && !isReversalSHORT) {
+    if (!isBTC && !isGold && signalSide === 'SHORT' && !isReversalSHORT) {
         if (macro.btcRegime.regime === 'BULL' || macro.btcWeeklyRegime?.regime === 'BULL') {
             adjustedScore *= 0.7; // -30% (Symmetric to BULL filter)
+            reasonLog = `⚠️ Macro: BTC Bullish Penalty (-30%)`;
         } else if (macro.btcRegime.regime === 'RANGE') {
             adjustedScore *= 0.9;
+            reasonLog = `⚠️ Macro: BTC Range Penalty (-10%)`;
         }
     }
 
     // 2. USDT DOMINANCE (Rotation Logic)
     if (macro.usdtDominance.trend === 'RISING' && signalSide === 'LONG') {
         adjustedScore *= 0.75; // -25% Drain
+        reasonLog = reasonLog ? `${reasonLog} | USDT Dominance Rising` : `⚠️ Macro: USDT Dominance Rising (-25%)`;
     } else if (macro.usdtDominance.trend === 'FALLING' && signalSide === 'LONG') {
         adjustedScore += 10; // ✅ BOOST: Capital rotating INTO alts
     } else if (macro.usdtDominance.trend === 'RISING' && signalSide === 'SHORT') {
@@ -1231,7 +1245,7 @@ function applyMacroFilters(
         if (goldStr > 2700 && signalSide === 'LONG') adjustedScore += 5; // Risk-off hedge
     }
 
-    return isNaN(adjustedScore) ? baseScore : Math.round(adjustedScore);
+    return { score: isNaN(adjustedScore) ? baseScore : Math.round(adjustedScore), reason: reasonLog };
 }
 
 // --- HELPER: SMART ARCHITECT CHECK (MTF) ---
