@@ -317,9 +317,11 @@ export function analyzePauPerdicesStrategy(
     }
 
     // --- DECISION ---
-    const triggerValid = inGoldenZone || hasHiddenDiv; // For shorts, relies on Hidden Div primarily if Fib ambiguous
+    // Relaxed Trigger: Allow if Golden Zone OR Hidden Div OR Super Strong Trend (Score > 80)
+    const triggerValid = inGoldenZone || hasHiddenDiv || score >= 80;
 
-    if (score >= 80 && triggerValid) {
+    // Reliability Check: Lower threshold to 70 to allow Off-Session signals (max score 75 without session bonus)
+    if (score >= 70 && triggerValid) {
         // Risk Calc
         const finalATR = (indicators.atr && indicators.atr > 0) ? indicators.atr : calculateATR_Internal(highs, lows, prices, 14);
         const slDist = finalATR * config.risk.sl_atr_multiplier;

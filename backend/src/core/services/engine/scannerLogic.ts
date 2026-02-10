@@ -334,6 +334,11 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                 // Skip if no valid signal found
                 if (strategyResult.primaryStrategy && strategyResult.primaryStrategy.signal === 'NEUTRAL') {
+                    if (TradingConfig.TOURNAMENT_MODE) {
+                        // DIAGNOSTIC LOG: Why did we fail?
+                        const reasons = strategyResult.details.length > 0 ? strategyResult.details.join(', ') : 'No strategy score > 10';
+                        console.log(`[Diagnostic] ${coin.symbol}: IGNORED. Reason: ${reasons}`);
+                    }
                     return;
                 }
 
