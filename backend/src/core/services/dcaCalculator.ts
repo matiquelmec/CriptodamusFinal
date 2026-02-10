@@ -1,6 +1,7 @@
 import { ConfluenceAnalysis, POI } from './confluenceEngine';
 import { MarketRegime } from '../types/types-advanced';
 import { FundamentalTier } from '../types'; // NEW Import
+import { TradingConfig } from '../config/tradingConfig';
 
 export interface DCAEntry {
     level: number; // 1, 2, 3
@@ -355,7 +356,7 @@ export function calculateDCAPlan(
 
     // 7.2 Calculate Baseline Volatility Stop (1.5x ATR - Professional Standard)
     // We use 1.5x as the "Standard Breathing Room" per Pau's strategy
-    const { TradingConfig } = require('../config/tradingConfig'); // Lazy load to allow generic usage
+    // const { TradingConfig } = require('../config/tradingConfig'); // REMOVED: Incompatible with ESM
     const baseMult = TradingConfig?.pauStrategy?.risk?.sl_atr_multiplier || 1.5;
 
     // Dynamic Tier Adjustments (Slight tweaks, not huge jumps)
