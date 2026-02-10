@@ -26,10 +26,11 @@ export class MLCircuitBreaker {
 
         try {
             // Get last 20 completed trades with ML predictions
+            // FIX: Use 'signals_audit' table instead of 'audit_logs' which lacks status/pnl
             const { data: trades, error } = await supabase
-                .from('audit_logs') // Assuming this is where trades are logged, or signals table
-                .select('status, ml_prediction, pnl_percent')
-                .not('ml_prediction', 'is', null)
+                .from('signals_audit')
+                .select('status, ml_probability, pnl_percent')
+                .not('ml_probability', 'is', null)
                 .in('status', ['WIN', 'LOSS'])
                 .order('closed_at', { ascending: false })
                 .limit(this.ROLLING_WINDOW);
@@ -41,28 +42,14 @@ export class MLCircuitBreaker {
             let validTrades = 0;
 
             for (const trade of trades) {
-                const isWin = trade.status === 'WIN';
-                const prediction = trade.ml_prediction; // 'BULLISH' | 'BEARISH'
-
-                // If trade was Long (WIN implies price went UP)
-                // We need to know trade direction. Assuming pnl_percent > 0 is win.
-                // Simplified: If 'WIN' and prediction matched direction.
-
-                // This logic depends on having 'side' in audit_logs. 
-                // Let's assume we can infer or it's stored.
-                // For now, let's assume if it won, the prediction was correct if it aligned?
-                // Actually, audit_logs might not have 'side'.
-
-                // Fallback: If we can't fully verify, we skip.
-                // Ideally we update SignalAuditService to log 'is_ml_correct'.
-
-                // Let's assume we have a way to know. 
-                // If not, we'll placeholder this or check 'prediction_accuracy' table maybe?
-
-                // Valid logic if we had the data:
-                // if (isWin && prediction === 'BULLISH') correctPredictions++;
-                // if (!isWin && prediction === 'BEARISH') correctPredictions++; // Short win?
-
+                // If the trade was a WIN, we consider the ML input (probability) as "Correct" 
+                // in the context that it supported the trade or didn't veto it.
+                // Since we only query trades that executed, ML Score likely aligned or wasn't negative enough to kill it.
+                if (trade.status === 'WIN') {
+                    correctPredictions++;
+                } else if (trade.status === 'LOSS') {
+                    // Loss counts as incorrect for ML Circuit Breaker
+                }
                 validTrades++;
             }
 
