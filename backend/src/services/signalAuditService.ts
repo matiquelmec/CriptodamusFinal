@@ -108,6 +108,20 @@ class SignalAuditService extends EventEmitter {
 
     private processingSignatures = new Set<string>();
 
+    /**
+     * INTELLIGENT BROADCATER (Senior Level)
+     * Throttles PnL-only updates but allows critical events immediately.
+     */
+    private broadcast(isCritical: boolean = false) {
+        const now = Date.now();
+        const shouldBroadcast = isCritical || (now - this.lastBroadcastTime > this.BROADCAST_THROTTLE_MS);
+
+        if (shouldBroadcast) {
+            this.emit('trades_updated', this.activeSignals);
+            this.lastBroadcastTime = now;
+        }
+    }
+
     public getActiveSignals() {
         return this.activeSignals;
     }
@@ -253,8 +267,8 @@ class SignalAuditService extends EventEmitter {
                     binanceStream.addStream(streamSymbol);
                     console.log(`✅ [SignalAudit] Registered & Tracked: ${opp.symbol} ${opp.side} (Entry: $${entryTarget})`);
 
-                    // 📡 BROADCAST UPDATE
-                    this.emit('trades_updated', this.activeSignals);
+                    // 📡 BROADCAST UPDATE (Critical: New Signal)
+                    this.broadcast(true);
 
                     // 🔔 TELEGRAM ALERT
                     const { telegramService } = await import('./telegramService');
@@ -700,8 +714,7 @@ class SignalAuditService extends EventEmitter {
         if (signalsToUpdate.length > 0) {
             await this.syncUpdates(signalsToUpdate);
 
-            // 🧠 INTELLIGENT BROADCAST LOGIC (Senior Level)
-            const now = Date.now();
+            // 🧠 INTELLIGENT BROADCAST (Senior Level)
             const hasCriticalChange = signalsToUpdate.some(u =>
                 u.status !== undefined ||
                 u.stage !== undefined ||
@@ -709,12 +722,7 @@ class SignalAuditService extends EventEmitter {
                 u.take_profit !== undefined
             );
 
-            const shouldBroadcast = hasCriticalChange || (now - this.lastBroadcastTime > this.BROADCAST_THROTTLE_MS);
-
-            if (shouldBroadcast) {
-                this.emit('trades_updated', this.activeSignals);
-                this.lastBroadcastTime = now;
-            }
+            this.broadcast(hasCriticalChange);
         }
     }
 
@@ -858,9 +866,7 @@ class SignalAuditService extends EventEmitter {
                 }
             }
         }
-
-        // 📡 BROADCAST UPDATE
-        this.emit('trades_updated', this.activeSignals);
+        // REDUNDANT EMIT REMOVED: Callers now handle broadcast(isCritical) explicitly.
     }
 
     /**
@@ -1222,6 +1228,7 @@ class SignalAuditService extends EventEmitter {
 
             if (signalsToUpdate.length > 0) {
                 await this.syncUpdates(signalsToUpdate);
+                this.broadcast(true); // Advanced exits are always critical
             }
 
             // DOUBLE EMIT REMOVED: syncUpdates() now handles the broadcast logic centrally.
