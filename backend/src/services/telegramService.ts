@@ -141,7 +141,9 @@ export class TelegramService {
             message += `🧠 <b>ANÁLISIS DE IA (Tesis)</b>\n`;
             opp.reasoning.forEach(r => {
                 // Clean markdown for Telegram HTML (remove **, __, and leading dashes)
-                const cleanR = r.replace(/\*\*/g, '').replace(/__/g, '').replace(/^[-*]\s*/, '');
+                // SANITIZATION FIX: Escape HTML special chars to prevent "Unsupported start tag" errors
+                let cleanR = r.replace(/\*\*/g, '').replace(/__/g, '').replace(/^[-*]\s*/, '');
+                cleanR = cleanR.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
                 message += `• ${cleanR}\n`;
             });
         }

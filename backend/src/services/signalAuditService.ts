@@ -529,13 +529,16 @@ class SignalAuditService extends EventEmitter {
                         shouldClose = true;
                         updates.status = currentStage > 0 ? 'WIN' : 'LOSS';
                         updates.final_price = currentPrice;
+                        updates.pnl_percent = totalPnL; // FIX: Ensure PnL is passed to Integrity Guard
+
                         if (currentStage > 0) {
-                            console.log(`🛡️ [SignalAudit] Smart Breakeven Hit: ${signal.symbol} (Secured Profit)`);
+                            console.log(`🛡️ [SignalAudit] Smart Breakeven Hit: ${signal.symbol} (Secured Profit: ${totalPnL.toFixed(2)}%)`);
                             telegramService.sendUpdateAlert('SL_MOVED', {
                                 symbol: signal.symbol,
                                 oldSl: signal.stop_loss,
                                 newSl: updates.final_price,
-                                reason: 'Smart Breakeven (Profit Secured)'
+                                reason: 'Smart Breakeven (Profit Secured)',
+                                pnl: totalPnL.toFixed(2)
                             });
                         } else {
                             console.log(`⛔ [SignalAudit] Technical Stop Loss Hit: ${signal.symbol} @ $${currentPrice}`);
@@ -548,7 +551,10 @@ class SignalAuditService extends EventEmitter {
                             if (tp1Hit) {
                                 updates.stage = 1;
                                 updates.status = 'PARTIAL_WIN';
-                                updates.realized_pnl_percent = this.calculateNetPnL(currentWAP, tp1, signal.side, 0, 0.50); // 50% Secured
+                                const realPnL = this.calculateNetPnL(currentWAP, tp1, signal.side, 0, 0.50);
+                                updates.realized_pnl_percent = realPnL;
+                                signal.realized_pnl_percent = realPnL; // FIX: Update memory for next tick calculation
+                                signal.stage = 1; // Sync stage to memory immediately
 
                                 // FORCE SL TO BREAKEVEN (Safety Net)
                                 // If TP1 is hit, we MUST ensure the stop is at least at entry.
@@ -584,7 +590,10 @@ class SignalAuditService extends EventEmitter {
                             if (tp2Hit) {
                                 updates.stage = 2;
                                 const profit2 = this.calculateNetPnL(currentWAP, tp2, signal.side, 0, 0.3);
-                                updates.realized_pnl_percent = (signal.realized_pnl_percent || 0) + profit2;
+                                const newRealized = (signal.realized_pnl_percent || 0) + profit2;
+                                updates.realized_pnl_percent = newRealized;
+                                signal.realized_pnl_percent = newRealized; // FIX: Update memory
+                                signal.stage = 2;
                                 console.log(`💰💰 [SignalAudit] TP2 Hit: ${signal.symbol}`);
                                 telegramService.sendUpdateAlert('TP_HIT', {
                                     symbol: signal.symbol,
