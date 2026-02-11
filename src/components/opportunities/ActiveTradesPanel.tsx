@@ -109,12 +109,29 @@ const ActiveTradesPanel: React.FC = () => {
                         <div className="divide-y divide-white/5">
                             {displayTrades.map((trade) => {
                                 const isLong = trade.side === 'LONG';
-                                const pnl = trade.pnl_percent || 0;
+
+                                // --- STATUS LOGIC ROBUSTA ---
+                                // Prioridad: STATUS explícito del Backend (PENDING vs ACTIVE)
+                                const status = trade.status || 'OPEN'; // Fallback
+                                const isPending = status === 'PENDING';
+                                const isActive = status === 'ACTIVE' || status === 'OPEN' || status === 'PARTIAL_WIN';
+
+                                // PnL Rendering
+                                let pnl = trade.pnl_percent || 0;
+                                let showPnl = true;
+
+                                if (isPending) {
+                                    pnl = 0;
+                                    showPnl = false; // Ocultar PnL si aún no hemos entrado
+                                }
+
                                 const isWin = pnl > 0;
                                 const pnlColor = isWin ? 'text-emerald-400' : 'text-rose-400';
                                 const pnlBg = isWin ? 'bg-emerald-500/5' : 'bg-rose-500/5';
-                                // DB uses 'entry_price' or 'activation_price'
-                                const entryPrice = trade.entry_price || trade.activation_price || 0;
+
+                                // Prices
+                                // Entry Price: Si es Pending = Precio Objetivo. Si es Active = Precio de Activación Real.
+                                const entryPrice = trade.activation_price || trade.entry_price || 0;
                                 const currentPrice = trade.last_price || trade.final_price || entryPrice;
 
                                 // Identify Active Target (TP1, TP2, TP3)
@@ -126,13 +143,29 @@ const ActiveTradesPanel: React.FC = () => {
                                 if (stage >= 3) { nextTp = null; tpLabel = "MOON"; }
 
                                 const isAdapted = trade.technical_reasoning?.includes('Updated') || trade.technical_reasoning?.includes('NUCLEAR');
+
+                                // --- BADGE LOGIC ---
                                 let statusLabel = 'OPEN';
                                 let statusIcon = <Clock size={12} />;
                                 let statusColor = 'text-slate-400';
+                                let statusBorder = 'border-slate-800';
 
-                                if (trade.stage === 1) { statusLabel = 'SECURED (TP1)'; statusIcon = <Shield size={12} />; statusColor = 'text-blue-400'; }
-                                if (trade.stage === 2) { statusLabel = 'PROFIT (TP2)'; statusIcon = <DollarSign size={12} />; statusColor = 'text-emerald-400'; }
-                                if (trade.stage === 3) { statusLabel = 'MOONBAG'; statusIcon = <Target size={12} />; statusColor = 'text-purple-400'; }
+                                if (isPending) {
+                                    statusLabel = 'ESPERANDO';
+                                    statusIcon = <Clock size={12} />;
+                                    statusColor = 'text-yellow-400';
+                                    statusBorder = 'border-yellow-500/30 bg-yellow-500/10';
+                                } else if (isActive) {
+                                    statusLabel = 'OPERANDO';
+                                    statusIcon = <Activity size={12} />;
+                                    statusColor = 'text-blue-400';
+                                    statusBorder = 'border-blue-500/30 bg-blue-500/10';
+                                }
+
+                                // Overrides for Stages
+                                if (stage === 1) { statusLabel = 'TP1 SECURED'; statusIcon = <Shield size={12} />; statusColor = 'text-emerald-400'; statusBorder = 'border-emerald-500/30 bg-emerald-500/10'; }
+                                if (stage === 2) { statusLabel = 'TP2 PROFIT'; statusIcon = <DollarSign size={12} />; statusColor = 'text-emerald-400'; statusBorder = 'border-emerald-500/30 bg-emerald-500/10'; }
+                                if (stage === 3) { statusLabel = 'MOONBAG'; statusIcon = <Target size={12} />; statusColor = 'text-purple-400'; statusBorder = 'border-purple-500/30 bg-purple-500/10'; }
 
                                 return (
                                     <div key={trade.id} className="grid grid-cols-7 gap-4 px-6 py-4 items-center hover:bg-white/2 transition-colors group">
@@ -152,11 +185,13 @@ const ActiveTradesPanel: React.FC = () => {
                                         </div>
 
                                         {/* 2. Entry */}
-                                        ${Number(entryPrice || 0).toLocaleString()}
+                                        <div className="col-span-1 text-right flex flex-col justify-center">
+                                            <span className="font-mono text-xs text-slate-300">${Number(entryPrice || 0).toLocaleString()}</span>
+                                            {isPending && <span className="text-[8px] text-yellow-500/70 uppercase">Objetivo</span>}
+                                        </div>
 
                                         {/* 3. Mark Price */}
                                         <div className="col-span-1 text-right font-mono text-xs text-white font-bold group-hover:text-blue-200 transition-colors">
-                                            {/* Using last_price directly from stream context if available */}
                                             ${Number(currentPrice || 0).toLocaleString()}
                                         </div>
 
@@ -185,15 +220,19 @@ const ActiveTradesPanel: React.FC = () => {
                                         </div>
 
                                         {/* 6. PnL */}
-                                        <div className={`col-span-1 text-right font-mono font-black text-sm ${pnlColor}`}>
-                                            <span className={`px-2 py-1 rounded ${pnlBg}`}>
-                                                {pnl > 0 ? '+' : ''}{pnl.toFixed(2)}%
-                                            </span>
+                                        <div className={`col-span-1 text-right font-mono font-black text-sm ${showPnl ? pnlColor : 'text-slate-600'}`}>
+                                            {showPnl ? (
+                                                <span className={`px-2 py-1 rounded ${pnlBg}`}>
+                                                    {pnl > 0 ? '+' : ''}{pnl.toFixed(2)}%
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] uppercase tracking-widest opacity-50">Esperando</span>
+                                            )}
                                         </div>
 
-                                        {/* 7. Status */}
+                                        {/* 7. Status Badge */}
                                         <div className="col-span-1 flex justify-end">
-                                            <div className={`flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full border border-white/5 bg-slate-900 ${statusColor}`}>
+                                            <div className={`flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full border ${statusBorder} ${statusColor}`}>
                                                 {statusIcon}
                                                 {statusLabel}
                                             </div>
