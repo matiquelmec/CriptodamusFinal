@@ -1480,7 +1480,15 @@ class SignalAuditService extends EventEmitter {
 
             if (scoreA !== scoreB) return scoreB - scoreA; // High score first
 
-            // Tie-breaker: Newest First
+            // Tie-breaker:
+            // If History (Score 1) -> Sort by 'closed_at' (Most recent outcome first)
+            // If Active/Pending (Score 2/3) -> Sort by 'created_at' (Newest signal first)
+            if (scoreA === 1) {
+                const timeA = new Date(a.closed_at || a.created_at).getTime();
+                const timeB = new Date(b.closed_at || b.created_at).getTime();
+                return timeB - timeA;
+            }
+
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
     }
