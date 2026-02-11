@@ -201,8 +201,25 @@ class SignalAuditService extends EventEmitter {
                         fees = (activationPrice * this.FEE_RATE);
 
                         console.log(`⚡ [SignalAudit] Market Entry: ${opp.symbol} @ $${activationPrice.toFixed(4)} (Slip: ${slippageAmount.toFixed(4)})`);
+
+                        // 3. SANITY CHECK: Ensure we are not entering into a trade that is ALREADY lost or won.
+                        // If Market Price is already below SL (Long) or above SL (Short), ABORT.
+                        // If Market Price is already above TP1 (Long) or below TP1 (Short), ABORT (or take profit instantly? No, unprofessional).
+
+                        const isInstantSL = (opp.side === 'LONG' ? activationPrice <= opp.stopLoss : activationPrice >= opp.stopLoss);
+                        const isInstantTP = (opp.side === 'LONG' ? activationPrice >= opp.takeProfits.tp1 : activationPrice <= opp.takeProfits.tp1);
+
+                        if (isInstantSL) {
+                            console.warn(`⛔ [SignalAudit] REJECTED Instant-Entry: Price ($${activationPrice}) is already past SL ($${opp.stopLoss})`);
+                            initialStatus = 'REJECTED_RISK';
+                        } else if (isInstantTP) {
+                            console.warn(`⚠️ [SignalAudit] REJECTED Instant-Entry: Price ($${activationPrice}) is already past TP1 ($${opp.takeProfits.tp1})`);
+                            initialStatus = 'REJECTED_LATE';
+                        }
                     }
                 }
+
+                if (initialStatus.includes('REJECTED')) return; // Do not register bad trades
 
                 const payload = {
                     signal_id: opp.id,
