@@ -204,20 +204,42 @@ class ScannerService extends EventEmitter {
 
             // 5. Broadcast Results
             if (uniqueResults.length > 0) {
-                console.log(`✅ [ScannerService] Broadcast: ${uniqueResults.length} opportunities (Merged).`);
-                this.emit('scan_complete', uniqueResults);
-
-                // 🚀 TELEGRAM NOTIFICATION HOOK
-                telegramService.broadcastSignals(uniqueResults).catch(err => console.error("[Scanner] Telegram Error:", err));
-
-                // 🛡️ SIGNAL AUDIT HOOK (New)
+                // 🛡️ [SMART FILTER] DEDUPLICATION AGAINST ACTIVE TRADES (SALA DE CONTROL)
+                // We must query the Audit Service to see if we satisfy the "Silence if Active" rule.
                 const { signalAuditService } = await import('./signalAuditService');
-                signalAuditService.registerSignals(uniqueResults).catch(err => console.error("[Scanner] Audit Error:", err));
+                const activeTrades = signalAuditService.getActiveSignalsSnapshot();
 
-                // Golden Tickets (High Confidence)
-                const goldenTickets = uniqueResults.filter(o => o.confidenceScore >= 80);
-                if (goldenTickets.length > 0) {
-                    this.emit('golden_ticket', goldenTickets);
+                // Filter out opportunities that are already being managed (PENDING, ACTIVE, OPEN, PARTIAL_WIN)
+                // We map symbols to upper case for robust comparison
+                const activeSymbols = new Set(activeTrades.map((t: any) => t.symbol.toUpperCase().replace('/', '')));
+
+                const returnableResults = uniqueResults.filter(op => {
+                    const opSymbol = op.symbol.toUpperCase().replace('/', '');
+                    if (activeSymbols.has(opSymbol)) {
+                        console.log(`🔇 [ScannerService] Suppressed Duplicate Signal: ${op.symbol} (Already in Control Room)`);
+                        return false;
+                    }
+                    return true;
+                });
+
+                if (returnableResults.length > 0) {
+                    console.log(`✅ [ScannerService] Broadcast: ${returnableResults.length} NEW opportunities (Filtered from ${uniqueResults.length}).`);
+                    this.emit('scan_complete', returnableResults);
+
+                    // 🚀 TELEGRAM NOTIFICATION HOOK
+                    telegramService.broadcastSignals(returnableResults).catch(err => console.error("[Scanner] Telegram Error:", err));
+
+                    // 🛡️ SIGNAL AUDIT HOOK (New)
+                    // Note: Audit Service has its own deduplication, but pre-filtering here saves DB calls.
+                    signalAuditService.registerSignals(returnableResults).catch(err => console.error("[Scanner] Audit Error:", err));
+
+                    // Golden Tickets (High Confidence)
+                    const goldenTickets = returnableResults.filter(o => o.confidenceScore >= 80);
+                    if (goldenTickets.length > 0) {
+                        this.emit('golden_ticket', goldenTickets);
+                    }
+                } else {
+                    console.log(`ℹ️ [ScannerService] Scan complete. ${uniqueResults.length} signals found but ALL were duplicates of active trades.`);
                 }
             } else {
                 console.log("ℹ️ [ScannerService] Scan complete. Market is quiet (0 signals found).");
