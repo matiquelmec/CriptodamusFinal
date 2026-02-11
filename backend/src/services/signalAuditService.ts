@@ -26,6 +26,10 @@ class SignalAuditService extends EventEmitter {
         isDriftDetected: false
     };
 
+    // 📡 BROADCAST OPTIMIZATION (Senior Throttling)
+    private lastBroadcastTime: number = 0;
+    private readonly BROADCAST_THROTTLE_MS = 10000; // 10 seconds for PnL updates
+
     // CONSTANTES INSTITUCIONALES
     private readonly FEE_RATE = 0.001; // 0.1% (Maker/Taker blend estimate w/ BNB discount)
     private readonly SLIPPAGE_MARKET = 0.0005; // 0.05% slippage on market orders
@@ -695,8 +699,22 @@ class SignalAuditService extends EventEmitter {
 
         if (signalsToUpdate.length > 0) {
             await this.syncUpdates(signalsToUpdate);
-            // 📡 BROADCAST UPDATE ONLY IF ANY CHANGES OCCURRED
-            // this.emit('trades_updated', this.activeSignals); // Moved to syncUpdates
+
+            // 🧠 INTELLIGENT BROADCAST LOGIC (Senior Level)
+            const now = Date.now();
+            const hasCriticalChange = signalsToUpdate.some(u =>
+                u.status !== undefined ||
+                u.stage !== undefined ||
+                u.stop_loss !== undefined ||
+                u.take_profit !== undefined
+            );
+
+            const shouldBroadcast = hasCriticalChange || (now - this.lastBroadcastTime > this.BROADCAST_THROTTLE_MS);
+
+            if (shouldBroadcast) {
+                this.emit('trades_updated', this.activeSignals);
+                this.lastBroadcastTime = now;
+            }
         }
     }
 
