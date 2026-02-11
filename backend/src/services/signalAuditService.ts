@@ -251,7 +251,7 @@ class SignalAuditService extends EventEmitter {
 
     // handleReversal was removed to prevent unprofessional flip-flopping.
 
-    private sessionStartTime = Date.now(); // NEW: To distinguish legacy vs new signals
+    // handleReversal was removed to prevent unprofessional flip-flopping.
 
     private async processPriceTick(symbol: string, currentPrice: number) {
         this.lastWSTick = Date.now(); // Update Heartbeat
@@ -818,11 +818,6 @@ class SignalAuditService extends EventEmitter {
                 }
             }
         }
-
-        if (signalsToUpdate.length > 0) {
-            await this.syncUpdates(signalsToUpdate);
-        }
-    }
 
     /**
      * Finds the nearest ML prediction for this signal and updates its outcome
