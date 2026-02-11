@@ -140,14 +140,15 @@ class SignalAuditService extends EventEmitter {
     private sessionStartTime = Date.now(); // NEW: To distinguish legacy vs new signals
     private recentClosures = new Map<string, number>(); // COOLDOWN: Track closed trades to prevent "Machine Gun" re-entry
 
-    public async registerSignals(opportunities: AIOpportunity[]) {
-        if (!this.supabase) return;
+    public async registerSignals(opportunities: AIOpportunity[]): Promise<AIOpportunity[]> {
+        if (!this.supabase) return [];
 
         // COOLDOWN CONFIG: 60 Minutes
         const COOLDOWN_MS = 60 * 60 * 1000;
+        const acceptedForLive: AIOpportunity[] = [];
 
         for (const opp of opportunities) {
-            const sigKey = `${opp.symbol}-${opp.side}`;
+            const sigKey = `${opp.symbol}-${opp.strategy}-${opp.side}`;
 
             if (this.processingSignatures.has(sigKey)) continue;
 
@@ -283,6 +284,9 @@ class SignalAuditService extends EventEmitter {
                         // 🔔 TELEGRAM ALERT (Only for valid trades)
                         const { telegramService } = await import('./telegramService');
                         telegramService.broadcastSignals([opp]);
+
+                        // 🎯 COLLECT FOR LIVE BROADCAST
+                        acceptedForLive.push(opp);
                     } else {
                         // REJECTED Status but saved for Audit
                         console.log(`📊 [SignalAudit] Logged REJECTION in DB: ${opp.symbol} is ${savedSig.status}`);
@@ -295,9 +299,8 @@ class SignalAuditService extends EventEmitter {
                 this.processingSignatures.delete(sigKey);
             }
         }
+        return acceptedForLive;
     }
-
-    // handleReversal was removed to prevent unprofessional flip-flopping.
 
     // handleReversal was removed to prevent unprofessional flip-flopping.
 

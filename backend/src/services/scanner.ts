@@ -248,20 +248,28 @@ class ScannerService extends EventEmitter {
                 });
 
                 if (returnableResults.length > 0) {
-                    console.log(`✅ [ScannerService] Broadcast: ${returnableResults.length} NEW opportunities (Filtered from ${uniqueResults.length}).`);
-                    this.emit('scan_complete', returnableResults);
+                    // 🛡️ SIGNAL AUDIT HOOK (New & Vetted)
+                    // Note: Audit Service is the SOLE AUTHORITY. 
+                    // We wait for it to vet the signals (Late check, spread, etc.)
+                    const vettedResults = await signalAuditService.registerSignals(returnableResults);
 
-                    // 🛡️ SIGNAL AUDIT HOOK (New)
-                    // Note: Audit Service is now the SOLE AUTHORITY for Telegram alerts.
-                    // It vetted the results, registers them, and handles the one-time notification.
-                    signalAuditService.registerSignals(returnableResults).catch(err => console.error("[Scanner] Audit Error:", err));
+                    if (vettedResults.length > 0) {
+                        console.log(`✅ [ScannerService] Broadcast: ${vettedResults.length} VETTED opportunities.`);
+                        this.emit('scan_complete', vettedResults);
 
-                    // Golden Tickets (High Confidence)
-                    const goldenTickets = returnableResults.filter(o => o.confidenceScore >= 80);
-                    if (goldenTickets.length > 0) {
-                        this.emit('golden_ticket', goldenTickets);
+                        // Update cache only with vetted results
+                        this.opportunities = vettedResults;
+
+                        // Golden Tickets (High Confidence)
+                        const goldenTickets = vettedResults.filter(o => o.confidenceScore >= 80);
+                        if (goldenTickets.length > 0) {
+                            this.emit('golden_ticket', goldenTickets);
+                        }
+                    } else {
+                        console.log(`ℹ️ [ScannerService] Scan complete. ${returnableResults.length} signals found but ALL were rejected by Auditor (Late/Risk).`);
                     }
-                } else {
+                }
+                else {
                     console.log(`ℹ️ [ScannerService] Scan complete. ${uniqueResults.length} signals found but ALL were duplicates of active trades.`);
                 }
             } else {
