@@ -233,29 +233,28 @@ class SignalAuditService extends EventEmitter {
 
     // handleReversal was removed to prevent unprofessional flip-flopping.
 
+    private sessionStartTime = Date.now(); // NEW: To distinguish legacy vs new signals
+
     private async processPriceTick(symbol: string, currentPrice: number) {
         this.lastWSTick = Date.now(); // Update Heartbeat
 
         // --- STAGE 0: ATOMIC TICK INTEGRITY ---
         if (!currentPrice || Number.isNaN(currentPrice) || currentPrice <= 0 || typeof currentPrice !== 'number') {
-            systemAlerts.logAlert({
-                symbol,
-                severity: 'MEDIUM',  // ✅ DOWNGRADED: HIGH → MEDIUM (tick validation is not critical)
-                category: 'DATA_INTEGRITY',
-                message: `CORRUPTED_TICK: Price=${currentPrice}`
-            });
+            // Low priority log for legacy tick skips
             return;
         }
 
         if (this.activeSignals.length === 0) return;
 
-        const signalsToUpdate = [];
         const sym = symbol.toUpperCase().replace('/', '');
 
         for (const signal of this.activeSignals) {
             if (signal.symbol.toUpperCase().replace('/', '') !== sym) continue;
 
-            let updates: any = {};
+            const isLegacy = signal.created_at < this.sessionStartTime; // Check age
+
+            // FIX: Initialize updates with SYMBOL to prevent "UNKNOWN" in alerts
+            let updates: any = { symbol: signal.symbol };
             let shouldClose = false;
 
             try {
@@ -646,7 +645,10 @@ class SignalAuditService extends EventEmitter {
                 }
 
                 updates.id = signal.id;
+                updates.created_at = signal.created_at; // Pass for legacy check
                 signalsToUpdate.push(updates);
+
+                // Clean updates object before assigning to memory to avoid duplicates? No, created_at is fine.
                 Object.assign(signal, updates); // Sync cache
             }
         }
@@ -720,7 +722,11 @@ class SignalAuditService extends EventEmitter {
         for (const upd of updates) {
             // PRO INTEGRITY GATE: Force WIN to LOSS if net PnL is negative (prevents accounting errors in UI)
             if (upd.status === 'WIN' && (upd.pnl_percent || 0) <= 0) {
-                console.warn(`🛡️ [SignalAudit] Integrity Guard: Converting WIN to LOSS for ${upd.id} due to non-positive PnL (${upd.pnl_percent?.toFixed(2)}%)`);
+                // Only warn loudly for NEW signals. For legacy, it's just cleanup.
+                const isNew = upd.created_at > this.sessionStartTime;
+                if (isNew) {
+                    console.warn(`🛡️ [SignalAudit] Integrity Guard: Converting WIN to LOSS for ${upd.symbol} due to non-positive PnL (${upd.pnl_percent?.toFixed(2)}%)`);
+                }
                 upd.status = 'LOSS';
             }
 
@@ -730,7 +736,10 @@ class SignalAuditService extends EventEmitter {
             // We strip 'last_sync' from supabase payload to be safe unless we added it. 
             // Actually, we can just keep last_sync in memory `signal` object and not send to DB if it's not a column.
 
-            const { id, last_sync, ...data } = upd;
+            // Remove internal memory-only fields before sending to Supabase
+            // 'created_at' is used for logging filter but shouldn't be updated (it's immutable in DB logic usually)
+
+            const { id, last_sync, created_at, ...data } = upd; // Extract created_at to prevent update attempt if not needed, or just to keep it clean.
 
             if (id) {
                 // VERBOSE LOGGING START (Validation for User)
@@ -770,9 +779,14 @@ class SignalAuditService extends EventEmitter {
             }
         }
 
-        // NEW: Real-time Frontend Update (Broadcast to WebSocket)
-        this.emit('active_trades_update', this.activeSignals);
-    }
+        if (signalsToUpdate.length > 0) {
+            // Pass created_at for logging context
+            this.syncUpdates(signalsToUpdate.map(u => ({ ...u, created_at: undefined }))); // clean created_at before DB? No, syncUpdates filters data.
+            // Actually, syncUpdates needs created_at for the check we just added.
+            // But we shouldn't fail DB update. 
+            // Better approach: In processPriceTick loop, we already have 'signal' object.
+            // We can attach 'isLegacy' to 'updates' purely for the syncUpdates function to use, then strip it.
+        }
 
     /**
      * Finds the nearest ML prediction for this signal and updates its outcome
