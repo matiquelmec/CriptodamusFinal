@@ -140,6 +140,16 @@ class SignalAuditService extends EventEmitter {
     private sessionStartTime = Date.now(); // NEW: To distinguish legacy vs new signals
     private recentClosures = new Map<string, number>(); // COOLDOWN: Track closed trades to prevent "Machine Gun" re-entry
 
+    /**
+     * UNIFIED COOLDOWN KEY GENERATOR ("One Truth")
+     * Prevents fragmentation errors where register uses one key and syncUpdates uses another.
+     * Logic: SYMBOL (Normalized) + SIDE
+     */
+    private getCooldownKey(symbol: string, side: string): string {
+        const normSymbol = symbol.replace('/', '').toUpperCase();
+        return `${normSymbol}-${side}`;
+    }
+
     public async registerSignals(opportunities: AIOpportunity[]): Promise<AIOpportunity[]> {
         if (!this.supabase) return [];
 
@@ -148,7 +158,9 @@ class SignalAuditService extends EventEmitter {
         const acceptedForLive: AIOpportunity[] = [];
 
         for (const opp of opportunities) {
-            const sigKey = `${opp.symbol}-${opp.strategy}-${opp.side}`;
+            // FIX: Use Unified Key (Symbol + Side) instead of Strategy-Specific
+            // This prevents "Strategy A" from opening a trade immediately after "Strategy B" closed one on the same pair.
+            const sigKey = this.getCooldownKey(opp.symbol, opp.side);
 
             if (this.processingSignatures.has(sigKey)) continue;
 
@@ -852,7 +864,10 @@ class SignalAuditService extends EventEmitter {
                         // COOLDOWN: Mark as recently closed
                         const signalFromMemory = this.activeSignals.find(s => s.id === upd.id) || upd;
                         if (upd.symbol && signalFromMemory.side) {
-                            this.recentClosures.set(`${upd.symbol}-${signalFromMemory.side}`, Date.now());
+                            // FIX: Use Unified Key for Consistency
+                            const cooldownKey = this.getCooldownKey(upd.symbol, signalFromMemory.side);
+                            this.recentClosures.set(cooldownKey, Date.now());
+                            console.log(`❄️ [CoolDown] Activated for ${cooldownKey} (60m)`);
                         }
 
                         console.log(`🎯 [SignalAudit] CERRADA (${upd.status}): ${upd.id} | Net PnL: ${finalPnL.toFixed(2)}%`);
