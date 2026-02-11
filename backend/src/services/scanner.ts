@@ -223,8 +223,7 @@ class ScannerService extends EventEmitter {
             // Deduplicate by ID (Symbol + Strategy) to avoid react key issues if any overlap occurs
             const uniqueResults = Array.from(new Map(allResults.map(item => [item.id, item])).values());
 
-            // 4. Update Cache
-            this.opportunities = uniqueResults;
+            // 4. Temporarily hold results pending vetting
             this.lastScanTime = Date.now();
 
             // 5. Broadcast Results
@@ -248,17 +247,15 @@ class ScannerService extends EventEmitter {
                 });
 
                 if (returnableResults.length > 0) {
-                    // 🛡️ SIGNAL AUDIT HOOK (New & Vetted)
-                    // Note: Audit Service is the SOLE AUTHORITY. 
-                    // We wait for it to vet the signals (Late check, spread, etc.)
+                    // VETTING GATE: Only broadcast and cache what the Auditor approves
                     const vettedResults = await signalAuditService.registerSignals(returnableResults);
+
+                    // CRITICAL: Always update cache to reflect latest vetted state
+                    this.opportunities = vettedResults;
 
                     if (vettedResults.length > 0) {
                         console.log(`✅ [ScannerService] Broadcast: ${vettedResults.length} VETTED opportunities.`);
                         this.emit('scan_complete', vettedResults);
-
-                        // Update cache only with vetted results
-                        this.opportunities = vettedResults;
 
                         // Golden Tickets (High Confidence)
                         const goldenTickets = vettedResults.filter(o => o.confidenceScore >= 80);
@@ -266,14 +263,18 @@ class ScannerService extends EventEmitter {
                             this.emit('golden_ticket', goldenTickets);
                         }
                     } else {
-                        console.log(`ℹ️ [ScannerService] Scan complete. ${returnableResults.length} signals found but ALL were rejected by Auditor (Late/Risk).`);
+                        console.log(`ℹ️ [ScannerService] Scan complete. ${returnableResults.length} signals found but ALL were rejected by Auditor (Late/Risk). Radar cleared.`);
+                        this.emit('scan_complete', []); // Notify UI to clear rejections
                     }
-                }
-                else {
+                } else {
                     console.log(`ℹ️ [ScannerService] Scan complete. ${uniqueResults.length} signals found but ALL were duplicates of active trades.`);
+                    this.opportunities = []; // Clear radar if everything is already managed
+                    this.emit('scan_complete', []);
                 }
             } else {
                 console.log("ℹ️ [ScannerService] Scan complete. Market is quiet (0 signals found).");
+                this.opportunities = []; // Reset radar on quiet market
+                this.emit('scan_complete', []);
             }
 
             // SUCCESS STATUS RESET
