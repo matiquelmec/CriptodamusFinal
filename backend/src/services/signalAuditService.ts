@@ -575,19 +575,24 @@ class SignalAuditService extends EventEmitter {
                                 signal.stage = 1; // Sync stage to memory immediately
 
                                 // FORCE SL TO BREAKEVEN (Safety Net)
-                                // If TP1 is hit, we MUST ensure the stop is at least at entry.
-                                // This fixes the discrepancy where Telegram says "Secured" but DB/Frontend still show original SL.
-                                const entryPrice = signal.entry_price;
-                                if (entryPrice) {
-                                    // Use Smart BE logic if available, otherwise strict entry
-                                    // We'll set it to entryPrice to start.
-                                    // Make sure we don't move SL *worse* if it's already better.
-                                    const betterSL = isLong ? Math.max(signal.stop_loss, entryPrice) : Math.min(signal.stop_loss, entryPrice);
+                                // If TP1 is hit, we MUST ensure the stop is at least at entry + fees.
+                                // FIX: Use currentWAP (Real execution price) + 0.2% Buffer to guarantee Green PnL.
+                                const baseEntry = currentWAP || signal.activation_price || signal.entry_price;
+                                const feeBuffer = baseEntry * 0.002; // 0.2% to cover open+close fees
+
+                                if (baseEntry) {
+                                    // Smart BE: Entry +/- Buffer
+                                    const smartBE = isLong ? (baseEntry + feeBuffer) : (baseEntry - feeBuffer);
+
+                                    // Make sure we don't move SL *worse* if it's already better (e.g. trailing stop is higher).
+                                    // For LONG: We want MAX(currentSL, smartBE)
+                                    // For SHORT: We want MIN(currentSL, smartBE)
+                                    const betterSL = isLong ? Math.max(signal.stop_loss, smartBE) : Math.min(signal.stop_loss, smartBE);
 
                                     if (betterSL !== signal.stop_loss) {
                                         updates.stop_loss = betterSL;
                                         signal.stop_loss = betterSL; // Update memory too
-                                        console.log(`🛡️ [TP1-Trigger] Forcing SL to Breakeven: ${betterSL}`);
+                                        console.log(`🛡️ [TP1-Trigger] Forcing SL to Smart Breakeven (Entry+Fees): ${betterSL.toFixed(4)}`);
                                     }
                                 }
 
