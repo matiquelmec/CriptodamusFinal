@@ -187,7 +187,9 @@ export const TradingConfig = {
         god_mode_threshold: 90,
         filters: { // NEW: Hard Filters
             min_adx: 18, // PAU STRATEGY ALIGNMENT (Commodity Friendly)
-            min_volume_24h: 5000000 // $5M Liquidity Floor
+            min_volume_24h: 5000000, // $5M Liquidity Floor
+            min_rvol: 0.5, // NEW: Zombie Market Filter (Avoid Dead Assets)
+            max_spread_bps: 20 // NEW: Spread Limit (0.2%) - Institutional Execution
         },
         weights: {
             // Trend Following (KING)
@@ -199,11 +201,11 @@ export const TradingConfig = {
             rsi_overbought: 5, // DOWN from 10
             rsi_divergence: 15, // DOWN from 20 (Strong but laggy)
 
-            // Volume / Institutional (GOD MODE BUFFS)
-            volume_spike: 25, // UP from 20
-            order_block_retest: 25, // UP from 20
-            liquidation_flutter: 25, // UP from 20
-            cvd_divergence_boost: 30, // UP from 25
+            // Volume / Institutional (GOD MODE BUFFS - INST. UPGRADE)
+            volume_spike: 25,
+            order_block_retest: 30, // UP from 25
+            liquidation_flutter: 30, // UP from 25
+            cvd_divergence_boost: 35, // UP from 30
             ml_confidence_max: 30,
             harmonic_pattern: 20,
 
@@ -217,8 +219,8 @@ export const TradingConfig = {
         // NEW: Advisor Specific Weights (Normalized to Scoring Impact)
         advisor: {
             hidden_divergence: 15,
-            sfp_sweep: 30,         // BOOST: Institutional Trap (+5)
-            order_block_retest: 25, // BOOST: Key Level (+5)
+            sfp_sweep: 35,         // BOOST: Institutional Trap (+5)
+            order_block_retest: 30, // BOOST: Key Level (+5)
             volume_absorption: 30, // BOOST: Hidden Accumulation (+5)
             fractal_alignment: 10,
             z_score_extreme: 20,
@@ -239,7 +241,7 @@ export const TradingConfig = {
             harmonic_pattern: 20,
             rsi_trendline_break: 15,
             funding_rate_extreme: 15,
-            coinbase_premium: 30, // BOOST: Institutional Trust (+5)
+            coinbase_premium: 35, // BOOST: Institutional Trust (+5)
             ttm_squeeze_bias: 10,
             fractal_tie_breaker: 10
         }

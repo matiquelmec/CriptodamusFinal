@@ -76,15 +76,24 @@ export class FilterEngine {
             // B. Volume Integrity (RVOL) - Professional Asset-Differentiated Approach
             // Now uses AssetClassifier for intelligent filtering
             if (!isReversionStrategy && rvol) {
-                // HARD FILTER: Only block if critically low (dead market)
+                // HARD FILTER: Zombie Market Prevention (Institutional)
+                const minRVOL = filters.min_rvol || 0.5; // Default 0.5x
+                if (rvol < minRVOL) {
+                    return { discarded: true, reason: `Zombie Market: RVOL ${rvol.toFixed(2)}x < ${minRVOL}x (Institutional Min)` };
+                }
+
                 if (AssetClassifier.isRVOLCriticallyLow(opportunity.symbol, rvol)) {
                     const statusMsg = AssetClassifier.getRVOLStatusMessage(opportunity.symbol, rvol);
                     return { discarded: true, reason: `${statusMsg} - Market likely dead/manipulated` };
                 }
+            }
 
-                // SOFT FILTER: Apply score adjustment instead of hard block
-                // This is handled in the scoring phase, not here
-                // Low RVOL will reduce score but not automatically discard
+            // B.2 Spread / Slippage Guard (Institutional)
+            // If spread analysis data is attached to metrics or opportunity
+            const spreadBps = (opportunity.metrics as any).spreadBps || 0; // Robust access
+            const maxSpread = filters.max_spread_bps || 25; // Default 25bps (0.25%)
+            if (spreadBps > maxSpread && !isReversionStrategy) {
+                return { discarded: true, reason: `Slippage Risk: Spread ${spreadBps}bps > ${maxSpread}bps Limit` };
             }
 
             // C. RSI Exhaustion Guard (Buying the Top / Selling the Bottom)
