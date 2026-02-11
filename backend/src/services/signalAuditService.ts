@@ -780,13 +780,9 @@ class SignalAuditService extends EventEmitter {
         }
 
         if (signalsToUpdate.length > 0) {
-            // Pass created_at for logging context
-            this.syncUpdates(signalsToUpdate.map(u => ({ ...u, created_at: undefined }))); // clean created_at before DB? No, syncUpdates filters data.
-            // Actually, syncUpdates needs created_at for the check we just added.
-            // But we shouldn't fail DB update. 
-            // Better approach: In processPriceTick loop, we already have 'signal' object.
-            // We can attach 'isLegacy' to 'updates' purely for the syncUpdates function to use, then strip it.
+            await this.syncUpdates(signalsToUpdate);
         }
+    }
 
     /**
      * Finds the nearest ML prediction for this signal and updates its outcome
