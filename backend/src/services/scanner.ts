@@ -15,6 +15,7 @@ class ScannerService extends EventEmitter {
     // Interval Handles
     private mainScanInterval: NodeJS.Timeout | null = null;
     private memeScanInterval: NodeJS.Timeout | null = null;
+    private hotScanInterval: NodeJS.Timeout | null = null;
 
     // Status State
     private currentStatus: any = { status: 'BOOTING', reason: 'INIT', message: 'System Initializing...' };
@@ -69,6 +70,9 @@ class ScannerService extends EventEmitter {
         // 1. Initial Scan (Immediate) - Per user requirement
         this.runFullScan();
 
+        // 1.5 Start Elite 9 Hot Scan (Sniper Mode - 5m)
+        this.startHotScan();
+
         // 2. Schedule next scan aligned to xx:00, xx:15, xx:30, xx:45
         this.scheduleNextAlignedScan();
 
@@ -92,8 +96,29 @@ class ScannerService extends EventEmitter {
      */
     public stop() {
         if (this.mainScanInterval) clearTimeout(this.mainScanInterval);
+        if (this.hotScanInterval) clearInterval(this.hotScanInterval);
         this.mainScanInterval = null;
+        this.hotScanInterval = null;
         console.log("🛑 [ScannerService] Stopped.");
+    }
+
+    /**
+     * NEW: Sniper Mode Hot Scan (Tournament Assets only)
+     * Every 5 minutes, independent of 15m candle alignment
+     */
+    private startHotScan() {
+        if (this.hotScanInterval) clearInterval(this.hotScanInterval);
+
+        const HOT_SCAN_MS = 5 * 60 * 1000; // 5 Minutes
+        console.log(`🎯 [ScannerService] Sniper Mode Active: Hot-Scanning Elite 9 every 5m.`);
+
+        this.hotScanInterval = setInterval(() => {
+            // We only run if we aren't already doing a full scan
+            if (!this.isScanning) {
+                console.log("🔫 [ScannerService] Triggering Hot Scan (Elite 9)...");
+                this.runFullScan('SWING_INSTITUTIONAL'); // Or SCALP_AGRESSIVE, based on preference
+            }
+        }, HOT_SCAN_MS);
     }
 
     /**

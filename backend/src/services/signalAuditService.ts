@@ -209,8 +209,9 @@ class SignalAuditService extends EventEmitter {
                     // If Market Price is already below SL (Long) or above SL (Short), ABORT.
                     // If Market Price is already above TP1 (Long) or below TP1 (Short), ABORT (or take profit instantly? No, unprofessional).
 
-                    const isInstantSL = (opp.side === 'LONG' ? currentPrice <= opp.stopLoss : currentPrice >= opp.stopLoss);
-                    const isInstantTP = (opp.side === 'LONG' ? currentPrice >= opp.takeProfits.tp1 : currentPrice <= opp.takeProfits.tp1);
+                    const tpBuffer = opp.takeProfits.tp1 * 0.002; // 0.2% Tolerance Buffer
+                    const isInstantSL = (opp.side === 'LONG' ? currentPrice <= (opp.stopLoss + tpBuffer) : currentPrice >= (opp.stopLoss - tpBuffer));
+                    const isInstantTP = (opp.side === 'LONG' ? currentPrice >= (opp.takeProfits.tp1 + tpBuffer) : currentPrice <= (opp.takeProfits.tp1 - tpBuffer));
 
                     if (isInstantSL) {
                         console.warn(`⛔ [SignalAudit] REJECTED Instant-Entry: ${opp.symbol} price ($${currentPrice}) is already past SL ($${opp.stopLoss})`);
@@ -228,7 +229,11 @@ class SignalAuditService extends EventEmitter {
                     initialStatus = 'PENDING';
                 }
 
-                if (initialStatus.includes('REJECTED')) return; // Do not register bad trades
+                // 📡 [Transparency Fix] Phase 24: Record rejections for user visibility
+                if (initialStatus.includes('REJECTED')) {
+                    console.warn(`🔇 [SignalAudit] Persisting REJECTION for ${opp.symbol}: ${initialStatus}`);
+                    // We proceed to insert but it will have REJECTED status in DB
+                }
 
                 const payload = {
                     signal_id: opp.id,
@@ -264,17 +269,25 @@ class SignalAuditService extends EventEmitter {
                 }
 
                 if (insertedData && insertedData.length > 0) {
-                    this.activeSignals.push(insertedData[0]);
-                    const streamSymbol = opp.symbol.toLowerCase().replace('/', '') + '@aggTrade';
-                    binanceStream.addStream(streamSymbol);
-                    console.log(`✅ [SignalAudit] Registered & Tracked: ${opp.symbol} ${opp.side} (Entry: $${entryTarget})`);
+                    const savedSig = insertedData[0];
 
-                    // 📡 BROADCAST UPDATE (Critical: New Signal)
-                    this.broadcast(true);
+                    if (savedSig.status === 'PENDING' || savedSig.status === 'ACTIVE') {
+                        this.activeSignals.push(savedSig);
+                        const streamSymbol = opp.symbol.toLowerCase().replace('/', '') + '@aggTrade';
+                        binanceStream.addStream(streamSymbol);
+                        console.log(`✅ [SignalAudit] Registered & Tracked: ${opp.symbol} ${opp.side} (Entry: $${entryTarget})`);
 
-                    // 🔔 TELEGRAM ALERT
-                    const { telegramService } = await import('./telegramService');
-                    telegramService.broadcastSignals([opp]);
+                        // 📡 BROADCAST UPDATE (Critical: New Signal)
+                        this.broadcast(true);
+
+                        // 🔔 TELEGRAM ALERT (Only for valid trades)
+                        const { telegramService } = await import('./telegramService');
+                        telegramService.broadcastSignals([opp]);
+                    } else {
+                        // REJECTED Status but saved for Audit
+                        console.log(`📊 [SignalAudit] Logged REJECTION in DB: ${opp.symbol} is ${savedSig.status}`);
+                        this.broadcast(true); // Update UI so it appears in Historico/Auditoria
+                    }
                 }
             } catch (err: any) {
                 console.error(`💥 [SignalAudit] Critical Failure registering ${opp.symbol}:`, err.message);
