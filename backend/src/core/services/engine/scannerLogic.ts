@@ -430,6 +430,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                                 reasoning.push(`⛔ Contra-Tendencia MACRO peligrosa (-40)`);
                                 // return; // DISABLED: Allow user to see it but with terrible score
                             }
+                        } else {
+                            // ✅ ALIGNED WITH MACRO (Architect Approval)
+                            // Bonus only if previously penalized or neutral
+                            const trendBonus = 15; // Reduced from 25
+                            totalScore += trendBonus;
+                            reasoning.push(`🕐 MTF Confluence: D1 + H4 + M15 Aligned ${signalSide} (+${trendBonus})`);
                         }
                     }
                 } else if (isProfessionalReversal) {
@@ -475,12 +481,12 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                                 // Normal Logic
                                 if (mlSide === signalSide) {
-                                    const boost = Math.round(mlResult.confidence * 30); // 0-30 points (Scaled for 75k candle brain)
+                                    const boost = Math.round(mlResult.confidence * 20); // Reduced from 30 (Scaled for 75k candle brain)
                                     totalScore += boost;
                                     reasoning.push(`🧠 IA Confluence: ${(mlResult.probabilityUp * 100).toFixed(2)}% probability`);
                                 } else if (mlResult.signal !== 'NEUTRAL' && mlSide !== signalSide) {
                                     // ML contradicts Strategy (Divergence)
-                                    totalScore -= 15; // Penalty
+                                    totalScore -= 10; // Reduced from 15
                                     reasoning.push(`🧠 IA Divergence: Brain expects ${mlResult.signal}`);
                                 }
                             }
@@ -497,15 +503,15 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         totalScore += TradingConfig.scoring.advisor.coinbase_premium;
                         reasoning.push(`🏦 Premium: Buying Detected (+${ve.coinbasePremium.gapPercent.toFixed(3)}%)`);
                         if (ve.coinbasePremium.gapPercent > 0.2) {
-                            totalScore += 10;
-                            reasoning.push(`🏦 CB Premium EXTREMO (+10)`);
+                            totalScore += 5; // Reduced from 10
+                            reasoning.push(`🏦 CB Premium EXTREMO (+5)`);
                         }
                     } else if (ve.coinbasePremium.signal === 'INSTITUTIONAL_SELL' && signalSide === 'SHORT') {
                         totalScore += TradingConfig.scoring.advisor.coinbase_premium;
                         reasoning.push(`🏦 Premium: Selling Detected (${ve.coinbasePremium.gapPercent.toFixed(3)}%)`);
                         if (ve.coinbasePremium.gapPercent < -0.2) {
-                            totalScore += 10;
-                            reasoning.push(`🏦 CB Discount EXTREMO (+10)`);
+                            totalScore += 5; // Reduced from 10
+                            reasoning.push(`🏦 CB Discount EXTREMO (+5)`);
                         }
                     }
 
@@ -516,10 +522,10 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         (indicators as any).cvdDivergence !== 'NONE';
 
                     if (!hasCVDDivergence && ve.cvd.trend === 'BULLISH' && signalSide === 'LONG') {
-                        totalScore += 10;
+                        totalScore += 5; // Reduced from 10
                         reasoning.push("🌊 CVD: Aggressive Buying Flow");
                     } else if (!hasCVDDivergence && ve.cvd.trend === 'BEARISH' && signalSide === 'SHORT') {
-                        totalScore += 10;
+                        totalScore += 5; // Reduced from 10
                         reasoning.push("🌊 CVD: Aggressive Selling Flow");
                     }
 
@@ -532,24 +538,24 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
 
                         // IMPROVEMENT 1: Fake Wall Detection (Anti-Manipulation)
                         if (adv.fakeWallRisk === 'HIGH') {
-                            totalScore -= 30;
+                            totalScore -= 20; // Reduced from 30
                             reasoning.push("🚨 FAKE WALL DETECTED: High manipulation risk");
                         } else if (adv.fakeWallRisk === 'MEDIUM') {
                             totalScore -= 10;
                             reasoning.push("⚠️ Wall Stability Questionable");
                         } else if (adv.wallStability === 'STABLE') {
-                            totalScore += 10;
+                            totalScore += 5; // Reduced from 10
                             reasoning.push("✅ Wall Stability Verified");
                         }
 
                         // IMPROVEMENT 2: Absorption Analysis (Tape Reading)
                         if (adv.wasAbsorbed && adv.absorptionScore > 80) {
-                            const boost = signalSide === 'LONG' ? 25 : 20;
+                            const boost = signalSide === 'LONG' ? 15 : 10; // Reduced from 25/20
                             totalScore += boost;
                             reasoning.push(`💎 WALL ABSORBED & HELD: Inst. support (${adv.absorptionScore}/100) (+${boost})`);
                         } else if (adv.wasAbsorbed && adv.absorptionScore > 60) {
-                            totalScore += 15;
-                            reasoning.push(`💎 Wall Holding: Score ${adv.absorptionScore}/100 (+15)`);
+                            totalScore += 10; // Reduced from 15
+                            reasoning.push(`💎 Wall Holding: Score ${adv.absorptionScore}/100 (+10)`);
                         }
 
                         // IMPROVEMENT 3: Deep Imbalance Analysis (Smart Money)
@@ -557,22 +563,22 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         if (depthIm) {
                             // Bullish Deep Pressure
                             if (depthIm.deep > 2.5 && signalSide === 'LONG') {
-                                totalScore += 30;
-                                reasoning.push(`🌊 DEEP BID PRESSURE: ${depthIm.deep.toFixed(1)}x institutional accumulation (+30)`);
+                                totalScore += 15; // Reduced from 30
+                                reasoning.push(`🌊 DEEP BID PRESSURE: ${depthIm.deep.toFixed(1)}x institutional accumulation (+15)`);
                             } else if (depthIm.deep < 0.4 && signalSide === 'SHORT') {
-                                totalScore += 30;
-                                reasoning.push(`🌊 DEEP ASK PRESSURE: ${(1 / depthIm.deep).toFixed(1)}x distribution (+30)`);
+                                totalScore += 15; // Reduced from 30
+                                reasoning.push(`🌊 DEEP ASK PRESSURE: ${(1 / depthIm.deep).toFixed(1)}x distribution (+15)`);
                             }
 
                             // Divergence Detection (Trap Warning)
                             if (depthIm.divergence) {
-                                totalScore -= 15;
+                                totalScore -= 10; // Reduced from 15
                                 reasoning.push("🪤 LIQUIDITY TRAP: Surface/Deep divergence detected");
                             }
 
                             // Surface-only pressure (weaker than deep)
                             if (depthIm.surface > 3 && depthIm.deep < 1 && signalSide === 'LONG') {
-                                totalScore -= 10;
+                                totalScore -= 5; // Reduced from 10
                                 reasoning.push("🪤 SHALLOW LIQUIDITY: Retail" + " trap suspected");
                             }
                         }
@@ -581,13 +587,13 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         const spread = adv.spreadAnalysis;
                         if (spread) {
                             if (spread.isPanic && signalSide === 'LONG') {
-                                totalScore += 20;
-                                reasoning.push(`🔥 PANIC SPREAD: ${spread.currentSpread.toFixed(3)}% - Capitulation entry (+20)`);
+                                totalScore += 10; // Reduced from 20
+                                reasoning.push(`🔥 PANIC SPREAD: ${spread.currentSpread.toFixed(3)}% - Capitulation entry (+10)`);
                             } else if (spread.isTight) {
-                                totalScore += 10;
+                                totalScore += 5; // Reduced from 10
                                 reasoning.push(`✅ TIGHT SPREAD: ${spread.currentSpread.toFixed(3)}% - High liquidity`);
                             } else if (spread.isWidening && signalSide === 'SHORT') {
-                                totalScore += 10;
+                                totalScore += 5; // Reduced from 10
                                 reasoning.push("📊 Widening Spread: Fear building");
                             }
                         }
@@ -598,8 +604,8 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                             const distancePct = Math.abs(nearest.price - indicators.price) / indicators.price;
 
                             if (distancePct < 0.01) { // Within 1%
-                                totalScore += 25;
-                                reasoning.push(`🧊 ICEBERG DETECTED at $${nearest.price.toFixed(2)}: Hidden institutional wall (+25)`);
+                                totalScore += 15; // Reduced from 25
+                                reasoning.push(`🧊 ICEBERG DETECTED at $${nearest.price.toFixed(2)}: Hidden institutional wall (+15)`);
                             } else if (distancePct < 0.02) {
                                 totalScore += 15;
                                 reasoning.push(`🧊 Iceberg nearby: ${nearest.bounceCount} bounces`);

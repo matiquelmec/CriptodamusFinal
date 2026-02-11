@@ -193,25 +193,25 @@ export const TradingConfig = {
         },
         weights: {
             // Trend Following (KING)
-            ema_alignment_bullish: 25, // UP from 15
-            ema_alignment_bearish: 25, // UP from 15
+            ema_alignment_bullish: 25,
+            ema_alignment_bearish: 25,
 
             // Momentum (RETAIL NERF)
-            rsi_oversold: 5,   // DOWN from 10
-            rsi_overbought: 5, // DOWN from 10
-            rsi_divergence: 15, // DOWN from 20 (Strong but laggy)
+            rsi_oversold: 5,
+            rsi_overbought: 5,
+            rsi_divergence: 15,
 
-            // Volume / Institutional (GOD MODE BUFFS - INST. UPGRADE)
-            volume_spike: 25,
-            order_block_retest: 30, // UP from 25
-            liquidation_flutter: 30, // UP from 25
-            cvd_divergence_boost: 35, // UP from 30
+            // Volume / Institutional (RECALIBRATED for Real Probability)
+            volume_spike: 15, // DOWN from 25
+            order_block_retest: 15, // DOWN from 30
+            liquidation_flutter: 15, // DOWN from 30
+            cvd_divergence_boost: 20, // DOWN from 35
             ml_confidence_max: 30,
             harmonic_pattern: 20,
 
             // Patterns
             chart_pattern_breakout: 15,
-            golden_ticket_pattern: 30, // UP from 25
+            golden_ticket_pattern: 20, // DOWN from 30
 
             // Strategic Overrides
             freeze_protocol_boost: 25
@@ -219,29 +219,29 @@ export const TradingConfig = {
         // NEW: Advisor Specific Weights (Normalized to Scoring Impact)
         advisor: {
             hidden_divergence: 15,
-            sfp_sweep: 35,         // BOOST: Institutional Trap (+5)
-            order_block_retest: 30, // BOOST: Key Level (+5)
-            volume_absorption: 30, // BOOST: Hidden Accumulation (+5)
+            sfp_sweep: 15,         // RECALIBRATED: Was 35
+            order_block_retest: 15, // RECALIBRATED: Was 30
+            volume_absorption: 30, // Keep High (Rare)
             fractal_alignment: 10,
             z_score_extreme: 20,
             pinball_setup: 15,
             // NEW CENTRALIZED WEIGHTS
-            trend_ema200: 15, // UP from 10
-            trend_slope_boost: 10, // UP from 5
+            trend_ema200: 15,
+            trend_slope_boost: 10,
             trend_ema_cross: 5,
-            vwap_position: 20, // BOOST: Institutional Baseline (+5)
-            momentum_macd: 4, // NERF from 5
-            momentum_rsi: 4,  // NERF from 5
-            stoch_cross_extreme: 5, // NERF from 10
+            vwap_position: 20,
+            momentum_macd: 4,
+            momentum_rsi: 4,
+            stoch_cross_extreme: 5,
             bollinger_zone: 5,
             contrarian_sentiment: 10,
-            liquidation_cascade: 30, // BOOST: Fuel (+5)
+            liquidation_cascade: 30,
             fvg_proximity: 10,
             value_area_deviation: 10,
             harmonic_pattern: 20,
             rsi_trendline_break: 15,
             funding_rate_extreme: 15,
-            coinbase_premium: 35, // BOOST: Institutional Trust (+5)
+            coinbase_premium: 20, // RECALIBRATED: Was 35
             ttm_squeeze_bias: 10,
             fractal_tie_breaker: 10
         }
