@@ -1,7 +1,7 @@
 
 import { TechnicalIndicators } from '../../types';
 import { TradingConfig } from '../../config/tradingConfig';
-import { calculateEMA } from '../mathUtils';
+import { calculateEMA, calculateADX, calculateATR } from '../mathUtils';
 
 export interface PauStrategyResult {
     signal: 'LONG' | 'SHORT' | 'NEUTRAL';
@@ -91,6 +91,30 @@ export function analyzePauPerdicesStrategy(
     const config = TradingConfig.pauStrategy;
     const reasons: string[] = [];
     let score = 0;
+
+    // --- 0. CRITICAL VOLATILITY FILTER (No Dead Markets) ---
+    // Calculate ATR manually if not provided
+    const finalATR = (indicators.atr && indicators.atr > 0) ? indicators.atr : calculateATR_Internal(highs, lows, prices, 14);
+    const atrPercent = (finalATR / currentPrice) * 100;
+
+    // Min Volatility Requirement (e.g. 0.1% movement in 15m)
+    // If market is dead flat, spread/fees will kill us.
+    if (atrPercent < 0.1) {
+        return createNeutralResult(`⛔ Market Dead (ATR ${atrPercent.toFixed(3)}% < 0.1%)`, { isGold: false });
+    }
+
+    // --- 0.1 CHOPPINESS FILTER (ADX) ---
+    // If ADX < 20, Market is Choppy/Sideways.
+    // We require stronger confirmation (higher score) if ADX is low.
+    const adx = calculateADX(highs, lows, prices, 14);
+    const isChoppy = adx < 25;
+    if (isChoppy) {
+        reasons.push(`⚠️ Choppy Market (ADX ${adx.toFixed(1)} < 25)`);
+        // We will penalize score later or require higher threshold
+    } else {
+        score += 10; // Bonus for strong trend environment
+        reasons.push(`✅ Strong Trend Environment (ADX ${adx.toFixed(1)})`);
+    }
 
     // --- 1. ASSET FILTER (Generalized) ---
     const isGold = symbol.includes('XAU') || symbol.includes('GOLD') || symbol.includes('PAXG');
@@ -317,12 +341,17 @@ export function analyzePauPerdicesStrategy(
     }
 
     // --- DECISION ---
-    // Relaxed Trigger: Allow if Golden Zone OR Hidden Div OR Strong Trend (Score >= 70)
-    // SYNC: Trigger threshold matches Entry threshold (70) to prevent "Zombie Signals" (Valid Score, No Trigger)
-    const triggerValid = inGoldenZone || hasHiddenDiv || score >= 70;
+    // Dynamic Threshold based on Regimen
+    let threshold = 75; // NEW BASE: 75 (Was 70) to filter noise
 
-    // Reliability Check: Lower threshold to 70 to allow Off-Session signals
-    if (score >= 70 && triggerValid) {
+    // If Market is Choppy (ADX < 25), require strict perfection (85)
+    if (isChoppy) threshold = 85;
+
+    // Relaxed Trigger: Allow if Golden Zone OR Hidden Div OR Strong Trend (Score >= Threshold)
+    const triggerValid = inGoldenZone || hasHiddenDiv || score >= threshold;
+
+    // Reliability Check: Strict Score
+    if (score >= threshold && triggerValid) {
         // Risk Calc
         const finalATR = (indicators.atr && indicators.atr > 0) ? indicators.atr : calculateATR_Internal(highs, lows, prices, 14);
         const slDist = finalATR * config.risk.sl_atr_multiplier;
@@ -365,7 +394,7 @@ export function analyzePauPerdicesStrategy(
     }
 
     // DIAGNOSTIC FAILURE REASON
-    const failDetails = `Score: ${score}/70, Trigger: ${triggerValid} (Zone:${inGoldenZone} Div:${hasHiddenDiv} ScoreMatch:${score >= 70})`;
+    const failDetails = `Score: ${score}/${threshold}, Trigger: ${triggerValid} (Zone:${inGoldenZone} Div:${hasHiddenDiv} ADX:${adx.toFixed(1)})`;
     return createNeutralResult(`Conditions not met [${failDetails}]`, { isGold, sessionValid: isActiveSession, trendValid: true, rsiValid: true, divergenceDetected: hasHiddenDiv });
 }
 

@@ -165,7 +165,30 @@ class SignalAuditService extends EventEmitter {
             if (this.processingSignatures.has(sigKey)) continue;
 
             // 0. COOLDOWN CHECK (Prevent Machine Gun Logic)
-            const lastClosed = this.recentClosures.get(sigKey);
+            let lastClosed = this.recentClosures.get(sigKey);
+
+            // 0.1 NEW: PERSISTENT CHECK (If not in memory, check DB for restart recovery)
+            if (!lastClosed) {
+                const { data: dbClosed } = await this.supabase
+                    .from('signals_audit')
+                    .select('closed_at, created_at')
+                    .eq('symbol', opp.symbol)
+                    .eq('side', opp.side)
+                    .in('status', ['WIN', 'LOSS', 'BREAKEVEN', 'EXPIRED'])
+                    .order('closed_at', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (dbClosed) {
+                    // Use closed_at, fallback to created_at if closed_at is null (edge case)
+                    const closedTime = dbClosed.closed_at ? new Date(dbClosed.closed_at).getTime() : new Date(dbClosed.created_at).getTime();
+                    // Update Memory Cache to avoid DB hits next time
+                    this.recentClosures.set(sigKey, closedTime);
+                    lastClosed = closedTime;
+                    console.log(`❄️ [CoolDown] Hydrated from DB for ${sigKey} (Closed: ${new Date(closedTime).toISOString()})`);
+                }
+            }
+
             if (lastClosed) {
                 if (Date.now() - lastClosed < COOLDOWN_MS) {
                     // Still in cooldown
