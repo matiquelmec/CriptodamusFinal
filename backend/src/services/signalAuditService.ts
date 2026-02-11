@@ -184,39 +184,27 @@ class SignalAuditService extends EventEmitter {
 
                 // Entry logic (Market Execution Simulation)
                 if (currentPrice > 0) {
-                    const canEnterNow = (opp.side === 'LONG')
-                        ? currentPrice <= (entryTarget + buffer)
-                        : currentPrice >= (entryTarget - buffer);
+                    // 3. SANITY CHECK: Ensure we are not entering into a trade that is ALREADY lost or won.
+                    // If Market Price is already below SL (Long) or above SL (Short), ABORT.
+                    // If Market Price is already above TP1 (Long) or below TP1 (Short), ABORT (or take profit instantly? No, unprofessional).
 
+                    const isInstantSL = (opp.side === 'LONG' ? currentPrice <= opp.stopLoss : currentPrice >= opp.stopLoss);
+                    const isInstantTP = (opp.side === 'LONG' ? currentPrice >= opp.takeProfits.tp1 : currentPrice <= opp.takeProfits.tp1);
 
-                    if (canEnterNow) {
-                        initialStatus = 'ACTIVE';
-                        // REALITY CHECK: Apply Slippage
-                        const slippageAmount = currentPrice * this.SLIPPAGE_MARKET;
-                        activationPrice = (opp.side === 'LONG')
-                            ? currentPrice + slippageAmount
-                            : currentPrice - slippageAmount;
-
-                        // Entry Fee
-                        fees = (activationPrice * this.FEE_RATE);
-
-                        console.log(`⚡ [SignalAudit] Market Entry: ${opp.symbol} @ $${activationPrice.toFixed(4)} (Slip: ${slippageAmount.toFixed(4)})`);
-
-                        // 3. SANITY CHECK: Ensure we are not entering into a trade that is ALREADY lost or won.
-                        // If Market Price is already below SL (Long) or above SL (Short), ABORT.
-                        // If Market Price is already above TP1 (Long) or below TP1 (Short), ABORT (or take profit instantly? No, unprofessional).
-
-                        const isInstantSL = (opp.side === 'LONG' ? activationPrice <= opp.stopLoss : activationPrice >= opp.stopLoss);
-                        const isInstantTP = (opp.side === 'LONG' ? activationPrice >= opp.takeProfits.tp1 : activationPrice <= opp.takeProfits.tp1);
-
-                        if (isInstantSL) {
-                            console.warn(`⛔ [SignalAudit] REJECTED Instant-Entry: Price ($${activationPrice}) is already past SL ($${opp.stopLoss})`);
-                            initialStatus = 'REJECTED_RISK';
-                        } else if (isInstantTP) {
-                            console.warn(`⚠️ [SignalAudit] REJECTED Instant-Entry: Price ($${activationPrice}) is already past TP1 ($${opp.takeProfits.tp1})`);
-                            initialStatus = 'REJECTED_LATE';
-                        }
+                    if (isInstantSL) {
+                        console.warn(`⛔ [SignalAudit] REJECTED Instant-Entry: Price ($${currentPrice}) is already past SL ($${opp.stopLoss})`);
+                        initialStatus = 'REJECTED_RISK';
+                    } else if (isInstantTP) {
+                        console.warn(`⚠️ [SignalAudit] REJECTED Instant-Entry: Price ($${currentPrice}) is already past TP1 ($${opp.takeProfits.tp1})`);
+                        initialStatus = 'REJECTED_LATE';
                     }
+                }
+
+                // TRACKING MODE: Force PENDING status initially.
+                // Let processPriceTick() handle the activation logic consistently.
+                // This ensures we "track" the price to the entry zone rather than jumping in.
+                if (initialStatus !== 'REJECTED_RISK' && initialStatus !== 'REJECTED_LATE') {
+                    initialStatus = 'PENDING';
                 }
 
                 if (initialStatus.includes('REJECTED')) return; // Do not register bad trades
