@@ -990,20 +990,55 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 // === CALCULATE DCA PLAN ===
                 let dcaPlan: any;
 
-                // CHECK: Does the strategy provide its own Risk Plan? (e.g. Pau Perdices)
                 if ((strategyResult.primaryStrategy as any).risk) {
                     const sRisk = (strategyResult.primaryStrategy as any).risk;
-                    // Map Strategy Risk to DCA Plan format
+
+                    // ROBUST DCA PROTOCOL (Standardized for All Strategies)
+                    // Instead of 100% Sniper Entry, we create a 3-Step Mesh to improve Average Entry
+                    // Distribution: 40% Market, 30% Pullback 1, 30% Pullback 2
+
+                    const entryPrice = indicators.price;
+                    const atrVal = indicators.atr || (entryPrice * 0.01); // Fallback 1% if ATR missing
+
+                    // Mesh Spacing: 0.5 ATR and 1.0 ATR distance
+                    // If LONG: entries below current price. If SHORT: entries above.
+                    const dirMult = signalSide === 'LONG' ? -1 : 1;
+
+                    const e1 = entryPrice;
+                    const e2 = entryPrice + (atrVal * 0.5 * dirMult);
+                    const e3 = entryPrice + (atrVal * 1.0 * dirMult);
+
+                    // Calculate Weighted Average Price (approximate for display)
+                    const avgEntry = (e1 * 0.4) + (e2 * 0.3) + (e3 * 0.3);
+
                     dcaPlan = {
-                        entries: [{
-                            level: 1,
-                            price: indicators.price, // Assuming market entry for sniper
-                            positionSize: 100, // Full clip
-                            confluenceScore: 5,
-                            factors: ["Strategy Defined Entry"],
-                            distanceFromCurrent: 0
-                        }],
-                        averageEntry: indicators.price,
+                        entries: [
+                            {
+                                level: 1,
+                                price: e1,
+                                positionSize: 40,
+                                confluenceScore: 5,
+                                factors: ["Strategy Signal (Market)"],
+                                distanceFromCurrent: 0
+                            },
+                            {
+                                level: 2,
+                                price: e2,
+                                positionSize: 30,
+                                confluenceScore: 4,
+                                factors: ["Robust DCA (0.5 ATR)"],
+                                distanceFromCurrent: Math.abs((e2 - entryPrice) / entryPrice) * 100
+                            },
+                            {
+                                level: 3,
+                                price: e3,
+                                positionSize: 30,
+                                confluenceScore: 4,
+                                factors: ["Robust DCA (1.0 ATR)"],
+                                distanceFromCurrent: Math.abs((e3 - entryPrice) / entryPrice) * 100
+                            }
+                        ],
+                        averageEntry: avgEntry,
                         totalRisk: TradingConfig.pauStrategy.risk.risk_per_trade * 100,
                         stopLoss: sRisk.stopLoss,
                         takeProfits: {
@@ -1013,7 +1048,7 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                         },
                         proximityScorePenalty: 0
                     };
-                    // console.log(`[Risk] Using Native Strategy Risk for ${coin.symbol}`);
+                    // console.log(`[Risk] Applied Robust DCA Protocol to Custom Strategy for ${coin.symbol}`);
                 } else {
                     // Use Default Institutional DCA Calculator
                     dcaPlan = calculateDCAPlan(

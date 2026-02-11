@@ -29,19 +29,76 @@ const OpportunityFinder: React.FC<OpportunityFinderProps> = ({ onSelectOpportuni
 
     // NEW: Socket Integration (Replaces local scanner)
     // Single hook call gets all necessary state (Singleton safe)
-    const { aiOpportunities, isConnected, systemStatus } = useSocket();
+    const { aiOpportunities, activeTrades, isConnected, systemStatus } = useSocket();
 
     // Sync socket data to local state for display
     useEffect(() => {
-        if (aiOpportunities && aiOpportunities.length > 0) {
-            setOpportunities(aiOpportunities);
+        // 1. Get Fresh Scanner Opportunities
+        const scannerOpps = aiOpportunities || [];
+
+        // 2. Map PENDING Trades back to Opportunity format (Restoring Visibility)
+        // Only signals that are strictly PENDING should be on the Radar.
+        // Once ACTIVE, they are "In Progress" and belong only to the Control Room.
+        const pendingOpps: AIOpportunity[] = (activeTrades || [])
+            .filter(t => t.status === 'PENDING')
+            .map(t => ({
+                id: t.id,
+                symbol: t.symbol,
+                timestamp: t.created_at || Date.now(), // Use creation time,
+                // Map Entry Price correctly
+                entryZone: {
+                    min: t.entry_price * 0.999, // Simulate zone for UI
+                    max: t.entry_price * 1.001,
+                    signalPrice: t.entry_price
+                },
+                stopLoss: t.stop_loss,
+                takeProfits: {
+                    tp1: t.tp1,
+                    tp2: t.tp2,
+                    tp3: t.tp3
+                },
+                side: t.side,
+                confidenceScore: t.confidence_score || 85, // Default high if missing
+                strategy: t.strategy || 'manual_pending',
+                technicalReasoning: t.technical_reasoning || "Orden Pendiente en Sala de Control",
+                invalidated: false,
+                // Add a special flag to identify these in UI if needed, or just let them blend in
+                debugLog: 'RESTORED_FROM_PENDING',
+
+                // Fix Missing Institutional Props (Defaults)
+                timeframe: t.timeframe || '15m',
+                session: t.session || 'GLOBAL',
+                riskRewardRatio: t.risk_reward || 2.5
+            }));
+
+        // 3. Merge & Deduplicate
+        // Priority: Pending Trades (Real Orders) > Scanner Opps (Suggestions)
+        // If an ID exists in both, prefer the Pending Trade version.
+        const combined = [...pendingOpps];
+        const pendingIds = new Set(pendingOpps.map(p => p.id));
+        const pendingSymbols = new Set(pendingOpps.map(p => p.symbol));
+
+        scannerOpps.forEach(opp => {
+            // Deduplicate by ID and Symbol (Don't show a scanner suggestion if we already have a pending order for that symbol)
+            if (!pendingIds.has(opp.id) && !pendingSymbols.has(opp.symbol)) {
+                combined.push(opp);
+            }
+        });
+
+        // Sort by timestamp desc (Newest first)
+        combined.sort((a, b) => b.timestamp - a.timestamp);
+
+        if (combined.length > 0) {
+            setOpportunities(combined);
 
             // Auto-detect regime from first opp if available
-            if (aiOpportunities[0].strategy) {
-                setDetectedRegime(aiOpportunities[0].strategy);
+            if (combined[0].strategy) {
+                setDetectedRegime(combined[0].strategy);
             }
+        } else {
+            setOpportunities([]); // Clear if empty
         }
-    }, [aiOpportunities]);
+    }, [aiOpportunities, activeTrades]);
 
     // Cleanup local loading/error states since we are now passive listeners
     useEffect(() => {
