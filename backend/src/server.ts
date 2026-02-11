@@ -311,7 +311,22 @@ binanceStream.subscribe((event: any) => {
     });
 });
 
-// 2. AI Scanner Opportunities (NEW)
+// 2.5 Active Trades Real-time Sync (NEW)
+signalAuditService.on('trades_updated', (trades: any[]) => {
+    const msg = JSON.stringify({
+        type: 'active_trades',
+        data: trades
+    });
+    console.log(`📡 [WS] Broadcasting Live Trade Update (${trades.length} active) to ${clients.size} clients.`);
+
+    clients.forEach((client) => {
+        if (client.ws.readyState === WebSocket.OPEN) {
+            client.ws.send(msg);
+        }
+    });
+});
+
+// 3. AI Scanner Opportunities (NEW)
 scannerService.on('scan_complete', (opportunities: AIOpportunity[]) => {
     const msg = JSON.stringify({
         type: 'ai_opportunities',

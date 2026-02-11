@@ -168,6 +168,7 @@ class SignalAuditService extends EventEmitter {
                 .in('status', ['PENDING', 'ACTIVE', 'OPEN', 'PARTIAL_WIN']);
 
             if (count && count > 0) {
+                console.log(`ℹ️ [SignalAudit] Suppressed ${opp.symbol}: Already has a managed position in DB.`);
                 this.processingSignatures.delete(sigKey);
                 continue;
             }
@@ -192,10 +193,10 @@ class SignalAuditService extends EventEmitter {
                     const isInstantTP = (opp.side === 'LONG' ? currentPrice >= opp.takeProfits.tp1 : currentPrice <= opp.takeProfits.tp1);
 
                     if (isInstantSL) {
-                        console.warn(`⛔ [SignalAudit] REJECTED Instant-Entry: Price ($${currentPrice}) is already past SL ($${opp.stopLoss})`);
+                        console.warn(`⛔ [SignalAudit] REJECTED Instant-Entry: ${opp.symbol} price ($${currentPrice}) is already past SL ($${opp.stopLoss})`);
                         initialStatus = 'REJECTED_RISK';
                     } else if (isInstantTP) {
-                        console.warn(`⚠️ [SignalAudit] REJECTED Instant-Entry: Price ($${currentPrice}) is already past TP1 ($${opp.takeProfits.tp1})`);
+                        console.warn(`⚠️ [SignalAudit] REJECTED Instant-Entry: ${opp.symbol} price ($${currentPrice}) is already past TP1 ($${opp.takeProfits.tp1})`);
                         initialStatus = 'REJECTED_LATE';
                     }
                 }
@@ -231,23 +232,32 @@ class SignalAuditService extends EventEmitter {
                     technical_reasoning: JSON.stringify({ dca: opp.dcaPlan || null }) + " | " + (opp.technicalReasoning || '')
                 };
 
-                const { data, error } = await this.supabase
+                const { data: insertedData, error: insertError } = await this.supabase
                     .from('signals_audit')
                     .insert(payload)
                     .select();
 
-                if (!error && data) {
-                    this.activeSignals.push(data[0]);
+                if (insertError) {
+                    console.error(`❌ [SignalAudit] Database Error registering ${opp.symbol}:`, insertError.message);
+                    this.processingSignatures.delete(sigKey);
+                    continue;
+                }
+
+                if (insertedData && insertedData.length > 0) {
+                    this.activeSignals.push(insertedData[0]);
                     const streamSymbol = opp.symbol.toLowerCase().replace('/', '') + '@aggTrade';
                     binanceStream.addStream(streamSymbol);
-                    console.log(`✅ [SignalAudit] Registered: ${opp.symbol} ${opp.side} (PRO Strategy)`);
+                    console.log(`✅ [SignalAudit] Registered & Tracked: ${opp.symbol} ${opp.side} (Entry: $${entryTarget})`);
+
+                    // 📡 BROADCAST UPDATE
+                    this.emit('trades_updated', this.activeSignals);
 
                     // 🔔 TELEGRAM ALERT
                     const { telegramService } = await import('./telegramService');
-                    // We send the single opportunity as an array
-                    // Check if it's worthy (score etc checked inside)
                     telegramService.broadcastSignals([opp]);
                 }
+            } catch (err: any) {
+                console.error(`💥 [SignalAudit] Critical Failure registering ${opp.symbol}:`, err.message);
             } finally {
                 this.processingSignatures.delete(sigKey);
             }
@@ -686,6 +696,9 @@ class SignalAuditService extends EventEmitter {
         if (signalsToUpdate.length > 0) {
             await this.syncUpdates(signalsToUpdate);
         }
+
+        // 📡 BROADCAST UPDATE IF ANY CHANGES OCCURRED
+        this.emit('trades_updated', this.activeSignals);
     }
 
     private calculateNetPnL(entry: number, exit: number, side: string, fees: number, sizeRatio: number): number {
@@ -828,6 +841,9 @@ class SignalAuditService extends EventEmitter {
                 }
             }
         }
+
+        // 📡 BROADCAST UPDATE
+        this.emit('trades_updated', this.activeSignals);
     }
 
     /**
