@@ -111,7 +111,7 @@ const PerformanceStats: React.FC = () => {
                                         {mlStats?.isDriftDetected && <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />}
                                     </div>
                                     <div className={`text-lg font-black ${mlStats?.isDriftDetected ? 'text-rose-400' : 'text-purple-400'}`}>
-                                        {mlStats ? `${mlStats.globalWinRate.toFixed(1)}%` : '---'}
+                                        {mlStats && mlStats.totalPredictions > 0 ? `${mlStats.globalWinRate.toFixed(1)}%` : <span className="text-xs tracking-widest opacity-70">CALIBRANDO</span>}
                                     </div>
                                 </div>
                             </div>

@@ -988,16 +988,44 @@ export const scanMarketOpportunities = async (style: TradingStyle): Promise<AIOp
                 }
 
                 // === CALCULATE DCA PLAN ===
-                // Use updated dcaCalculator with tier-based logic
-                const dcaPlan = calculateDCAPlan(
-                    indicators.price,
-                    (indicators.confluenceAnalysis as any) || { topSupports: [], topResistances: [] }, // Ensure valid ConfluenceAnalysis object
-                    indicators.atr,
-                    signalSide,
-                    indicators.marketRegime, // Arg 5: Market Regime
-                    indicators.fibonacci,    // Arg 6: Fibs
-                    postPenaltyTier          // Arg 7: Tier
-                );
+                let dcaPlan: any;
+
+                // CHECK: Does the strategy provide its own Risk Plan? (e.g. Pau Perdices)
+                if ((strategyResult.primaryStrategy as any).risk) {
+                    const sRisk = (strategyResult.primaryStrategy as any).risk;
+                    // Map Strategy Risk to DCA Plan format
+                    dcaPlan = {
+                        entries: [{
+                            level: 1,
+                            price: indicators.price, // Assuming market entry for sniper
+                            positionSize: 100, // Full clip
+                            confluenceScore: 5,
+                            factors: ["Strategy Defined Entry"],
+                            distanceFromCurrent: 0
+                        }],
+                        averageEntry: indicators.price,
+                        totalRisk: TradingConfig.pauStrategy.risk.risk_per_trade * 100,
+                        stopLoss: sRisk.stopLoss,
+                        takeProfits: {
+                            tp1: { price: sRisk.takeProfit1, exitSize: 40 },
+                            tp2: { price: sRisk.takeProfit2, exitSize: 30 },
+                            tp3: { price: sRisk.takeProfit3, exitSize: 30 }
+                        },
+                        proximityScorePenalty: 0
+                    };
+                    // console.log(`[Risk] Using Native Strategy Risk for ${coin.symbol}`);
+                } else {
+                    // Use Default Institutional DCA Calculator
+                    dcaPlan = calculateDCAPlan(
+                        indicators.price,
+                        (indicators.confluenceAnalysis as any) || { topSupports: [], topResistances: [] }, // Ensure valid ConfluenceAnalysis object
+                        indicators.atr,
+                        signalSide,
+                        indicators.marketRegime, // Arg 5: Market Regime
+                        indicators.fibonacci,    // Arg 6: Fibs
+                        postPenaltyTier          // Arg 7: Tier
+                    );
+                }
 
                 // === CALCULATE POSITION SIZING ===
                 const kellySize = calculateKellySize(0.65, dynamicRR); // 65% winrate assumption

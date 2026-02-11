@@ -48,7 +48,8 @@ export class StrategyRunner {
                         signal: pauResult.signal,
                         reason: pauResult.reason.join(". "),
                         isFresh: true,
-                        specificTrigger: pauResult.reason[0] || 'Sniper Setup'
+                        specificTrigger: pauResult.reason[0] || 'Sniper Setup',
+                        risk: pauResult.risk // NEW: Propagate calculated risk
                     },
                     details: pauResult.reason,
                     scoreBoost: 50, // Massive priority boost

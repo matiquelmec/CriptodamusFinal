@@ -10,6 +10,7 @@
     "dev": "tsx watch src/server.ts",
     "monitor": "tsx src/scripts/monitor.ts",
     "dump-state": "tsx src/dump_state.ts",
+    "reset-logs": "tsx src/scripts/reset_logs.ts",
     "build": "tsc"
   },
   "dependencies": {

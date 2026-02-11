@@ -61,6 +61,19 @@ async function cleanLogs() {
             console.log("✅ All audit logs reset successfully.");
         }
     }
+
+    // 3. Reset ML Stats (Brain Health)
+    console.log("🧠 [Reset] Clearing ML Prediction History (Brain Health)...");
+    const { error: mlError } = await supabase
+        .from('model_predictions')
+        .delete()
+        .neq('prediction_time', '1970-01-01'); // Delete all
+
+    if (mlError) {
+        console.error("❌ Error resetting Brain Health:", mlError.message);
+    } else {
+        console.log("✅ Brain Health reset successfully! (ML stats back to fresh)");
+    }
 }
 
 cleanLogs();
