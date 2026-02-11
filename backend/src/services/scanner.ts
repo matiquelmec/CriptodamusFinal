@@ -226,11 +226,9 @@ class ScannerService extends EventEmitter {
                     console.log(`✅ [ScannerService] Broadcast: ${returnableResults.length} NEW opportunities (Filtered from ${uniqueResults.length}).`);
                     this.emit('scan_complete', returnableResults);
 
-                    // 🚀 TELEGRAM NOTIFICATION HOOK
-                    telegramService.broadcastSignals(returnableResults).catch(err => console.error("[Scanner] Telegram Error:", err));
-
                     // 🛡️ SIGNAL AUDIT HOOK (New)
-                    // Note: Audit Service has its own deduplication, but pre-filtering here saves DB calls.
+                    // Note: Audit Service is now the SOLE AUTHORITY for Telegram alerts.
+                    // It vetted the results, registers them, and handles the one-time notification.
                     signalAuditService.registerSignals(returnableResults).catch(err => console.error("[Scanner] Audit Error:", err));
 
                     // Golden Tickets (High Confidence)
