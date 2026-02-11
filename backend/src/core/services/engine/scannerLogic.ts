@@ -1234,7 +1234,8 @@ function applyMacroFilters(
     }
 
     // 2. USDT DOMINANCE (Rotation Logic)
-    if (macro.usdtDominance.trend === 'RISING' && signalSide === 'LONG') {
+    // EXCEPTION: Gold (Safe Haven) often rises when USDT Dominance limits Crypto
+    if (macro.usdtDominance.trend === 'RISING' && signalSide === 'LONG' && !isGold) {
         adjustedScore *= 0.75; // -25% Drain
         reasonLog = reasonLog ? `${reasonLog} | USDT Dominance Rising` : `⚠️ Macro: USDT Dominance Rising (-25%)`;
     } else if (macro.usdtDominance.trend === 'FALLING' && signalSide === 'LONG') {

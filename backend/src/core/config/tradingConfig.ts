@@ -182,11 +182,11 @@ export const TradingConfig = {
 
     // --- SCORING MATRIX ---
     scoring: {
-        min_score_entry: 60, // DIAGNOSTIC MODE: Reduced from 75 to 60
-        min_score_to_list: 60, // DIAGNOSTIC MODE: Match entry
+        min_score_entry: 70, // PAU STRATEGY ALIGNMENT (Verified Threshold)
+        min_score_to_list: 70, // Match entry threshold
         god_mode_threshold: 90,
         filters: { // NEW: Hard Filters
-            min_adx: 15, // DIAGNOSTIC MODE: Reduced from 20 to 15 (Allow weaker trends)
+            min_adx: 18, // PAU STRATEGY ALIGNMENT (Commodity Friendly)
             min_volume_24h: 5000000 // $5M Liquidity Floor
         },
         weights: {

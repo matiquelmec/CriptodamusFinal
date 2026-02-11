@@ -100,7 +100,9 @@ export class FilterEngine {
             // D. Trend Strength Check (Adjusted: 20 for Pau Perdices compatibility)
             // Gold and commodities can have smooth trends with lower ADX
             const assetProfile = AssetClassifier.classify(opportunity.symbol);
-            const minADX = assetProfile.class === 'COMMODITY' ? 18 : 20; // Gentler for gold
+            // Use Config value (18) as base. Commodities might match it or be slightly lower if needed, 
+            // but for now we trust the Config to be "Pau Aligned" (18).
+            const minADX = TradingConfig.scoring.filters.min_adx;
 
             if (!isReversionStrategy && adx && adx < minADX) {
                 return { discarded: true, reason: `Weak Structural Trend (ADX ${adx.toFixed(1)} < ${minADX})` };
