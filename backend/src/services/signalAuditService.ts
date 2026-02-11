@@ -117,13 +117,31 @@ class SignalAuditService extends EventEmitter {
 
 
 
+    private sessionStartTime = Date.now(); // NEW: To distinguish legacy vs new signals
+    private recentClosures = new Map<string, number>(); // COOLDOWN: Track closed trades to prevent "Machine Gun" re-entry
+
     public async registerSignals(opportunities: AIOpportunity[]) {
         if (!this.supabase) return;
+
+        // COOLDOWN CONFIG: 60 Minutes
+        const COOLDOWN_MS = 60 * 60 * 1000;
 
         for (const opp of opportunities) {
             const sigKey = `${opp.symbol}-${opp.side}`;
 
             if (this.processingSignatures.has(sigKey)) continue;
+
+            // 0. COOLDOWN CHECK (Prevent Machine Gun Logic)
+            const lastClosed = this.recentClosures.get(sigKey);
+            if (lastClosed) {
+                if (Date.now() - lastClosed < COOLDOWN_MS) {
+                    // Still in cooldown
+                    // console.log(`❄️ [SignalAudit] Cooldown active for ${sigKey} (${((COOLDOWN_MS - (Date.now() - lastClosed))/60000).toFixed(0)}m left)`);
+                    continue;
+                } else {
+                    this.recentClosures.delete(sigKey); // Expired
+                }
+            }
 
             // 1. SINGLE POSITION ENFORCEMENT (Professional Trader Rule)
             // No abrimos LONG si ya hay un LONG activo para este par.
@@ -646,6 +664,7 @@ class SignalAuditService extends EventEmitter {
 
                 updates.id = signal.id;
                 updates.created_at = signal.created_at; // Pass for legacy check
+                updates.side = signal.side; // Pass for Cooldown cache
                 signalsToUpdate.push(updates);
 
                 // Clean updates object before assigning to memory to avoid duplicates? No, created_at is fine.
@@ -761,6 +780,26 @@ class SignalAuditService extends EventEmitter {
                     if (upd.status === 'WIN' || upd.status === 'LOSS') {
                         const finalPnL = upd.pnl_percent || 0;
                         this.activeSignals = this.activeSignals.filter((s: any) => s.id !== upd.id);
+
+                        // COOLDOWN: Mark as recently closed
+                        const sigKey = `${upd.symbol}-${upd.side || (upd.strategy ? 'LONG' : 'LONG')}`; // Fallback side if missing found in activeSignals logic usually.
+                        // Actually upd might not have 'side'. We need to be careful. activeSignals has it.
+                        // The 'upd' object comes from processPriceTick but it is partial.
+                        // We should grab side BEFORE filtering or from the filtered signal?
+                        // activeSignals filter removes it. Let's find it first.
+                        // Wait, we filtered line 763. This line 763 is destructive.
+                        // We should fix the logic order or rely on upd having side if we pass it.
+
+                        // Correct approach: We use the signal object from memory (which we just filtered OUT).
+                        // But wait, line 763 removes it. We don't have reference unless we saved it.
+                        // However, upd is derived from signal in processPriceTick loop.
+                        // Does upd have side? Line 648 push updates. updates usually just has status, pnl etc.
+                        // Let's modify processPriceTick to include side in updates for context.
+
+                        if (upd.symbol && upd.side) {
+                            this.recentClosures.set(`${upd.symbol}-${upd.side}`, Date.now());
+                        }
+
                         console.log(`🎯 [SignalAudit] CERRADA (${upd.status}): ${upd.id} | Net PnL: ${finalPnL.toFixed(2)}%`);
 
                         telegramService.sendUpdateAlert('TRADE_CLOSED', {
