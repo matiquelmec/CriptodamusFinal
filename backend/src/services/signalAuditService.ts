@@ -818,6 +818,7 @@ class SignalAuditService extends EventEmitter {
                 }
             }
         }
+    }
 
     /**
      * Finds the nearest ML prediction for this signal and updates its outcome
