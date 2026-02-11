@@ -1464,9 +1464,23 @@ class SignalAuditService extends EventEmitter {
         const unique = Array.from(new Map(sanitized.map(item => [item.id, item])).values());
 
         return unique.sort((a: any, b: any) => {
-            const scoreA = ['ACTIVE', 'PARTIAL_WIN'].includes(a.status) ? 1 : 0;
-            const scoreB = ['ACTIVE', 'PARTIAL_WIN'].includes(b.status) ? 1 : 0;
-            if (scoreA !== scoreB) return scoreB - scoreA;
+            // ROBUST SORTING LOGIC:
+            // Priority 1: Money on the table (ACTIVE, PARTIAL_WIN) - Score 3
+            // Priority 2: Waiting for entry (PENDING, OPEN) - Score 2
+            // Priority 3: History (WIN, LOSS, EXPIRED) - Score 1
+
+            const getScore = (s: string) => {
+                if (['ACTIVE', 'PARTIAL_WIN'].includes(s)) return 3;
+                if (['PENDING', 'OPEN'].includes(s)) return 2;
+                return 1;
+            };
+
+            const scoreA = getScore(a.status);
+            const scoreB = getScore(b.status);
+
+            if (scoreA !== scoreB) return scoreB - scoreA; // High score first
+
+            // Tie-breaker: Newest First
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
     }
