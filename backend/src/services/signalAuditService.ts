@@ -695,10 +695,9 @@ class SignalAuditService extends EventEmitter {
 
         if (signalsToUpdate.length > 0) {
             await this.syncUpdates(signalsToUpdate);
+            // 📡 BROADCAST UPDATE ONLY IF ANY CHANGES OCCURRED
+            // this.emit('trades_updated', this.activeSignals); // Moved to syncUpdates
         }
-
-        // 📡 BROADCAST UPDATE IF ANY CHANGES OCCURRED
-        this.emit('trades_updated', this.activeSignals);
     }
 
     private calculateNetPnL(entry: number, exit: number, side: string, fees: number, sizeRatio: number): number {

@@ -317,7 +317,10 @@ signalAuditService.on('trades_updated', (trades: any[]) => {
         type: 'active_trades',
         data: trades
     });
-    console.log(`📡 [WS] Broadcasting Live Trade Update (${trades.length} active) to ${clients.size} clients.`);
+
+    if (clients.size > 0) {
+        console.log(`📡 [WS] Broadcasting Live Trade Update (${trades.length} active) to ${clients.size} clients.`);
+    }
 
     clients.forEach((client) => {
         if (client.ws.readyState === WebSocket.OPEN) {
