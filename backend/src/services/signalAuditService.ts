@@ -91,13 +91,15 @@ class SignalAuditService extends EventEmitter {
                         const parts = sig.technical_reasoning.split(' | ');
                         const dcaData = JSON.parse(parts[0]);
                         sig.dcaPlan = dcaData.dca;
-                    } catch (e) {
-                        // console.error("Error parsing DCA:", e);
-                    }
+                    } catch (e) { }
                 }
                 return sig;
             });
-            console.log(`🛡️ [SignalAudit] Seguimiento activo de ${data.length} señales (DCA Hydrated).`);
+
+            // 🧹 TOTAL CLEANUP (Fase 23): Clear stale memory-locks on boot
+            this.checkExpirations().then(() => {
+                console.log(`🛡️ [SignalAudit] Fresh Start: Following ${this.activeSignals.filter(s => s.status === 'ACTIVE' || s.status === 'PARTIAL_WIN').length} Active trades.`);
+            });
 
             data.forEach((sig: any) => {
                 const streamSymbol = sig.symbol.toLowerCase().replace('/', '') + '@aggTrade';
@@ -825,28 +827,16 @@ class SignalAuditService extends EventEmitter {
                         console.log(`✅ [Sync] DB WRITE SUCCESS: SL for ${id} set to ${data.stop_loss}`);
                     }
 
-                    // Integrity Check for Closure
-                    if (upd.status === 'WIN' || upd.status === 'LOSS') {
+                    // 🛡️ [Senior Fix] Terminal Status Cleanup: Remove from memory RAM
+                    const terminalStatuses = ['WIN', 'LOSS', 'EXPIRED', 'REJECTED_RISK', 'REJECTED_LATE', 'BREAKEVEN', 'ERROR_HALT'];
+                    if (terminalStatuses.includes(upd.status)) {
                         const finalPnL = upd.pnl_percent || 0;
                         this.activeSignals = this.activeSignals.filter((s: any) => s.id !== upd.id);
 
                         // COOLDOWN: Mark as recently closed
-                        const sigKey = `${upd.symbol}-${upd.side || (upd.strategy ? 'LONG' : 'LONG')}`; // Fallback side if missing found in activeSignals logic usually.
-                        // Actually upd might not have 'side'. We need to be careful. activeSignals has it.
-                        // The 'upd' object comes from processPriceTick but it is partial.
-                        // We should grab side BEFORE filtering or from the filtered signal?
-                        // activeSignals filter removes it. Let's find it first.
-                        // Wait, we filtered line 763. This line 763 is destructive.
-                        // We should fix the logic order or rely on upd having side if we pass it.
-
-                        // Correct approach: We use the signal object from memory (which we just filtered OUT).
-                        // But wait, line 763 removes it. We don't have reference unless we saved it.
-                        // However, upd is derived from signal in processPriceTick loop.
-                        // Does upd have side? Line 648 push updates. updates usually just has status, pnl etc.
-                        // Let's modify processPriceTick to include side in updates for context.
-
-                        if (upd.symbol && upd.side) {
-                            this.recentClosures.set(`${upd.symbol}-${upd.side}`, Date.now());
+                        const signalFromMemory = this.activeSignals.find(s => s.id === upd.id) || upd;
+                        if (upd.symbol && signalFromMemory.side) {
+                            this.recentClosures.set(`${upd.symbol}-${signalFromMemory.side}`, Date.now());
                         }
 
                         console.log(`🎯 [SignalAudit] CERRADA (${upd.status}): ${upd.id} | Net PnL: ${finalPnL.toFixed(2)}%`);
@@ -922,7 +912,12 @@ class SignalAuditService extends EventEmitter {
         for (const signal of this.activeSignals) {
             // Only expire PENDING signals. Once ACTIVE, they must hit SL or TP.
             if (signal.status === 'PENDING' || signal.status === 'OPEN') {
-                const ageHours = (Date.now() - Number(signal.created_at)) / (1000 * 60 * 60);
+                // ROBUST DATE PARSING: Handle both Number (Unix) and String (ISO)
+                const created = typeof signal.created_at === 'string'
+                    ? new Date(signal.created_at).getTime()
+                    : Number(signal.created_at);
+
+                const ageHours = (Date.now() - created) / (1000 * 60 * 60);
                 const limit = signal.timeframe === '15m' ? 4 : 72; // Increased to 72h
                 if (ageHours > limit) {
                     console.log(`⌛ [SignalAudit] Expiring stale signal: ${signal.symbol}`);
