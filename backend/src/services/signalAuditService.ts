@@ -264,6 +264,7 @@ class SignalAuditService extends EventEmitter {
 
         if (this.activeSignals.length === 0) return;
 
+        const signalsToUpdate: any[] = [];
         const sym = symbol.toUpperCase().replace('/', '');
 
         for (const signal of this.activeSignals) {
