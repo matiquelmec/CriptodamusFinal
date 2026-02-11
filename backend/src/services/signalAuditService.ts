@@ -290,7 +290,7 @@ class SignalAuditService extends EventEmitter {
                     } else {
                         // REJECTED Status but saved for Audit
                         console.log(`📊 [SignalAudit] Logged REJECTION in DB: ${opp.symbol} is ${savedSig.status}`);
-                        this.broadcast(true); // Update UI so it appears in Historico/Auditoria
+                        // No broadcasting for rejections to keep UI clean
                     }
                 }
             } catch (err: any) {
@@ -1497,6 +1497,7 @@ class SignalAuditService extends EventEmitter {
         const { data, error } = await this.supabase
             .from('signals_audit')
             .select('*')
+            .not('status', 'like', 'REJECTED_%') // Filter out technical rejections from main history
             .order('created_at', { ascending: false })
             .limit(limit);
         if (error || !data) return [];

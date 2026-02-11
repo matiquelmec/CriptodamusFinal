@@ -35,7 +35,9 @@ const AuditHistory: React.FC<AuditHistoryProps> = ({ onShowEducation }) => {
                 const url = `${getBaseUrl()}/api/performance/history?limit=50`;
                 const response = await axios.get(url);
                 if (Array.isArray(response.data)) {
-                    setHistory(response.data);
+                    // Safety filter: exclude technical rejections
+                    const filtered = response.data.filter((sig: any) => !sig.status?.startsWith('REJECTED_'));
+                    setHistory(filtered);
                 } else {
                     console.error("Historical data is not an array:", response.data);
                     setHistory([]);

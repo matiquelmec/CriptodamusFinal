@@ -9,6 +9,7 @@
     "debug-audit": ".\\node_modules\\.bin\\tsx src/scripts/debug_scanner.ts",
     "dev": "tsx watch src/server.ts",
     "monitor": "tsx src/scripts/monitor.ts",
+    "dump-state": "tsx src/dump_state.ts",
     "build": "tsc"
   },
   "dependencies": {

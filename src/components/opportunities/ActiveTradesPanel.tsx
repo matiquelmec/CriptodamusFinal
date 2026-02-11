@@ -11,7 +11,10 @@ const ActiveTradesPanel: React.FC = () => {
     // HYBRID MERGE: Socket (Fast Price) + RealtimeDB (Reliable State/SL/TP)
     const displayTrades = useMemo(() => {
         if (!activeTrades) return [];
-        return activeTrades.map(socketTrade => {
+        // Filter out any technical rejections that might have leaked
+        const filtered = activeTrades.filter(t => !t.status?.startsWith('REJECTED_'));
+
+        return filtered.map(socketTrade => {
             // Find if we have a fresher DB update for this trade
             const dbUpdate = realtimeUpdates.find(r => r.id === socketTrade.id);
             if (dbUpdate) {
