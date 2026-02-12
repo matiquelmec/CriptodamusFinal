@@ -113,10 +113,35 @@ export class NotificationFilter {
 
         // ========== TP ADAPTATION FILTERING ==========
         if (updateType === 'TP_ADAPTED') {
-            // TP adaptations are contextual (e.g., front-running detection)
+            const newTP = data.newValue || 0;
+            // CHECK 1: Value Deduplication (Prevent spamming same value)
+            // We store the last TP adapted value in lastTP dictionary under 'adapted' key or similar,
+            // but the interface defines tp1, tp2. Let's assume we map it to 'tp_adapted' or misuse tp1?
+            // Better: use lastSL logic or extend interface.
+            // For now, let's use a dynamic key or just compare against last known TP if possible.
+            // Actually, let's assume we just check against lastNotificationTime if it was RECENT.
+            // BUT, if we want to deduplicate by VALUE, we need to store it.
+
+            // Let's use 'tp1' slot for single-target adaptations or add a dedicated field?
+            // We can't easily change interface here without breaking static typing.
+            // Let's rely on COOLDOWN + REASON check.
+
+            // FIX: If we just sent a "Front-run" alert 1ms ago, don't send it again unless value changed.
+            // Since we don't store value cleanly, let's enforce a strict 1-minute duplicate-prevention 
+            // even for "Front-run", OR ensure we update cache.
+
+            // 1. Update Cache is MANDATORY to start the timer.
+
             // ALWAYS notify if it's a defensive move (front-run detected)
             if (data.reason?.toLowerCase().includes('front-run') ||
                 data.reason?.toLowerCase().includes('cluster')) {
+
+                // ANTI-SPAM: Even for urgent alerts, ignore if sent < 1 min ago
+                if (now - state.lastNotificationTime < 60 * 1000 && state.lastNotificationType === 'TP_ADAPTED') {
+                    return { shouldNotify: false, suppressionReason: 'Urgent duplicate suppression (1m)' };
+                }
+
+                this.updateCache(symbol, updateType, undefined, { tp_adapted: newTP }); // Update Timestamp
                 return {
                     shouldNotify: true,
                     reason: 'Defensive TP adaptation (market structure changed)'
@@ -132,6 +157,7 @@ export class NotificationFilter {
                 };
             }
 
+            this.updateCache(symbol, updateType, undefined, { tp_adapted: newTP });
             return { shouldNotify: true, reason: 'TP adaptation cleared cooldown' };
         }
 

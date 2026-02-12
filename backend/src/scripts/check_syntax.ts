@@ -1,9 +1,7 @@
 
 import { TradingConfig } from '../core/config/tradingConfig';
-// import { SignalAuditService } from '../services/signalAuditService'; // Class is not exported directly? usually default or named.
-// Let's check signalAuditService export.
-// It seems it exports default instance usually? Or class?
-// Line 12: class SignalAuditService...
+import { NotificationFilter } from '../services/NotificationFilter';
 
 console.log("TradingConfig syntax OK:", TradingConfig.pauStrategy.concurrency);
+console.log("NotificationFilter syntax OK");
 console.log("Syntax Check Passed.");

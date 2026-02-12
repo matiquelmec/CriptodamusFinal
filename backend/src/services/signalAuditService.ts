@@ -672,15 +672,10 @@ class SignalAuditService extends EventEmitter {
 
                         if (currentStage > 0) {
                             console.log(`🛡️ [SignalAudit] Smart Breakeven Hit: ${signal.symbol} (Secured Profit: ${totalPnL.toFixed(2)}%)`);
-                            telegramService.sendUpdateAlert('SL_MOVED', {
-                                symbol: signal.symbol,
-                                oldSl: signal.stop_loss,
-                                newSl: updates.final_price,
-                                reason: 'Smart Breakeven (Profit Secured)',
-                                pnl: totalPnL.toFixed(2)
-                            });
+                            updates.exit_reason = 'Smart Breakeven (Profit Secured)';
                         } else {
                             console.log(`⛔ [SignalAudit] Technical Stop Loss Hit: ${signal.symbol} @ $${currentPrice}`);
+                            updates.exit_reason = 'Technical Stop Loss Hit';
                         }
                     } else {
                         // --- 2D: TP SEQUENTIAL MANAGEMENT ---
