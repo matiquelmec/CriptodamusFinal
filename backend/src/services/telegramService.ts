@@ -205,8 +205,8 @@ export class TelegramService {
      * Alert for Live Updates (SL Move, TP Hit, Context Change)
      * NOW WITH INTELLIGENT FILTERING
      */
-    public async sendUpdateAlert(type: 'SL_MOVED' | 'TP_HIT' | 'TP_ADAPTED' | 'TRADE_CLOSED', data: any) {
-        if (!this.bot || !TradingConfig.telegram.chatId) return;
+    public async sendUpdateAlert(type: 'SL_MOVED' | 'TP_HIT' | 'TP_ADAPTED' | 'TRADE_CLOSED', data: any): Promise<boolean> {
+        if (!this.bot || !TradingConfig.telegram.chatId) return false;
 
         // PROFESSIONAL FILTER: Check if this update warrants notification
         const { NotificationFilter } = await import('./NotificationFilter');
@@ -215,13 +215,14 @@ export class TelegramService {
             newValue: data.newSl || data.newTp,
             stage: data.stage,
             reason: data.reason,
-            pnl: data.pnl
+            pnl: data.pnl,
+            historyLog: data.historyLog // Pass Persistence Context
         });
 
         if (!filterResult.shouldNotify) {
             const priority = NotificationFilter.getPriority(type, data);
             console.log(`[Telegram] [${priority}] Notification suppressed for ${data.symbol} (${type}): ${filterResult.suppressionReason}`);
-            return; // SUPPRESS SPAM
+            return false; // SUPPRESS SPAM
         }
 
         // Log notification decision
@@ -272,8 +273,10 @@ export class TelegramService {
         try {
             await this.bot.sendMessage(TradingConfig.telegram.chatId, fullMessage, { parse_mode: 'HTML' });
             console.log(`[Telegram] Sent UPDATE alert for ${data.symbol} (${type})`);
+            return true; // Sent successfully
         } catch (error: any) {
             console.error(`[Telegram] Failed to send Update Alert: ${error.message}`);
+            return false; // Failed
         }
     }
 }

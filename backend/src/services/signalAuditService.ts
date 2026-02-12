@@ -719,7 +719,13 @@ class SignalAuditService extends EventEmitter {
                                     price: tp1,
                                     pnl: updates.realized_pnl_percent.toFixed(2),
                                     // Add the new SL to the alert context if useful for debugging
-                                    newSl: updates.stop_loss
+                                    newSl: updates.stop_loss,
+                                    historyLog: (signal.technical_reasoning || '') + (updates.technical_reasoning || '')
+                                }).then(sent => {
+                                    if (sent) {
+                                        const tag = `[SENT:TP_HIT_1]`;
+                                        updates.technical_reasoning = (updates.technical_reasoning || '') + ` ${tag}`;
+                                    }
                                 });
                             }
                         }
@@ -925,11 +931,27 @@ class SignalAuditService extends EventEmitter {
 
                         console.log(`🎯 [SignalAudit] CERRADA (${upd.status}): ${upd.id} | Net PnL: ${finalPnL.toFixed(2)}%`);
 
+
+                        const tag = `[SENT:TRADE_CLOSED]`;
+                        const historyLog = signalFromMemory.technical_reasoning || '';
+
                         telegramService.sendUpdateAlert('TRADE_CLOSED', {
                             symbol: upd.symbol || 'UNKNOWN',
                             status: upd.status,
                             pnl: finalPnL.toFixed(2),
-                            reason: upd.exit_reason || 'Target/SL Hit'
+                            reason: upd.exit_reason || 'Target/SL Hit',
+                            historyLog: historyLog
+                        }).then(sent => {
+                            if (sent) {
+                                // Close loop: We already deleted from active memory, but we might want to update final record in DB if meaningful.
+                                // Since trade is closed, maybe just log?
+                                // Actually, we can update the row one last time with the tag to prevent ghosts.
+                                if (sent && this.supabase) {
+                                    this.supabase.from('signals_audit').update({
+                                        technical_reasoning: `${historyLog} ${tag}`
+                                    }).eq('id', upd.id).then(() => { });
+                                }
+                            }
                         });
 
                         // ML FEEDBACK LOOP: Update model_predictions outcome
@@ -1130,11 +1152,20 @@ class SignalAuditService extends EventEmitter {
                                 const betterSL = isLong ? Math.max(currentStoredSL, trailingSL) : Math.min(currentStoredSL || Infinity, trailingSL);
                                 if (betterSL !== currentStoredSL) {
                                     updates.stop_loss = Number(betterSL.toFixed(4));
+
+                                    const tag = `[SENT:SL_MOVED_TRAILING_${updates.stop_loss}]`;
+                                    const historyLog = (signal.technical_reasoning || '') + (updates.technical_reasoning || '');
+
                                     telegramService.sendUpdateAlert('SL_MOVED', {
                                         symbol: signal.symbol,
                                         oldSl: signal.stop_loss,
                                         newSl: updates.stop_loss,
-                                        reason: 'Trailing Stop Follow-up'
+                                        reason: 'Trailing Stop Follow-up',
+                                        historyLog: historyLog
+                                    }).then(sent => {
+                                        if (sent) {
+                                            updates.technical_reasoning = (updates.technical_reasoning || '') + ` ${tag}`;
+                                        }
                                     });
                                 }
                             }
@@ -1159,11 +1190,20 @@ class SignalAuditService extends EventEmitter {
                         if (slChanged) {
                             updates.stop_loss = Number(tightenedSL.toFixed(4));
                             console.log(`⏱️ [TimeDecay] ${signal.symbol}: SL tightened to ${tightenedSL.toFixed(2)} (${ageHours.toFixed(1)}h, factor: ${tightenFactor.toFixed(2)})`);
+
+                            const tag = `[SENT:SL_MOVED_DECAY_${updates.stop_loss}]`;
+                            const historyLog = (signal.technical_reasoning || '') + (updates.technical_reasoning || '');
+
                             telegramService.sendUpdateAlert('SL_MOVED', {
                                 symbol: signal.symbol,
                                 oldSl: signal.stop_loss,
                                 newSl: updates.stop_loss,
-                                reason: `Time Decay (${ageHours.toFixed(1)}h)`
+                                reason: `Time Decay (${ageHours.toFixed(1)}h)`,
+                                historyLog: historyLog
+                            }).then(sent => {
+                                if (sent) {
+                                    updates.technical_reasoning = (updates.technical_reasoning || '') + ` ${tag}`;
+                                }
                             });
                         }
                     }
@@ -1189,11 +1229,20 @@ class SignalAuditService extends EventEmitter {
                             if (isImprovement) {
                                 updates.stop_loss = Number(smartBE.toFixed(4));
                                 console.log(`⏰ [ForcedBreakeven] ${signal.symbol}: SL → Smart BE ($${updates.stop_loss}) after ${ageHours.toFixed(1)}h`);
+
+                                const tag = `[SENT:SL_MOVED_FORCEBE_${updates.stop_loss}]`;
+                                const historyLog = (signal.technical_reasoning || '') + (updates.technical_reasoning || '');
+
                                 telegramService.sendUpdateAlert('SL_MOVED', {
                                     symbol: signal.symbol,
                                     oldSl: signal.stop_loss,
                                     newSl: updates.stop_loss,
-                                    reason: `Forced Breakeven (>12h)`
+                                    reason: `Forced Breakeven (>12h)`,
+                                    historyLog: historyLog
+                                }).then(sent => {
+                                    if (sent) {
+                                        updates.technical_reasoning = (updates.technical_reasoning || '') + ` ${tag}`;
+                                    }
                                 });
                             }
                         }
@@ -1240,11 +1289,20 @@ class SignalAuditService extends EventEmitter {
                                     updates.technical_reasoning = `${signal.technical_reasoning || ''} | [NUCLEAR] Secured BE before ${approachingEvent.title}`;
 
                                     console.log(`☢️ [NuclearGuard] ${signal.symbol}: Secured at BE (PnL ${pnlPercent.toFixed(2)}%) before ${approachingEvent.title}`);
+
+                                    const tag = `[SENT:SL_MOVED_NUCLEAR_${updates.stop_loss}]`;
+                                    const historyLog = (signal.technical_reasoning || '') + (updates.technical_reasoning || '');
+
                                     telegramService.sendUpdateAlert('SL_MOVED', {
                                         symbol: signal.symbol,
                                         oldSl: signal.stop_loss,
                                         newSl: updates.stop_loss,
-                                        reason: `Nuclear Shield (${approachingEvent.title})`
+                                        reason: `Nuclear Shield (${approachingEvent.title})`,
+                                        historyLog: historyLog
+                                    }).then(sent => {
+                                        if (sent) {
+                                            updates.technical_reasoning = (updates.technical_reasoning || '') + ` ${tag}`;
+                                        }
                                     });
                                 }
                             }
@@ -1293,10 +1351,12 @@ class SignalAuditService extends EventEmitter {
                             exit_reason: exitReason
                         };
 
+                        Object.assign(signal, updates); // FIX: Sync Memory for Exit
                         signalsToUpdate.push(updates);
                     } else if (Object.keys(updates).length > 0) {
                         // Solo update SL (no cierre)
                         updates.id = signal.id;
+                        Object.assign(signal, updates); // FIX: Sync Memory for Non-Terminal Update (Prevents Loops)
                         signalsToUpdate.push(updates);
                     }
 
@@ -1399,20 +1459,32 @@ class SignalAuditService extends EventEmitter {
                 if (targetStage === 2 && signal.dcaPlan?.takeProfits?.tp2) signal.dcaPlan.takeProfits.tp2.price = context.new_tp;
                 if (targetStage === 3 && signal.dcaPlan?.takeProfits?.tp3) signal.dcaPlan.takeProfits.tp3.price = context.new_tp;
 
-                // Sync to DB (Update reasoning or context field)
-                if (this.supabase) {
-                    await this.supabase.from('signals_audit').update({
-                        technical_reasoning: `${signal.technical_reasoning || ''} | [Updated] ${context.reason}`
-                    }).eq('id', signal.id);
-                }
-
                 console.log(`📉 [SignalAudit] Dynamic TP Adapted for ${symbol}: ${currentTargetPrice} -> ${context.new_tp}`);
 
-                // Notify User
+                // Notify User FIRST (Idempotency Check inside)
+                const historyLog = `${signal.technical_reasoning || ''} | [Updated] ${context.reason}`;
+
                 telegramService.sendUpdateAlert('TP_ADAPTED', {
                     symbol: symbol,
                     newTp: context.new_tp,
-                    reason: context.reason
+                    reason: context.reason,
+                    historyLog: historyLog
+                }).then(sent => {
+                    // Sync to DB (Only if sent or if we want to persist the reasoning independent of alert?)
+                    // Usually we want to persist the REASON regardless, but the TAG only if sent.
+                    // Let's persist Reason always, and Tag if sent.
+
+                    if (this.supabase) {
+                        let finalReasoning = historyLog;
+                        if (sent) {
+                            finalReasoning += ` [SENT:TP_ADAPTED_${context.new_tp}]`;
+                        }
+
+                        this.supabase.from('signals_audit').update({
+                            technical_reasoning: finalReasoning,
+                            dca_plan: signal.dcaPlan // Persist TP change
+                        }).eq('id', signal.id).then(() => { });
+                    }
                 });
             }
         }

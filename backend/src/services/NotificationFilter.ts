@@ -30,8 +30,27 @@ export class NotificationFilter {
             stage?: number;
             reason?: string;
             pnl?: number;
+            historyLog?: string; // New: Persistence Check
         }
     ): { shouldNotify: boolean; reason?: string; suppressionReason?: string } {
+
+        // IDEMPOTENCY CHECK (Persistence)
+        // If the update is already logged in the DB history, ignore it (Server Restart protection)
+        if (data.historyLog) {
+            // Tag format: [SENT:SL_MOVED_1.2345] or [SENT:TP_HIT_Stage1]
+            let tag = '';
+            if (updateType === 'SL_MOVED') tag = `[SENT:SL_MOVED_${data.newValue}]`;
+            if (updateType === 'TP_HIT') tag = `[SENT:TP_HIT_${data.stage}]`;
+            if (updateType === 'TP_ADAPTED') tag = `[SENT:TP_ADAPTED_${data.newValue}]`;
+            if (updateType === 'TRADE_CLOSED') tag = `[SENT:TRADE_CLOSED]`; // Less strict, maybe use generic
+
+            if (tag && data.historyLog.includes(tag)) {
+                return {
+                    shouldNotify: false,
+                    suppressionReason: `Idempotency: Already sent (${tag})`
+                };
+            }
+        }
 
         // CRITICAL RULE 1: Always notify on trade closure
         if (updateType === 'TRADE_CLOSED') {
@@ -70,12 +89,33 @@ export class NotificationFilter {
                 };
             }
 
-            // FILTER 2: Significance threshold (% change needed to notify)
-            if (oldSL > 0) {
-                const changePercent = Math.abs(((newSL - oldSL) / oldSL) * 100);
+            // FILTER 3: Significance threshold (% change needed to notify)
+            // Fix: Handle server restart (lastSL=0) by using data.oldValue provided by caller
+            const referenceSL = state.lastSL > 0 ? state.lastSL : (data.oldValue || 0);
+
+            // ALWAYS notify if moving to breakeven or profit (major psychological milestone)
+            const isCritical =
+                data.reason?.toLowerCase().includes('breakeven') ||
+                data.reason?.toLowerCase().includes('profit secured') ||
+                data.reason?.toLowerCase().includes('nuclear') ||
+                data.reason?.toLowerCase().includes('force');
+
+            if (isCritical) {
+                this.updateCache(symbol, updateType, newSL, {});
+                return {
+                    shouldNotify: true,
+                    reason: `Critical Update: ${data.reason}`
+                };
+            }
+
+            // For Standard Trailing Stops, apply Strict Threshold
+            if (referenceSL > 0) {
+                const changePercent = Math.abs(((newSL - referenceSL) / referenceSL) * 100);
                 const MINIMUM_CHANGE_PERCENT = 0.5; // 0.5% minimum movement to notify
 
                 if (changePercent < MINIMUM_CHANGE_PERCENT) {
+                    // Update cache silently so we track the drift, but don't spam user
+                    // Actually, better NOT to update cache, so we accumulate change until it hits 0.5% from the last NOTIFIED price.
                     return {
                         shouldNotify: false,
                         suppressionReason: `Insignificant change (${changePercent.toFixed(2)}% < ${MINIMUM_CHANGE_PERCENT}%)`
@@ -83,32 +123,12 @@ export class NotificationFilter {
                 }
             }
 
-            // FILTER 3: Direction & Psychology
-            // ALWAYS notify if moving to breakeven or profit (major psychological milestone)
-            if (data.reason?.toLowerCase().includes('breakeven') ||
-                data.reason?.toLowerCase().includes('profit secured')) {
-                this.updateCache(symbol, updateType, newSL, {});
-                return {
-                    shouldNotify: true,
-                    reason: 'Breakeven milestone (psychologically critical)'
-                };
-            }
-
-            // ALWAYS notify if SL is tightening significantly (> 2%)
-            if (oldSL > 0) {
-                const movementPercent = ((newSL - oldSL) / oldSL) * 100;
-                if (Math.abs(movementPercent) > 2.0) {
-                    this.updateCache(symbol, updateType, newSL, {});
-                    return {
-                        shouldNotify: true,
-                        reason: `Significant SL adjustment (${movementPercent.toFixed(2)}%)`
-                    };
-                }
-            }
+            // ALWAYS notify if SL is tightening significantly (> 2%) - Redundant but safe
+            // Combined with above: If > 0.5%, we notify.
 
             // If we pass all filters, allow notification
             this.updateCache(symbol, updateType, newSL, {});
-            return { shouldNotify: true, reason: 'SL update meets all criteria' };
+            return { shouldNotify: true, reason: 'SL update meets significance criteria (>0.5%)' };
         }
 
         // ========== TP ADAPTATION FILTERING ==========
