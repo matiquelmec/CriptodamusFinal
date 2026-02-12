@@ -56,6 +56,11 @@ export const TradingConfig = {
             enabled: true,
             deep_retracement_penalty: -10,  // Penalizar entradas en 61.8-78.6%
             penalize_above_618: true  // Activar penalización para >61.8%
+        },
+        // NEW: Concurrency & Frequency Control (User Request: "Too many signals")
+        concurrency: {
+            max_active_trades: 10, // Relaxed: Safety net only (User wants precision, not caps)
+            max_daily_trades_per_asset: 8 // Relaxed: Allow legitimacy, block infinite loops
         }
     },
 
@@ -182,7 +187,7 @@ export const TradingConfig = {
 
     // --- SCORING MATRIX ---
     scoring: {
-        min_score_entry: 70, // PAU STRATEGY ALIGNMENT (Verified Threshold)
+        min_score_entry: 75, // UPGRADED: 75 to filter noise (User Req: Reduce Frequency)
         min_score_to_list: 70, // Match entry threshold
         god_mode_threshold: 90,
         filters: { // NEW: Hard Filters

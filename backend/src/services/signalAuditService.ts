@@ -8,6 +8,7 @@ import { SmartFetch } from '../core/services/SmartFetch'; // Import SmartFetch f
 import EventEmitter from 'events';
 
 import { calculateRSIArray } from '../core/services/mathUtils';
+import { TradingConfig } from '../core/config/tradingConfig';
 
 class SignalAuditService extends EventEmitter {
     private supabase: any = null;
@@ -225,6 +226,40 @@ class SignalAuditService extends EventEmitter {
 
             if (count && count > 0) {
                 console.log(`ℹ️ [SignalAudit] Suppressed ${opp.symbol}: Already has a managed position in DB.`);
+                this.processingSignatures.delete(sigKey);
+                continue;
+            }
+
+            // 2.1 FREQUENCY & CONCURRENCY CONTROL (User Request: "Too many signals")
+            // A. Global Active Limit (Diversification)
+            // We count locally first (assume syncUpdates keeps it fresh)
+            const activePauTrades = this.activeSignals.filter(s =>
+                ['PENDING', 'ACTIVE', 'OPEN', 'PARTIAL_WIN'].includes(s.status)
+            ).length;
+
+            const concurrencyConfig = TradingConfig.pauStrategy.concurrency || { max_active_trades: 3, max_daily_trades_per_asset: 2 };
+
+            if (activePauTrades >= concurrencyConfig.max_active_trades) {
+                console.warn(`🛑 [SignalAudit] MAX ACTIVE TRADES REACHED (${activePauTrades}/${concurrencyConfig.max_active_trades}). Rejecting ${opp.symbol}.`);
+                this.processingSignatures.delete(sigKey);
+                continue;
+            }
+
+            // B. Daily Asset Limit (Overtrading Protection)
+            // "Promedio de Paul es 1 operacion diaria" -> We limit to 2 just in case of a retry/re-entry.
+            const todayStart = new Date();
+            todayStart.setUTCHours(0, 0, 0, 0);
+            const startTimestamp = todayStart.getTime();
+
+            const { count: dailyCount } = await this.supabase
+                .from('signals_audit')
+                .select('*', { count: 'exact', head: true })
+                .eq('symbol', opp.symbol)
+                //.eq('strategy', 'PauPerdicesStrategy') // Optional: if we want to limit per strategy
+                .gte('created_at', startTimestamp); // Signals created TODAY
+
+            if (dailyCount !== null && dailyCount >= concurrencyConfig.max_daily_trades_per_asset) {
+                console.warn(`🛑 [SignalAudit] DAILY LIMIT REACHED for ${opp.symbol} (${dailyCount}/${concurrencyConfig.max_daily_trades_per_asset}). Rejecting.`);
                 this.processingSignatures.delete(sigKey);
                 continue;
             }
