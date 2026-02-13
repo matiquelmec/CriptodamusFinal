@@ -64,6 +64,11 @@ export class StrategyRunner {
         const marketRegime = detectMarketRegime(indicators);
         const selection = selectStrategies(marketRegime);
 
+        // DIAGNOSTIC LOG (User Visibility)
+        if (indicators.symbol?.includes('BTC') || indicators.symbol?.includes('ETH') || indicators.symbol?.includes('PAXG')) { // Filter noise
+            console.log(`🧠 [Regime] ${indicators.symbol}: ${marketRegime.regime} (ADX ${indicators.adx?.toFixed(1)} | BW ${indicators.bollinger?.bandwidth?.toFixed(2)}%)`);
+        }
+
         let bestStrategyResult: {
             id: string;
             score: number;

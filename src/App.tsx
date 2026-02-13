@@ -1,31 +1,17 @@
-
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import Opportunities from './pages/Opportunities';
-import News from './pages/News';
-import Calendar from './pages/Calendar';
-import SystemLogs from './pages/SystemLogs';
-import DebugDB from './pages/DebugDB';
 
 const App: React.FC = () => {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="oportunidades" element={<Opportunities />} />
-          <Route path="noticias" element={<News />} />
-          <Route path="eventos" element={<Calendar />} />
-          <Route path="sistema" element={<SystemLogs />} />
-          <Route path="debug-db" element={<DebugDB />} />
-          {/* Fallback route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
-  );
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
+            <div className="max-w-2xl text-center animate-fade-in">
+                <h1 className="text-3xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600 mb-6 leading-tight">
+                    Si quieres ganarle al mercado,<br />
+                    necesitas un sistema inteligente y eficiente.
+                </h1>
+                <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-purple-600 mx-auto rounded-full opacity-80"></div>
+            </div>
+        </div>
+    );
 };
 
 export default App;
